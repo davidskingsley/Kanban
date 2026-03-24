@@ -1968,23 +1968,7 @@ class EmbeddedKanbanGUI:
 
     def view_card_types_dialog(self):
         """Show all configured card types for the current board."""
-        lines = []
-        default_type_id = self.board.get_default_card_type_id()
-        last_used_id = self.board.get_last_used_card_type().id
-        for card_type in self.board.get_card_types_ordered():
-            flags = []
-            if card_type.id == default_type_id:
-                flags.append('default')
-            if card_type.id == last_used_id:
-                flags.append('last used')
-            suffix = f" [{' | '.join(flags)}]" if flags else ''
-            lines.append(f"{card_type.name}{suffix}")
-            if card_type.description:
-                lines.append(f"  Description: {card_type.description}")
-            lines.append(f"  Project preset: {card_type.default_project or 'None'}")
-            lines.append(f"  Color preset: {card_type.default_color or 'Default'}")
-            lines.append("")
-        messagebox.showinfo("Card Types", "\n".join(lines).strip() or "No card types available.")
+        CardTypesOverviewDialog(self.parent_frame, self.board)
 
     def create_card_type_dialog(self):
         """Create a new card type."""
@@ -2639,6 +2623,157 @@ class CardTypeDialog:
 
     def cancel(self):
         """Cancel the dialog."""
+        self.dialog.destroy()
+
+
+## @brief Modal dialog for browsing card types and their presets.
+class CardTypesOverviewDialog:
+    """Dialog for browsing configured card types on the current board."""
+
+    def __init__(self, parent, board):
+        self.board = board
+        self.card_types = self.board.get_card_types_ordered()
+        self.default_type_id = self.board.get_default_card_type_id()
+        self.last_used_id = self.board.get_last_used_card_type().id
+
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title("Card Types")
+        center_modal(self.dialog, parent, 760, 440)
+
+        self.setup_ui()
+        self.dialog.wait_window()
+
+    def setup_ui(self):
+        """Set up the card type overview UI."""
+        main_frame = tk.Frame(self.dialog, padx=20, pady=20, bg=APP_BG)
+        main_frame.pack(fill='both', expand=True)
+
+        total_cards = len(self.board.get_all_cards())
+        summary = f"{len(self.card_types)} types configured | {total_cards} total cards on this board"
+        tk.Label(main_frame, text=summary, font=('Arial', 10, 'bold'), bg=APP_BG, fg='#5F554D').pack(anchor='w', pady=(0, 12))
+
+        content_frame = tk.Frame(main_frame, bg=APP_BG)
+        content_frame.pack(fill='both', expand=True)
+
+        list_frame = tk.Frame(content_frame, bg=APP_BG)
+        list_frame.pack(side='left', fill='both', expand=False)
+
+        tk.Label(list_frame, text="Card Types", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w', pady=(0, 8))
+
+        list_container = tk.Frame(list_frame, bg=APP_BG)
+        list_container.pack(fill='both', expand=True)
+
+        self.listbox = tk.Listbox(list_container, width=28, font=('Arial', 10), activestyle='dotbox')
+        self.listbox.pack(side='left', fill='both', expand=True)
+        style_text_input(self.listbox)
+
+        list_scrollbar = ttk.Scrollbar(list_container, orient='vertical', command=self.listbox.yview)
+        list_scrollbar.pack(side='right', fill='y')
+        self.listbox.configure(yscrollcommand=list_scrollbar.set)
+
+        details_frame = tk.Frame(content_frame, bg=SURFACE_BG, highlightthickness=1, highlightbackground='#E0D7CA')
+        details_frame.pack(side='left', fill='both', expand=True, padx=(18, 0))
+
+        details_inner = tk.Frame(details_frame, bg=SURFACE_BG, padx=18, pady=18)
+        details_inner.pack(fill='both', expand=True)
+
+        self.name_label = tk.Label(details_inner, text="", font=('Arial', 15, 'bold'), bg=SURFACE_BG, anchor='w')
+        self.name_label.pack(fill='x')
+
+        self.meta_label = tk.Label(details_inner, text="", font=('Arial', 9, 'bold'), bg=SURFACE_BG, fg='#7A6A5A', anchor='w')
+        self.meta_label.pack(fill='x', pady=(4, 14))
+
+        self.description_value = tk.Label(details_inner, text="", font=('Arial', 10), bg=SURFACE_BG, justify='left', anchor='nw', wraplength=360)
+        self.description_value.pack(fill='x', pady=(0, 14))
+
+        self.project_value = tk.Label(details_inner, text="", font=('Arial', 10), bg=SURFACE_BG, justify='left', anchor='w')
+        self.project_value.pack(fill='x', pady=(0, 10))
+
+        self.color_row = tk.Frame(details_inner, bg=SURFACE_BG)
+        self.color_row.pack(fill='x', pady=(0, 10))
+
+        self.color_value = tk.Label(self.color_row, text="", font=('Arial', 10), bg=SURFACE_BG, anchor='w')
+        self.color_value.pack(side='left')
+
+        self.color_preview = tk.Label(
+            self.color_row,
+            text="Default",
+            width=10,
+            bg=SURFACE_ALT_BG,
+            fg='#2F2923',
+            relief='solid',
+            bd=1,
+            font=('Arial', 9, 'bold'),
+            padx=8,
+            pady=4,
+        )
+        self.color_preview.pack(side='right')
+
+        self.usage_value = tk.Label(details_inner, text="", font=('Arial', 10), bg=SURFACE_BG, justify='left', anchor='w')
+        self.usage_value.pack(fill='x')
+
+        button_frame = tk.Frame(main_frame, bg=APP_BG)
+        button_frame.pack(fill='x', pady=(16, 0))
+        create_soft_button(button_frame, "Close", self.close, variant='primary').pack(side='right')
+
+        self.populate_list()
+        self.listbox.bind('<<ListboxSelect>>', self.on_selection_changed)
+        self.listbox.bind('<Double-Button-1>', lambda _event: self.close())
+        self.dialog.bind('<Escape>', lambda _event: self.close())
+        self.dialog.bind('<Return>', lambda _event: self.close())
+
+    def populate_list(self):
+        """Populate the list of card types."""
+        self.listbox.delete(0, tk.END)
+        for card_type in self.card_types:
+            suffixes = []
+            if card_type.id == self.default_type_id:
+                suffixes.append('default')
+            if card_type.id == self.last_used_id:
+                suffixes.append('last used')
+            suffix = f" [{' | '.join(suffixes)}]" if suffixes else ''
+            self.listbox.insert(tk.END, f"{card_type.name}{suffix}")
+
+        if self.card_types:
+            self.listbox.selection_set(0)
+            self.listbox.activate(0)
+            self.update_details(self.card_types[0])
+
+    def on_selection_changed(self, _event=None):
+        """Update the details panel for the selected card type."""
+        selection = self.listbox.curselection()
+        if not selection:
+            return
+        self.update_details(self.card_types[selection[0]])
+
+    def update_details(self, card_type):
+        """Render the selected card type details."""
+        flags = []
+        if card_type.id == self.default_type_id:
+            flags.append('Cannot be deleted')
+        if card_type.id == self.last_used_id:
+            flags.append('Used for next new card')
+
+        usage_count = len(self.board.get_cards_by_type(card_type.id))
+
+        self.name_label.config(text=card_type.name)
+        self.meta_label.config(text=' | '.join(flags) if flags else 'Custom card type')
+        self.description_value.config(text=f"Description: {card_type.description or 'No description'}")
+        self.project_value.config(text=f"Project preset: {card_type.default_project or 'None'}")
+        self.color_value.config(text=f"Color preset: {card_type.default_color or 'Default'}")
+        self.usage_value.config(text=f"Cards using this type: {usage_count}")
+
+        if card_type.default_color:
+            self.color_preview.config(
+                text='Preview',
+                bg=card_type.default_color,
+                fg='white' if is_dark_color(card_type.default_color) else '#2F2923',
+            )
+        else:
+            self.color_preview.config(text='Default', bg=SURFACE_ALT_BG, fg='#2F2923')
+
+    def close(self):
+        """Close the dialog."""
         self.dialog.destroy()
 
 
