@@ -17,7 +17,7 @@ def get_default_storage_dir() -> str:
 
 
 def get_default_single_board_file() -> str:
-    """Return the default data file path for legacy single-board mode."""
+    """Return the default data file path for a standalone board file."""
     return os.path.join(get_default_storage_dir(), "kanban_data.json")
 
 

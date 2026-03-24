@@ -1,6 +1,6 @@
 ## @file
-#  @brief Interactive command-line interface for operating a single Kanban board.
-"""Command Line Interface for the Kanban board application."""
+#  @brief Interactive command-line interface for operating one board inside the multi-board CLI.
+"""Board-level command-line interface for the Kanban board application."""
 
 from datetime import date
 from typing import Optional
@@ -9,9 +9,9 @@ from .board import KanbanBoard
 from .models import Priority, Status
 
 
-## @brief Provide menu-driven access to single-board Kanban operations.
-class KanbanCLI:
-    """Command line interface for the Kanban board."""
+## @brief Provide menu-driven access to a selected board from the multi-board CLI.
+class BoardCLI:
+    """Command line interface for an individual board."""
     
     def __init__(self, board: KanbanBoard):
         self.board = board

@@ -5,7 +5,7 @@
 import os
 
 from .board_manager import BoardManager
-from .cli import KanbanCLI
+from .cli import BoardCLI
 
 
 ## @brief Provide menu-driven multi-board management from the terminal.
@@ -116,7 +116,7 @@ class MultiBoardCLI:
             input("\nPress Enter to continue...")
     
     def open_current_board(self):
-        """Open the current board in single-board CLI mode."""
+        """Open the current board in the board command interface."""
         current_board = self.board_manager.get_current_board()
         if not current_board:
             print("No current board selected!")
@@ -125,8 +125,7 @@ class MultiBoardCLI:
         print("Opening board interface...")
         print()
         
-        # Create single-board CLI and run it
-        board_cli = KanbanCLI(current_board)
+        board_cli = BoardCLI(current_board)
         board_cli.run()
     
     def switch_board(self):

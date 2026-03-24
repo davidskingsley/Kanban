@@ -1,12 +1,11 @@
 # Multi-Board Kanban Manager
 
-A Python Kanban application focused on multi-board management with a Tkinter GUI and CLI workflows. It supports custom columns, drag-and-drop card movement, file attachments on cards, external board loading, read-only fallback when a board is already open elsewhere, and a legacy single-board CLI mode.
+A Python Kanban application focused on multi-board management with a Tkinter GUI and CLI workflows. It supports custom columns, drag-and-drop card movement, file attachments on cards, external board loading, and read-only fallback when a board is already open elsewhere.
 
 ## Features
 
 - Multi-board GUI for creating, switching, renaming, deleting, importing, and exporting boards
-- Multi-board CLI for terminal-based board management
-- Legacy single-board CLI for working with a standalone board data file
+- Multi-board CLI for terminal-based board management and per-board card operations
 - Custom columns with rename, reorder, recolor, and delete support
 - Card priorities, assignees, tags, projects, custom colors, reusable card types, real subcards, and copied file attachments
 - Drag-and-drop movement in the multi-board GUI
@@ -42,18 +41,6 @@ This is the default mode and the primary GUI workflow.
 python main.py --cli
 ```
 
-### Legacy Single-Board CLI
-
-```bash
-python main.py --single-board
-```
-
-Use a custom single-board data file if needed:
-
-```bash
-python main.py --single-board --data-file my_board.json
-```
-
 ### Demo Scripts
 
 ```bash
@@ -68,8 +55,6 @@ python main.py [options]
 
 Options:
   --cli              Use the multi-board command-line interface
-  --single-board     Use the legacy single-board CLI mode
-  --data-file FILE   Specify a custom data file for single-board CLI mode
   --boards-dir DIR   Specify a custom boards directory for multi-board mode
   --help             Show help message
 ```
@@ -79,7 +64,6 @@ Options:
 Default runtime storage locations:
 
 - Multi-board mode: `$HOME/.kanban-ds/boards`
-- Single-board CLI mode: `$HOME/.kanban-ds/kanban_data.json`
 
 External board loading:
 
