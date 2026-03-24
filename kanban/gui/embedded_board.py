@@ -150,12 +150,12 @@ class EmbeddedKanbanGUI:
         self.status_bar.config(text="🔒 Board is read only")
         return False
 
-    def create_add_card_button(self, parent, header_bg):
-        """Create a more visible add-card button for the first column header."""
+    def create_add_card_button(self, parent, header_bg, column):
+        """Create a more visible add-card button for a column header."""
         return ttk.Button(
             parent,
             text="+ Add",
-            command=self.create_card_dialog,
+            command=lambda: self.create_card_dialog(column.id),
             style='AddCard.TButton',
         )
     
@@ -187,8 +187,9 @@ class EmbeddedKanbanGUI:
                                    font=('Arial', 10, 'bold'))
             header_label.pack(side='left', fill='x', expand=True, padx=(8, 0))
 
-            if i == 0:
-                add_button = self.create_add_card_button(header_frame, header_frame['bg'])
+            add_button = None
+            if getattr(column, 'can_add_card', False):
+                add_button = self.create_add_card_button(header_frame, header_frame['bg'], column)
                 add_button.pack(side='right', padx=4, pady=2)
             
             # Add context menu to header
@@ -202,7 +203,7 @@ class EmbeddedKanbanGUI:
             self.bind_column_mousewheel(col_frame, cards_frame.scroll_canvas)
             self.bind_column_mousewheel(header_frame, cards_frame.scroll_canvas)
             self.bind_column_mousewheel(header_label, cards_frame.scroll_canvas)
-            if i == 0:
+            if add_button is not None:
                 self.bind_column_mousewheel(add_button, cards_frame.scroll_canvas)
 
             self.drop_targets.append({
@@ -977,7 +978,7 @@ class EmbeddedKanbanGUI:
         self.status_bar.config(text=status_text)
 
     # Card Management Methods
-    def create_card_dialog(self):
+    def create_card_dialog(self, target_column_id=None):
         """Show dialog to create a new card."""
         if not self.ensure_board_writable():
             return
@@ -988,9 +989,8 @@ class EmbeddedKanbanGUI:
             
             # Get target column
             if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns:
-                columns = self.board.get_columns_ordered()
-                if columns:
-                    target_column = columns[0].id  # Add to first column
+                target_column = target_column_id or self.board.get_default_add_card_column_id()
+                if target_column:
                     self.board.create_card(
                         title,
                         description,
@@ -1207,8 +1207,13 @@ class EmbeddedKanbanGUI:
         dialog = ColumnDialog(self.parent_frame, "Create Column")
         if not dialog.result:
             return
-        name, color_value = dialog.result
-        column_id = self.board.create_column(name, color=color_value)
+        name, color_value, is_completed, can_add_card = dialog.result
+        column_id = self.board.create_column(
+            name,
+            color=color_value,
+            is_completed=is_completed,
+            can_add_card=can_add_card,
+        )
         self.refresh_display()
         self.status_bar.config(text=f"✅ Created column: {name}")
 
@@ -1457,7 +1462,7 @@ class EmbeddedKanbanGUI:
         )
 
     def modify_specific_column(self, column):
-        """Modify a specific column's name and color."""
+        """Modify a specific column's properties."""
         if not self.ensure_board_writable():
             return
 
@@ -1466,12 +1471,20 @@ class EmbeddedKanbanGUI:
             "Column Properties",
             initial_name=column.name,
             initial_color=column.color,
+            initial_is_completed=getattr(column, 'is_completed', False),
+            initial_can_add_card=getattr(column, 'can_add_card', False),
         )
         if not dialog.result:
             return
 
-        new_name, new_color = dialog.result
-        self.board.update_column(column.id, name=new_name, color=new_color)
+        new_name, new_color, is_completed, can_add_card = dialog.result
+        self.board.update_column(
+            column.id,
+            name=new_name,
+            color=new_color,
+            is_completed=is_completed,
+            can_add_card=can_add_card,
+        )
         self.refresh_display()
         self.status_bar.config(text=f"✅ Updated column: {new_name}")
 

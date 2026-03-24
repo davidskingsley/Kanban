@@ -154,7 +154,8 @@ class KanbanBoard:
         return snapshot['description']
     
     # Column Management Methods
-    def create_column(self, name: str, position: int = None, color: str = "#2196F3") -> str:
+    def create_column(self, name: str, position: int = None, color: str = "#2196F3",
+                      is_completed: bool = False, can_add_card: bool = False) -> str:
         """Create a new custom column."""
         self._ensure_writable()
 
@@ -167,7 +168,7 @@ class KanbanBoard:
         self._push_undo_state(f"Create column '{name}'")
         
         column_id = str(uuid.uuid4())
-        column = CustomColumn(column_id, name, position, color)
+        column = CustomColumn(column_id, name, position, color, is_completed, can_add_card)
         self.custom_columns[column_id] = column
         
         # Adjust positions of other columns if needed
@@ -189,7 +190,8 @@ class KanbanBoard:
         self.save_board()
         return True
 
-    def update_column(self, column_id: str, name: str = None, color: str = None) -> bool:
+    def update_column(self, column_id: str, name: str = None, color: str = None,
+                      is_completed=UNSET, can_add_card=UNSET) -> bool:
         """Update one or more custom column properties in a single undo step."""
         self._ensure_writable()
 
@@ -197,7 +199,7 @@ class KanbanBoard:
             return False
 
         column = self.custom_columns[column_id]
-        if name is None and color is None:
+        if name is None and color is None and is_completed is UNSET and can_add_card is UNSET:
             return False
 
         self._push_undo_state(f"Update column '{column.name}'")
@@ -205,6 +207,10 @@ class KanbanBoard:
             column.rename(name)
         if color is not None:
             column.change_color(color)
+        if is_completed is not UNSET:
+            column.set_completed(is_completed)
+        if can_add_card is not UNSET:
+            column.set_can_add_card(can_add_card)
         self.save_board()
         return True
     
@@ -308,6 +314,17 @@ class KanbanBoard:
             return min(self.custom_columns.keys(), key=lambda cid: self.custom_columns[cid].position)
         else:
             return None  # Legacy mode uses Status enum
+
+    def get_default_add_card_column_id(self) -> Optional[str]:
+        """Return the preferred column for creating new cards in custom-column mode."""
+        if not self.use_custom_columns:
+            return None
+
+        ordered_columns = self.get_columns_ordered()
+        for column in ordered_columns:
+            if column.can_add_card:
+                return column.id
+        return ordered_columns[0].id if ordered_columns else None
 
     def _ensure_default_card_type(self):
         """Ensure the board always has a non-deletable default card type."""
@@ -743,10 +760,8 @@ class KanbanBoard:
     def is_card_done(self, card: Card) -> bool:
         """Return whether the given card is currently in the done column."""
         if self.use_custom_columns:
-            ordered_columns = self.get_columns_ordered()
-            if not ordered_columns:
-                return False
-            return card.column_id == ordered_columns[-1].id
+            column = self.get_column_by_id(card.column_id)
+            return bool(column and column.is_completed)
         return card.status == Status.DONE
 
     def get_card_location_label(self, card: Card) -> str:
@@ -939,7 +954,7 @@ class KanbanBoard:
         return stats
     
     def clear_done_cards(self) -> int:
-        """Remove all cards from the Done column (legacy) or last column (custom)."""
+        """Remove all cards from done columns."""
         self._ensure_writable()
 
         if not self.use_custom_columns:
@@ -951,16 +966,16 @@ class KanbanBoard:
             self.save_board()
             return done_count
         else:
-            # For custom columns, clear the last column (typically "Done")
             if not self.custom_columns:
                 return 0
-            
-            last_column = max(self.custom_columns.values(), key=lambda col: col.position)
-            card_count = len(last_column.cards)
+
+            completed_columns = [column for column in self.custom_columns.values() if column.is_completed]
+            card_count = sum(len(column.cards) for column in completed_columns)
             if card_count == 0:
                 return 0
             self._push_undo_state("Clear done cards")
-            last_column.cards.clear()
+            for column in completed_columns:
+                column.cards.clear()
             self.save_board()
             return card_count
     
@@ -1017,6 +1032,8 @@ class KanbanBoard:
         for column_data in data.get('columns', []):
             column = CustomColumn.from_dict(column_data)
             self.custom_columns[column.id] = column
+
+        self._apply_missing_column_defaults(data.get('columns', []))
         
         # Load cards into columns
         for card_data in data.get('cards', []):
@@ -1056,7 +1073,14 @@ class KanbanBoard:
         
         for i, status in enumerate(Status):
             column_id = str(uuid.uuid4())
-            column = CustomColumn(column_id, status.value, i, colors[i])
+            column = CustomColumn(
+                column_id,
+                status.value,
+                i,
+                colors[i],
+                is_completed=(status == Status.DONE),
+                can_add_card=(status == Status.TODO),
+            )
             self.custom_columns[column_id] = column
             status_to_column_id[status] = column_id
         
@@ -1088,7 +1112,14 @@ class KanbanBoard:
         
         for i, (name, color) in enumerate(default_columns):
             column_id = str(uuid.uuid4())
-            column = CustomColumn(column_id, name, i, color)
+            column = CustomColumn(
+                column_id,
+                name,
+                i,
+                color,
+                is_completed=(name == "Done"),
+                can_add_card=(name == "To Do"),
+            )
             self.custom_columns[column_id] = column
         
         if persist:
@@ -1097,6 +1128,21 @@ class KanbanBoard:
     def save_board(self):
         """Save board data to storage."""
         self.storage.save(self.export_data())
+
+    def _apply_missing_column_defaults(self, columns_data: List[Dict]):
+        """Backfill new column flags for older saved boards that do not persist them yet."""
+        if not self.custom_columns:
+            return
+
+        if not any('is_completed' in column_data for column_data in columns_data):
+            ordered_columns = self.get_columns_ordered()
+            if ordered_columns:
+                ordered_columns[-1].set_completed(True)
+
+        if not any('can_add_card' in column_data for column_data in columns_data):
+            ordered_columns = self.get_columns_ordered()
+            if ordered_columns:
+                ordered_columns[0].set_can_add_card(True)
     
     def export_board(self, format_type: str = "text") -> str:
         """Export board in different formats."""

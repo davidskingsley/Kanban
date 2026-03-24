@@ -96,19 +96,20 @@ class KanbanCLI:
             print("14. Delete column")
             print("15. Reorder columns")
             print("16. Change column color")
-            print("17. View columns")
+            print("17. Edit column flags")
+            print("18. View columns")
 
         print("\nCARD TYPE ACTIONS:")
-        print("18. View card types")
-        print("19. Create card type")
-        print("20. Edit card type")
-        print("21. Delete card type")
+        print("19. View card types")
+        print("20. Create card type")
+        print("21. Edit card type")
+        print("22. Delete card type")
         
         print("\nOTHER:")
-        print("22. Create backup")
-        print("23. Clean up orphaned attachment files")
-        print("24. Undo last change")
-        print("25. Redo last undone change")
+        print("23. Create backup")
+        print("24. Clean up orphaned attachment files")
+        print("25. Undo last change")
+        print("26. Redo last undone change")
         print("0. Exit")
         print()
     
@@ -131,15 +132,16 @@ class KanbanCLI:
             '14': self.delete_column if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
             '15': self.reorder_columns if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
             '16': self.change_column_color if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
-            '17': self.view_columns if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
-            '18': self.view_card_types,
-            '19': self.create_card_type,
-            '20': self.edit_card_type,
-            '21': self.delete_card_type,
-            '22': self.create_backup,
-            '23': self.cleanup_orphaned_attachment_files,
-            '24': self.undo_last_change,
-            '25': self.redo_last_change,
+            '17': self.edit_column_flags if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
+            '18': self.view_columns if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
+            '19': self.view_card_types,
+            '20': self.create_card_type,
+            '21': self.edit_card_type,
+            '22': self.delete_card_type,
+            '23': self.create_backup,
+            '24': self.cleanup_orphaned_attachment_files,
+            '25': self.undo_last_change,
+            '26': self.redo_last_change,
             '0': self.exit_app
         }
         
@@ -203,17 +205,26 @@ class KanbanCLI:
         if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns:
             columns = self.board.get_columns_ordered()
             if columns:
+                default_column_id = self.board.get_default_add_card_column_id()
+                default_index = next((index for index, column in enumerate(columns) if column.id == default_column_id), 0)
                 print("\nAvailable columns:")
                 for i, column in enumerate(columns, 1):
-                    print(f"{i}. {column.name}")
+                    markers = []
+                    if getattr(column, 'can_add_card', False):
+                        markers.append('add')
+                    if getattr(column, 'is_completed', False):
+                        markers.append('done')
+                    suffix = f" [{' | '.join(markers)}]" if markers else ""
+                    print(f"{i}. {column.name}{suffix}")
                 
                 try:
-                    col_choice = input(f"Choose column (1-{len(columns)}, default=1): ").strip()
-                    col_choice = int(col_choice) if col_choice else 1
+                    prompt_default = default_index + 1
+                    col_choice = input(f"Choose column (1-{len(columns)}, default={prompt_default}): ").strip()
+                    col_choice = int(col_choice) if col_choice else prompt_default
                     if 1 <= col_choice <= len(columns):
                         column_id = columns[col_choice - 1].id
                 except (ValueError, IndexError):
-                    column_id = columns[0].id  # Default to first column
+                    column_id = columns[default_index].id
         
         try:
             self.board.create_card(
@@ -939,6 +950,9 @@ class KanbanCLI:
         
         color_choice = input("Choose color (1-8, default=2): ").strip() or "2"
         color = colors.get(color_choice, colors["2"])
+
+        is_completed = input("Treat this as a completed column? (y/N): ").strip().lower() == 'y'
+        can_add_card = input("Show an Add Card action for this column? (y/N): ").strip().lower() == 'y'
         
         try:
             position = input("Position (leave blank for last): ").strip()
@@ -946,7 +960,7 @@ class KanbanCLI:
         except ValueError:
             position = None
         
-        column_id = self.board.create_column(name, position, color)
+        column_id = self.board.create_column(name, position, color, is_completed, can_add_card)
         print(f"✅ Column '{name}' created successfully!")
     
     def rename_column(self):
@@ -1127,6 +1141,54 @@ class KanbanCLI:
                 print("Invalid selection!")
         except (ValueError, IndexError):
             print("Invalid input!")
+
+    def edit_column_flags(self):
+        """Edit the completed/add-card flags for an existing column."""
+        if not self.ensure_board_writable():
+            return
+
+        print("\n--- EDIT COLUMN FLAGS ---")
+        columns = self.board.get_columns_ordered()
+        if not columns:
+            print("No columns available!")
+            return
+
+        print("Available columns:")
+        for i, column in enumerate(columns, 1):
+            completed = 'yes' if getattr(column, 'is_completed', False) else 'no'
+            add_card = 'yes' if getattr(column, 'can_add_card', False) else 'no'
+            print(f"{i}. {column.name} (completed: {completed}, add card: {add_card})")
+
+        try:
+            choice = int(input(f"Select column (1-{len(columns)}): "))
+            if not 1 <= choice <= len(columns):
+                print("Invalid selection!")
+                return
+
+            column = columns[choice - 1]
+            current_completed = getattr(column, 'is_completed', False)
+            current_add_card = getattr(column, 'can_add_card', False)
+
+            completed_text = input(
+                f"Treat '{column.name}' as completed? (y/n, Enter keeps {'yes' if current_completed else 'no'}): "
+            ).strip().lower()
+            add_card_text = input(
+                f"Show Add Card action for '{column.name}'? (y/n, Enter keeps {'yes' if current_add_card else 'no'}): "
+            ).strip().lower()
+
+            is_completed = current_completed if completed_text == '' else completed_text == 'y'
+            can_add_card = current_add_card if add_card_text == '' else add_card_text == 'y'
+
+            if self.board.update_column(
+                column.id,
+                is_completed=is_completed,
+                can_add_card=can_add_card,
+            ):
+                print(f"✅ Updated flags for '{column.name}'!")
+            else:
+                print("❌ Failed to update column flags!")
+        except (ValueError, IndexError):
+            print("Invalid input!")
     
     def view_columns(self):
         """View all columns and their details."""
@@ -1143,6 +1205,8 @@ class KanbanCLI:
             print(f"{i + 1}. {column.name}")
             print(f"   Color: {column.color}")
             print(f"   Position: {column.position}")
+            print(f"   Completed column: {'yes' if getattr(column, 'is_completed', False) else 'no'}")
+            print(f"   Add-card column: {'yes' if getattr(column, 'can_add_card', False) else 'no'}")
             print(f"   Cards: {len(column)} cards")
             print(f"   Created: {column.created_at.strftime('%Y-%m-%d %H:%M')}")
             if column.cards:

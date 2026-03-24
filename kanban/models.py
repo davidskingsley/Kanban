@@ -144,11 +144,14 @@ class CardType:
 class CustomColumn:
     """Represents a custom column on the Kanban board."""
     
-    def __init__(self, column_id: str, name: str, position: int = 0, color: str = "#2196F3"):
+    def __init__(self, column_id: str, name: str, position: int = 0, color: str = "#2196F3",
+                 is_completed: bool = False, can_add_card: bool = False):
         self.id = column_id if column_id else str(uuid.uuid4())
         self.name = name
         self.position = position
         self.color = color
+        self.is_completed = is_completed
+        self.can_add_card = can_add_card
         self.cards: List['Card'] = []
         self.created_at = datetime.now()
         self.updated_at = datetime.now()
@@ -184,6 +187,16 @@ class CustomColumn:
         """Change the column color."""
         self.color = new_color
         self.updated_at = datetime.now()
+
+    def set_completed(self, is_completed: bool):
+        """Control whether cards in this column are treated as done."""
+        self.is_completed = bool(is_completed)
+        self.updated_at = datetime.now()
+
+    def set_can_add_card(self, can_add_card: bool):
+        """Control whether this column exposes a direct add-card action."""
+        self.can_add_card = bool(can_add_card)
+        self.updated_at = datetime.now()
     
     def reposition(self, new_position: int):
         """Change the column position."""
@@ -197,6 +210,8 @@ class CustomColumn:
             'name': self.name,
             'position': self.position,
             'color': self.color,
+            'is_completed': self.is_completed,
+            'can_add_card': self.can_add_card,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }
@@ -204,7 +219,14 @@ class CustomColumn:
     @classmethod
     def from_dict(cls, data: dict):
         """Create column from dictionary."""
-        column = cls(data['id'], data['name'], data.get('position', 0), data.get('color', '#2196F3'))
+        column = cls(
+            data['id'],
+            data['name'],
+            data.get('position', 0),
+            data.get('color', '#2196F3'),
+            data.get('is_completed', False),
+            data.get('can_add_card', False),
+        )
         column.created_at = datetime.fromisoformat(data.get('created_at', datetime.now().isoformat()))
         column.updated_at = datetime.fromisoformat(data.get('updated_at', datetime.now().isoformat()))
         return column

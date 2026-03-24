@@ -178,6 +178,28 @@ def center_modal(dialog, parent, width, height):
     dialog.geometry(f"{width}x{height}+{x}+{y}")
 
 
+def finalize_modal_size(dialog, min_width, min_height, resizable=False, screen_margin=60):
+    """Resize and recenter a modal after its content is created so action buttons remain visible."""
+    dialog.update_idletasks()
+
+    screen_width = dialog.winfo_screenwidth()
+    screen_height = dialog.winfo_screenheight()
+    max_width = max(min_width, screen_width - screen_margin)
+    max_height = max(min_height, screen_height - screen_margin)
+
+    requested_width = max(min_width, dialog.winfo_reqwidth())
+    requested_height = max(min_height, dialog.winfo_reqheight())
+    width = min(requested_width, max_width)
+    height = min(requested_height, max_height)
+
+    x = max(0, (screen_width // 2) - (width // 2))
+    y = max(0, (screen_height // 2) - (height // 2))
+
+    dialog.minsize(min_width, min_height)
+    dialog.resizable(resizable, resizable)
+    dialog.geometry(f"{width}x{height}+{x}+{y}")
+
+
 def create_soft_button(parent, text, command, variant='primary', width=None):
     """Create a softer button style with explicit colors for reliable contrast."""
     palette = {

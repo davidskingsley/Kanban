@@ -19,6 +19,7 @@ from .common import (
     center_modal,
     create_soft_button,
     create_tooltip,
+    finalize_modal_size,
     format_optional_date,
     is_dark_color,
     open_path_with_default_app,
@@ -38,6 +39,7 @@ class BoardDialog:
         center_modal(self.dialog, parent, 520, 320)
         
         self.setup_ui()
+        finalize_modal_size(self.dialog, 520, 320)
         
         # Focus on name entry
         self.name_entry.focus()
@@ -122,18 +124,20 @@ class ColumnDialog:
 
     DEFAULT_COLORS = ['#FF9800', '#2196F3', '#4CAF50', '#F44336', '#9C27B0', '#FF5722']
 
-    def __init__(self, parent, title="Column Properties", initial_name="", initial_color="#FF9800"):
+    def __init__(self, parent, title="Column Properties", initial_name="", initial_color="#FF9800",
+                 initial_is_completed=False, initial_can_add_card=False):
         self.result = None
 
         self.dialog = tk.Toplevel(parent)
         self.dialog.title(title)
         center_modal(self.dialog, parent, 420, 280)
 
-        self.setup_ui(initial_name, initial_color)
+        self.setup_ui(initial_name, initial_color, initial_is_completed, initial_can_add_card)
+        finalize_modal_size(self.dialog, 420, 280)
         self.name_entry.focus()
         self.dialog.wait_window()
 
-    def setup_ui(self, initial_name, initial_color):
+    def setup_ui(self, initial_name, initial_color, initial_is_completed, initial_can_add_card):
         """Set up the dialog UI."""
         main_frame = tk.Frame(self.dialog, bg=APP_BG)
         main_frame.pack(fill='both', expand=True, padx=20, pady=20)
@@ -180,6 +184,30 @@ class ColumnDialog:
             )
             swatch.pack(side='left', padx=(0, 6), ipady=6)
 
+        self.completed_var = tk.BooleanVar(value=initial_is_completed)
+        self.add_card_var = tk.BooleanVar(value=initial_can_add_card)
+
+        options_frame = tk.Frame(main_frame, bg=APP_BG)
+        options_frame.pack(fill='x', pady=(0, 20))
+
+        tk.Checkbutton(
+            options_frame,
+            text="Treat this as a completed column",
+            variable=self.completed_var,
+            bg=APP_BG,
+            activebackground=APP_BG,
+            anchor='w',
+        ).pack(fill='x', pady=(0, 8))
+
+        tk.Checkbutton(
+            options_frame,
+            text="Show an Add Card button in this column",
+            variable=self.add_card_var,
+            bg=APP_BG,
+            activebackground=APP_BG,
+            anchor='w',
+        ).pack(fill='x')
+
         button_frame = tk.Frame(main_frame, bg=APP_BG)
         button_frame.pack(fill='x')
 
@@ -209,7 +237,7 @@ class ColumnDialog:
 
         color = self.color_var.get().strip() or self.DEFAULT_COLORS[0]
 
-        self.result = (name, color)
+        self.result = (name, color, self.completed_var.get(), self.add_card_var.get())
         self.dialog.destroy()
 
     def cancel(self):
@@ -230,6 +258,7 @@ class SelectionDialog:
         center_modal(self.dialog, parent, 420, 180)
 
         self.setup_ui(prompt, initial_index)
+        finalize_modal_size(self.dialog, 420, 180)
         self.dialog.wait_window()
 
     def setup_ui(self, prompt, initial_index):
@@ -283,6 +312,7 @@ class ReorderColumnsDialog:
         center_modal(self.dialog, parent, 420, 360)
 
         self.setup_ui()
+        finalize_modal_size(self.dialog, 420, 360)
         self.dialog.wait_window()
 
     def setup_ui(self):
@@ -400,6 +430,7 @@ class DueDateOverviewDialog:
         self.dialog.resizable(True, True)
 
         self.setup_ui()
+        finalize_modal_size(self.dialog, 1360, 760, resizable=True)
         self.dialog.wait_window()
 
     def _get_scheduled_cards(self):
@@ -624,6 +655,7 @@ class CardTypeDialog:
         center_modal(self.dialog, parent, 460, 420)
 
         self.setup_ui(initial_name or "", initial_description or "", initial_project or "", initial_color or "")
+        finalize_modal_size(self.dialog, 460, 420)
         if self.allow_name_edit:
             self.name_entry.focus()
         else:
@@ -739,6 +771,7 @@ class CardTypesOverviewDialog:
         center_modal(self.dialog, parent, 760, 440)
 
         self.setup_ui()
+        finalize_modal_size(self.dialog, 760, 440)
         self.dialog.wait_window()
 
     def setup_ui(self):
@@ -891,6 +924,7 @@ class NoteDialog:
         center_modal(self.dialog, parent, 620, 420 if read_only else 320)
 
         self.setup_ui(initial_text or "")
+        finalize_modal_size(self.dialog, 620, 420 if read_only else 320)
         self.text_widget.focus()
         self.dialog.wait_window()
 
@@ -987,6 +1021,7 @@ class CardDialog:
         
         self.setup_ui(initial_title, initial_description, initial_priority, 
                  initial_assignee, initial_project, initial_start_date, initial_end_date, initial_color, initial_tags)
+        finalize_modal_size(self.dialog, 440, dialog_height)
         
         # Wait for dialog to close
         self.dialog.wait_window()
