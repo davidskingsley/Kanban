@@ -45,6 +45,8 @@ class EmbeddedKanbanGUI:
         self.drop_targets = []
         self.column_drop_targets = []
         self.drag_preview = None
+        self.drag_preview_offset_x = 0
+        self.drag_preview_offset_y = 0
         self.column_drag_state = None
         
         # Create main interface
@@ -195,8 +197,8 @@ class EmbeddedKanbanGUI:
             # Add context menu to header
             header_frame.bind("<Button-3>", lambda e, col=column: self.show_column_context_menu(e, col))
             header_label.bind("<Button-3>", lambda e, col=column: self.show_column_context_menu(e, col))
-            self.bind_column_drag_events(header_frame, column)
-            self.bind_column_drag_events(header_label, column)
+            self.bind_column_drag_events(header_frame, column, header_frame)
+            self.bind_column_drag_events(header_label, column, header_frame)
             
             # Cards area
             cards_frame = self.create_scrollable_cards_area(col_frame)
@@ -222,13 +224,14 @@ class EmbeddedKanbanGUI:
             # Display cards
             self.display_cards_in_frame(cards_frame, column.cards)
 
-    def bind_column_drag_events(self, widget, column):
+    def bind_column_drag_events(self, widget, column, anchor_widget=None):
         """Bind drag events that allow custom columns to be reordered from the header."""
-        widget.bind("<Button-1>", lambda event, current_column=column: self.start_column_drag(event, current_column))
-        widget.bind("<B1-Motion>", lambda event, current_column=column: self.drag_column(event, current_column))
+        preview_anchor = anchor_widget or widget
+        widget.bind("<Button-1>", lambda event, current_column=column, current_anchor=preview_anchor: self.start_column_drag(event, current_column, current_anchor))
+        widget.bind("<B1-Motion>", lambda event, current_column=column, current_anchor=preview_anchor: self.drag_column(event, current_column, current_anchor))
         widget.bind("<ButtonRelease-1>", lambda event, current_column=column: self.end_column_drag(event, current_column))
 
-    def start_column_drag(self, event, column):
+    def start_column_drag(self, event, column, anchor_widget):
         """Record the starting state for a potential column drag."""
         if not (hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns):
             return
@@ -237,10 +240,12 @@ class EmbeddedKanbanGUI:
             'column_id': column.id,
             'start_x': event.x_root,
             'start_y': event.y_root,
+            'offset_x': event.x_root - anchor_widget.winfo_rootx(),
+            'offset_y': event.y_root - anchor_widget.winfo_rooty(),
             'is_dragging': False,
         }
 
-    def drag_column(self, event, column):
+    def drag_column(self, event, column, anchor_widget):
         """Track column drag motion and highlight the target insertion point."""
         if not self.column_drag_state or self.column_drag_state.get('column_id') != column.id:
             return
@@ -250,7 +255,14 @@ class EmbeddedKanbanGUI:
             dy = abs(event.y_root - self.column_drag_state['start_y'])
             if dx > 6 or dy > 6:
                 self.column_drag_state['is_dragging'] = True
-                self.create_column_drag_preview(column, event.x_root, event.y_root)
+                self.create_column_drag_preview(
+                    column,
+                    anchor_widget,
+                    event.x_root,
+                    event.y_root,
+                    self.column_drag_state['offset_x'],
+                    self.column_drag_state['offset_y'],
+                )
                 self.status_bar.config(text=f"Dragging column '{column.name}'")
 
         if self.column_drag_state['is_dragging']:
@@ -292,7 +304,7 @@ class EmbeddedKanbanGUI:
 
         self.refresh_display()
 
-    def create_column_drag_preview(self, column, x, y):
+    def create_column_drag_preview(self, column, anchor_widget, x, y, offset_x, offset_y):
         """Create a floating preview for the dragged column header."""
         self.destroy_drag_preview()
 
@@ -321,7 +333,11 @@ class EmbeddedKanbanGUI:
             pady=10,
         ).pack(fill='both', expand=True)
 
-        preview.geometry(f"240x44+{x + 12}+{y + 12}")
+        preview_width = max(anchor_widget.winfo_width(), 240)
+        preview_height = max(anchor_widget.winfo_height(), 44)
+        self.drag_preview_offset_x = max(0, min(offset_x, preview_width - 1))
+        self.drag_preview_offset_y = max(0, min(offset_y, preview_height - 1))
+        preview.geometry(f"{preview_width}x{preview_height}+{x - self.drag_preview_offset_x}+{y - self.drag_preview_offset_y}")
         self.drag_preview = preview
 
     def highlight_column_drop_targets(self, x):
@@ -524,6 +540,8 @@ class EmbeddedKanbanGUI:
         card_frame.default_highlight_thickness = border_width
         card_frame.drag_start_x = 0
         card_frame.drag_start_y = 0
+        card_frame.drag_offset_x = 0
+        card_frame.drag_offset_y = 0
         card_frame.is_dragging = False
         
         # Priority indicator
@@ -739,6 +757,8 @@ class EmbeddedKanbanGUI:
         """Initialize drag state for a card."""
         card_frame.drag_start_x = event.x_root
         card_frame.drag_start_y = event.y_root
+        card_frame.drag_offset_x = event.x_root - card_frame.winfo_rootx()
+        card_frame.drag_offset_y = event.y_root - card_frame.winfo_rooty()
         card_frame.is_dragging = False
         card_frame.lift()
 
@@ -750,7 +770,14 @@ class EmbeddedKanbanGUI:
             if dx > 5 or dy > 5:
                 card_frame.is_dragging = True
                 card_frame.config(bg='#F8FBFF', highlightbackground=ACCENT_ACTION, highlightcolor=ACCENT_ACTION)
-                self.create_drag_preview(card, event.x_root, event.y_root)
+                self.create_drag_preview(
+                    card,
+                    card_frame,
+                    event.x_root,
+                    event.y_root,
+                    card_frame.drag_offset_x,
+                    card_frame.drag_offset_y,
+                )
                 self.status_bar.config(text=f"Dragging '{card.title}'")
 
         if card_frame.is_dragging:
@@ -785,7 +812,7 @@ class EmbeddedKanbanGUI:
 
             self.refresh_display()
 
-    def create_drag_preview(self, card, x, y):
+    def create_drag_preview(self, card, card_frame, x, y, offset_x, offset_y):
         """Create a floating preview of the card while dragging."""
         self.destroy_drag_preview()
 
@@ -797,6 +824,9 @@ class EmbeddedKanbanGUI:
         preview_bg, preview_fg, preview_muted = get_card_palette(card)
         card_type = self.board.get_card_type(card.card_type_id)
         card_type_name = card_type.name if card_type else self.board.get_default_card_type().name
+        preview_width = max(card_frame.winfo_width(), 220)
+        preview_height = max(card_frame.winfo_height(), 60)
+        wrap_width = max(preview_width - 30, 120)
         preview_frame = tk.Frame(preview, bg=preview_bg, relief='flat', bd=0,
                      highlightthickness=1, highlightbackground='#C8D8F0')
         preview_frame.pack(fill='both', expand=True)
@@ -813,7 +843,7 @@ class EmbeddedKanbanGUI:
         content.pack(fill='both', expand=True)
 
         tk.Label(content, text=card.title, font=('Arial', 9, 'bold'), bg=preview_bg, fg=preview_fg, anchor='w',
-                 justify='left', wraplength=190).pack(fill='x')
+                 justify='left', wraplength=wrap_width).pack(fill='x')
 
         subtitle_parts = [card_type_name]
         if card.project:
@@ -835,21 +865,25 @@ class EmbeddedKanbanGUI:
             subtitle_parts.append('LATE')
         if subtitle_parts:
             tk.Label(content, text="  ".join(subtitle_parts), font=('Arial', 8), bg=preview_bg, fg=preview_muted,
-                     anchor='w', justify='left', wraplength=190).pack(fill='x', pady=(2, 0))
+                     anchor='w', justify='left', wraplength=wrap_width).pack(fill='x', pady=(2, 0))
 
-        preview.geometry(f"220x60+{x + 12}+{y + 12}")
+        self.drag_preview_offset_x = max(0, min(offset_x, preview_width - 1))
+        self.drag_preview_offset_y = max(0, min(offset_y, preview_height - 1))
+        preview.geometry(f"{preview_width}x{preview_height}+{x - self.drag_preview_offset_x}+{y - self.drag_preview_offset_y}")
         self.drag_preview = preview
 
     def move_drag_preview(self, x, y):
         """Move the floating drag preview with the cursor."""
         if self.drag_preview and self.drag_preview.winfo_exists():
-            self.drag_preview.geometry(f"+{x + 12}+{y + 12}")
+            self.drag_preview.geometry(f"+{x - self.drag_preview_offset_x}+{y - self.drag_preview_offset_y}")
 
     def destroy_drag_preview(self):
         """Destroy any active floating drag preview."""
         if self.drag_preview and self.drag_preview.winfo_exists():
             self.drag_preview.destroy()
         self.drag_preview = None
+        self.drag_preview_offset_x = 0
+        self.drag_preview_offset_y = 0
 
     def highlight_drop_targets(self, x, y):
         """Highlight the drop target under the cursor."""
