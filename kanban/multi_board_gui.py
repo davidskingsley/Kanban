@@ -1928,10 +1928,16 @@ class EmbeddedKanbanGUI:
         details += f"Assignee: {card.assignee or 'None'}\n"
         details += f"Color: {card.color or 'Default'}\n"
         details += f"Tags: {', '.join(card.tags) if card.tags else 'None'}\n"
+        details += f"Notes: {len(card.notes)}\n"
         parent_card = self.board.get_parent_card(card)
         details += f"Parent: {parent_card.title if parent_card else 'None'}\n"
         details += f"Created: {card.created_at.strftime('%Y-%m-%d %H:%M') if card.created_at else 'Unknown'}\n"
         details += f"Updated: {card.updated_at.strftime('%Y-%m-%d %H:%M') if card.updated_at else 'Unknown'}\n"
+
+        if card.notes:
+            details += "\nNotes:\n"
+            for note in card.notes:
+                details += f"- {note.created_at.strftime('%Y-%m-%d %H:%M')}\n"
 
         completed, total = self.board.get_subcard_progress(card.id)
         if total:
@@ -2777,6 +2783,59 @@ class CardTypesOverviewDialog:
         self.dialog.destroy()
 
 
+## @brief Modal dialog for entering a card note before it is saved.
+class NoteDialog:
+    """Dialog for entering note text."""
+
+    def __init__(self, parent, title, initial_text=""):
+        self.result = None
+
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title(title)
+        center_modal(self.dialog, parent, 520, 320)
+
+        self.setup_ui(initial_text or "")
+        self.text_widget.focus()
+        self.dialog.wait_window()
+
+    def setup_ui(self, initial_text):
+        """Set up the note entry UI."""
+        main_frame = tk.Frame(self.dialog, padx=20, pady=20, bg=APP_BG)
+        main_frame.pack(fill='both', expand=True)
+
+        tk.Label(
+            main_frame,
+            text="Note:",
+            font=('Arial', 10, 'bold'),
+            bg=APP_BG,
+        ).pack(anchor='w')
+
+        self.text_widget = tk.Text(main_frame, height=10, width=60, font=('Arial', 10), wrap='word')
+        self.text_widget.pack(fill='both', expand=True, pady=(0, 14))
+        self.text_widget.insert('1.0', initial_text)
+        style_text_input(self.text_widget)
+
+        helper_text = "The note will be saved with the current date and time."
+        tk.Label(main_frame, text=helper_text, font=('Arial', 9), fg=TEXT_MUTED, bg=APP_BG).pack(anchor='w', pady=(0, 14))
+
+        button_frame = tk.Frame(main_frame, bg=APP_BG)
+        button_frame.pack(fill='x')
+        create_soft_button(button_frame, "Cancel", self.cancel, variant='secondary').pack(side='right', padx=(10, 0))
+        create_soft_button(button_frame, "Save Note", self.confirm, variant='primary').pack(side='right')
+
+        self.dialog.bind('<Escape>', lambda _event: self.cancel())
+        self.dialog.bind('<Control-Return>', lambda _event: self.confirm())
+
+    def confirm(self):
+        """Save the entered note text and close the dialog."""
+        self.result = self.text_widget.get('1.0', 'end-1c').strip()
+        self.dialog.destroy()
+
+    def cancel(self):
+        """Close the dialog without saving."""
+        self.dialog.destroy()
+
+
 ## @brief Modal dialog for creating or editing cards in the multi-board GUI.
 class CardDialog:
     """Dialog for creating/editing cards."""
@@ -2940,6 +2999,9 @@ class CardDialog:
         self.tags_entry.insert(0, ', '.join(initial_tags))
         style_text_input(self.tags_entry)
 
+        if self.card is not None:
+            self._build_notes_section(fields_frame)
+
         if self._supports_subcard_management():
             self._build_subcards_section(fields_frame)
         
@@ -3049,6 +3111,115 @@ class CardDialog:
         create_soft_button(actions_frame, "Delete Selected", self.delete_selected_subcard, variant='secondary').pack(side='left', padx=(8, 0))
 
         self.refresh_subcards_list()
+
+    def _build_notes_section(self, parent):
+        """Render note management controls for an existing card."""
+        tk.Label(parent, text="Notes:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+
+        notes_frame = tk.Frame(parent, bg=APP_BG)
+        notes_frame.pack(fill='both', expand=True, pady=(0, 20))
+
+        list_frame = tk.Frame(notes_frame, bg=APP_BG)
+        list_frame.pack(fill='both', expand=True)
+
+        self.notes_listbox = tk.Listbox(list_frame, height=5, font=('Arial', 10), activestyle='dotbox')
+        self.notes_listbox.pack(side='left', fill='both', expand=True)
+        style_text_input(self.notes_listbox)
+        self.notes_listbox.bind('<Double-Button-1>', self.view_selected_note)
+
+        scrollbar = ttk.Scrollbar(list_frame, orient='vertical', command=self.notes_listbox.yview)
+        scrollbar.pack(side='right', fill='y')
+        self.notes_listbox.configure(yscrollcommand=scrollbar.set)
+
+        actions_frame = tk.Frame(notes_frame, bg=APP_BG)
+        actions_frame.pack(fill='x', pady=(8, 0))
+
+        create_soft_button(actions_frame, "Add Note", self.add_note, variant='accent').pack(side='left')
+        create_soft_button(actions_frame, "View Selected", self.view_selected_note, variant='secondary').pack(side='left', padx=(8, 0))
+        create_soft_button(actions_frame, "Delete Selected", self.delete_selected_note, variant='secondary').pack(side='left', padx=(8, 0))
+
+        self.refresh_notes_list()
+
+    def refresh_notes_list(self):
+        """Refresh the list of notes for the current card."""
+        if not hasattr(self, 'notes_listbox') or self.card is None:
+            return
+
+        self.notes_listbox.delete(0, tk.END)
+        for note in self.card.notes:
+            summary = note.text.strip().splitlines()[0] if note.text.strip() else 'Empty note'
+            self.notes_listbox.insert(tk.END, f"{note.created_at.strftime('%Y-%m-%d %H:%M')} | {summary[:40]}")
+
+        if not self.card.notes:
+            self.notes_listbox.insert(tk.END, 'No notes yet')
+
+    def add_note(self):
+        """Prompt for note text and create a new timestamped note for the current card."""
+        if self.card is None:
+            return
+
+        note_dialog = NoteDialog(self.dialog, f"Add Note to '{self.card.title}'")
+        if note_dialog.result is None:
+            return
+
+        note = self.board.add_card_note(self.card.id, note_dialog.result)
+        if note is None:
+            messagebox.showerror('Error', 'Card not found.', parent=self.dialog)
+            return
+
+        self.card = self.board.find_card(self.card.id)
+        self.refresh_notes_list()
+        if self.on_change:
+            self.on_change()
+        self.dialog.after(0, lambda: messagebox.showinfo('Note Added', f"Created note at {note.created_at.strftime('%Y-%m-%d %H:%M:%S')}", parent=self.dialog))
+
+    def view_selected_note(self, _event=None):
+        """Show the selected note details."""
+        if self.card is None or not hasattr(self, 'notes_listbox'):
+            return
+
+        current = self.notes_listbox.curselection()
+        if not current or not self.card.notes:
+            messagebox.showinfo('View Note', 'Select a note to view.', parent=self.dialog)
+            return
+
+        index = current[0]
+        if index >= len(self.card.notes):
+            return
+
+        note = self.card.notes[index]
+        details = f"Created: {note.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n\n{note.text or '(empty note)'}"
+        messagebox.showinfo('Card Note', details, parent=self.dialog)
+
+    def delete_selected_note(self):
+        """Delete the selected note from the current card."""
+        if self.card is None or not hasattr(self, 'notes_listbox'):
+            return
+
+        current = self.notes_listbox.curselection()
+        if not current or not self.card.notes:
+            messagebox.showinfo('Delete Note', 'Select a note to delete.', parent=self.dialog)
+            return
+
+        index = current[0]
+        if index >= len(self.card.notes):
+            return
+
+        note = self.card.notes[index]
+        summary = note.text.strip().splitlines()[0] if note.text.strip() else 'this empty note'
+        confirm_message = f"Delete note from {note.created_at.strftime('%Y-%m-%d %H:%M:%S')}?\n\n{summary[:80]}"
+        if not messagebox.askyesno('Delete Note', confirm_message, parent=self.dialog):
+            return
+
+        deleted = self.board.delete_card_note(self.card.id, note.id)
+        if not deleted:
+            messagebox.showerror('Error', 'Note could not be deleted.', parent=self.dialog)
+            return
+
+        self.card = self.board.find_card(self.card.id)
+        self.refresh_notes_list()
+        if self.on_change:
+            self.on_change()
 
     def refresh_subcards_list(self):
         """Refresh the list of current subcards and their locations."""

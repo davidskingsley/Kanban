@@ -29,6 +29,33 @@ class Status(Enum):
     DONE = "Done"
 
 
+## @brief Represents a timestamped note attached to a card.
+class CardNote:
+    """Represents a note recorded against a card."""
+
+    def __init__(self, text: str = "", created_at: datetime = None, note_id: str = None):
+        self.id = note_id if note_id else str(uuid.uuid4())
+        self.text = text or ""
+        self.created_at = created_at or datetime.now()
+
+    def to_dict(self):
+        """Convert note to dictionary for serialization."""
+        return {
+            'id': self.id,
+            'text': self.text,
+            'created_at': self.created_at.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        """Create note from dictionary."""
+        return cls(
+            data.get('text', ''),
+            datetime.fromisoformat(data.get('created_at', datetime.now().isoformat())),
+            data.get('id'),
+        )
+
+
 ## @brief Represents a reusable board-level card type with optional presets.
 class CardType:
     """Represents a configurable card type with optional project and color presets."""
@@ -182,6 +209,7 @@ class Card:
         self.card_type_id = None
         self.parent_id = None
         self.tags = []
+        self.notes: List[CardNote] = []
 
     def update(self, title: str = None, description: str = None,
                priority: Priority = None, assignee: str = None, project: str = None,
@@ -229,6 +257,22 @@ class Card:
         if tag in self.tags:
             self.tags.remove(tag)
             self.updated_at = datetime.now()
+
+    def add_note(self, text: str = "") -> CardNote:
+        """Add a timestamped note to the card."""
+        note = CardNote(text)
+        self.notes.append(note)
+        self.updated_at = datetime.now()
+        return note
+
+    def remove_note(self, note_id: str) -> bool:
+        """Remove a note from the card by ID."""
+        for index, note in enumerate(self.notes):
+            if note.id == note_id:
+                self.notes.pop(index)
+                self.updated_at = datetime.now()
+                return True
+        return False
     
     def to_dict(self):
         """Convert card to dictionary for serialization."""
@@ -246,7 +290,8 @@ class Card:
             'color': self.color,
             'card_type_id': self.card_type_id,
             'parent_id': self.parent_id,
-            'tags': self.tags
+            'tags': self.tags,
+            'notes': [note.to_dict() for note in self.notes],
         }
     
     @classmethod
@@ -273,6 +318,7 @@ class Card:
         card.card_type_id = data.get('card_type_id')
         card.parent_id = data.get('parent_id')
         card.tags = data.get('tags', [])
+        card.notes = [CardNote.from_dict(note_data) for note_data in data.get('notes', [])]
         return card
     
     def __str__(self):

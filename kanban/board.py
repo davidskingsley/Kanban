@@ -382,6 +382,31 @@ class KanbanBoard:
         """Return the direct child cards of the given parent card."""
         return [card for card in self.get_all_cards() if card.parent_id == parent_id]
 
+    def add_card_note(self, card_id: str, text: str = ""):
+        """Add a timestamped note to an existing card."""
+        self._ensure_writable()
+
+        card = self.find_card(card_id)
+        if not card:
+            return None
+
+        note = card.add_note(text)
+        self.save_board()
+        return note
+
+    def delete_card_note(self, card_id: str, note_id: str) -> bool:
+        """Delete a note from an existing card."""
+        self._ensure_writable()
+
+        card = self.find_card(card_id)
+        if not card:
+            return False
+
+        removed = card.remove_note(note_id)
+        if removed:
+            self.save_board()
+        return removed
+
     def get_subcard_progress(self, parent_id: str) -> tuple[int, int]:
         """Return completed and total counts for a parent card's direct subcards."""
         subcards = self.get_subcards(parent_id)
