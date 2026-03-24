@@ -43,7 +43,9 @@ class EmbeddedKanbanGUI:
         self.assignee_filter = None
         self.overdue_filter = False
         self.drop_targets = []
+        self.column_drop_targets = []
         self.drag_preview = None
+        self.column_drag_state = None
         
         # Create main interface
         self.setup_full_interface()
@@ -102,6 +104,7 @@ class EmbeddedKanbanGUI:
             widget.destroy()
 
         self.drop_targets = []
+        self.column_drop_targets = []
         
         if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns:
             self.refresh_custom_columns()
@@ -191,6 +194,8 @@ class EmbeddedKanbanGUI:
             # Add context menu to header
             header_frame.bind("<Button-3>", lambda e, col=column: self.show_column_context_menu(e, col))
             header_label.bind("<Button-3>", lambda e, col=column: self.show_column_context_menu(e, col))
+            self.bind_column_drag_events(header_frame, column)
+            self.bind_column_drag_events(header_label, column)
             
             # Cards area
             cards_frame = self.create_scrollable_cards_area(col_frame)
@@ -207,9 +212,184 @@ class EmbeddedKanbanGUI:
                 'default_bg': SURFACE_BG,
                 'canvas': cards_frame.scroll_canvas
             })
+            self.column_drop_targets.append({
+                'column_id': column.id,
+                'label': column.name,
+                'frame': col_frame,
+            })
             
             # Display cards
             self.display_cards_in_frame(cards_frame, column.cards)
+
+    def bind_column_drag_events(self, widget, column):
+        """Bind drag events that allow custom columns to be reordered from the header."""
+        widget.bind("<Button-1>", lambda event, current_column=column: self.start_column_drag(event, current_column))
+        widget.bind("<B1-Motion>", lambda event, current_column=column: self.drag_column(event, current_column))
+        widget.bind("<ButtonRelease-1>", lambda event, current_column=column: self.end_column_drag(event, current_column))
+
+    def start_column_drag(self, event, column):
+        """Record the starting state for a potential column drag."""
+        if not (hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns):
+            return
+
+        self.column_drag_state = {
+            'column_id': column.id,
+            'start_x': event.x_root,
+            'start_y': event.y_root,
+            'is_dragging': False,
+        }
+
+    def drag_column(self, event, column):
+        """Track column drag motion and highlight the target insertion point."""
+        if not self.column_drag_state or self.column_drag_state.get('column_id') != column.id:
+            return
+
+        if not self.column_drag_state['is_dragging']:
+            dx = abs(event.x_root - self.column_drag_state['start_x'])
+            dy = abs(event.y_root - self.column_drag_state['start_y'])
+            if dx > 6 or dy > 6:
+                self.column_drag_state['is_dragging'] = True
+                self.create_column_drag_preview(column, event.x_root, event.y_root)
+                self.status_bar.config(text=f"Dragging column '{column.name}'")
+
+        if self.column_drag_state['is_dragging']:
+            self.move_drag_preview(event.x_root, event.y_root)
+            self.highlight_column_drop_targets(event.x_root)
+            self.auto_scroll_column_drag(event.x_root)
+
+    def end_column_drag(self, event, column):
+        """Complete a column drag-drop reorder when released over another column."""
+        if not self.column_drag_state or self.column_drag_state.get('column_id') != column.id:
+            return
+
+        was_dragging = self.column_drag_state.get('is_dragging', False)
+        self.column_drag_state = None
+        if not was_dragging:
+            return
+
+        target_order = self.get_dragged_column_order(event.x_root, column.id)
+        self.clear_column_drop_highlights()
+        self.destroy_drag_preview()
+
+        if target_order is None:
+            self.refresh_display()
+            return
+
+        current_order = [item.id for item in self.board.get_columns_ordered()]
+        if target_order == current_order:
+            self.refresh_display()
+            return
+
+        if not self.ensure_board_writable():
+            self.refresh_display()
+            return
+
+        if self.board.reorder_columns(target_order):
+            self.refresh_display()
+            self.status_bar.config(text=f"🔄 Reordered column: {column.name}")
+            return
+
+        self.refresh_display()
+
+    def create_column_drag_preview(self, column, x, y):
+        """Create a floating preview for the dragged column header."""
+        self.destroy_drag_preview()
+
+        preview = tk.Toplevel(self.parent_frame)
+        preview.overrideredirect(True)
+        preview.attributes('-topmost', True)
+        preview.configure(bg='#DCE8F8')
+
+        preview_frame = tk.Frame(
+            preview,
+            bg=column.color if hasattr(column, 'color') else SURFACE_BG,
+            relief='flat',
+            bd=0,
+            highlightthickness=1,
+            highlightbackground='#C8D8F0',
+        )
+        preview_frame.pack(fill='both', expand=True)
+
+        tk.Label(
+            preview_frame,
+            text=f"{column.name} ({len(column)})",
+            font=('Arial', 10, 'bold'),
+            bg=preview_frame['bg'],
+            fg='white' if getattr(column, 'color', '#FFFFFF') != '#FFFFFF' else '#2F2923',
+            padx=12,
+            pady=10,
+        ).pack(fill='both', expand=True)
+
+        preview.geometry(f"240x44+{x + 12}+{y + 12}")
+        self.drag_preview = preview
+
+    def highlight_column_drop_targets(self, x):
+        """Highlight the column where the dragged header would be inserted."""
+        insertion_index = self.get_column_insertion_index(x)
+        for index, target in enumerate(self.column_drop_targets):
+            frame = target['frame']
+            if insertion_index is None:
+                frame.config(highlightbackground=OUTLINE_COLOR, highlightcolor=OUTLINE_COLOR, highlightthickness=1)
+                continue
+
+            highlight_active = index == insertion_index or (insertion_index == len(self.column_drop_targets) and index == len(self.column_drop_targets) - 1)
+            if highlight_active:
+                frame.config(highlightbackground=ACCENT_ACTION, highlightcolor=ACCENT_ACTION, highlightthickness=3)
+            else:
+                frame.config(highlightbackground=OUTLINE_COLOR, highlightcolor=OUTLINE_COLOR, highlightthickness=1)
+
+    def clear_column_drop_highlights(self):
+        """Restore default column highlight styling after a drag completes."""
+        for target in self.column_drop_targets:
+            frame = target['frame']
+            frame.config(highlightbackground=OUTLINE_COLOR, highlightcolor=OUTLINE_COLOR, highlightthickness=1)
+
+    def get_column_insertion_index(self, x_root):
+        """Return the insertion index for a dragged column based on the pointer position."""
+        if not self.column_drop_targets:
+            return None
+
+        first_frame = self.column_drop_targets[0]['frame']
+        last_frame = self.column_drop_targets[-1]['frame']
+        board_left = first_frame.winfo_rootx()
+        board_right = last_frame.winfo_rootx() + last_frame.winfo_width()
+        if x_root < board_left or x_root > board_right:
+            return None
+
+        for index, target in enumerate(self.column_drop_targets):
+            frame = target['frame']
+            frame_x = frame.winfo_rootx()
+            frame_width = frame.winfo_width()
+            midpoint = frame_x + (frame_width / 2)
+            if x_root < midpoint:
+                return index
+        return len(self.column_drop_targets)
+
+    def get_dragged_column_order(self, x_root, dragged_column_id):
+        """Return the reordered column ID list implied by the drag position."""
+        insertion_index = self.get_column_insertion_index(x_root)
+        if insertion_index is None:
+            return None
+
+        order = [item.id for item in self.board.get_columns_ordered()]
+        if dragged_column_id not in order:
+            return None
+
+        order.remove(dragged_column_id)
+        insertion_index = min(insertion_index, len(order))
+        order.insert(insertion_index, dragged_column_id)
+        return order
+
+    def auto_scroll_column_drag(self, x_root):
+        """Auto-scroll the board horizontally while dragging a column near an edge."""
+        canvas_left = self.canvas.winfo_rootx()
+        canvas_right = canvas_left + self.canvas.winfo_width()
+        threshold = 48
+
+        if x_root <= canvas_left + threshold:
+            self.canvas.xview_scroll(-1, 'units')
+        elif x_root >= canvas_right - threshold:
+            self.canvas.xview_scroll(1, 'units')
     
     def refresh_legacy_columns(self):
         """Refresh display for boards with legacy columns."""
