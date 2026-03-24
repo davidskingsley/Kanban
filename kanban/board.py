@@ -3,7 +3,7 @@
 """Main Kanban board implementation with custom column support."""
 
 from typing import List, Optional, Dict, Union
-from .models import Card, Column, CustomColumn, Status, Priority
+from .models import Card, Column, CustomColumn, Status, Priority, UNSET
 from .storage import DataStorage, get_default_single_board_file
 import os
 import uuid
@@ -184,7 +184,8 @@ class KanbanBoard:
     
     # Card Management Methods
     def create_card(self, title: str, description: str = "", priority: Priority = Priority.MEDIUM,
-                   column_id: str = None, project: str = None, parent_id: str = None) -> Card:
+                   column_id: str = None, project: str = None, parent_id: str = None,
+                   color: str = None) -> Card:
         """Create a new card and add it to the specified column (or first column if none specified)."""
         self._ensure_writable()
 
@@ -202,6 +203,8 @@ class KanbanBoard:
                 card.project = project
             if parent_id is not None:
                 card.parent_id = parent_id
+            if color is not None:
+                card.color = color
             self.custom_columns[column_id].add_card(card)
         else:
             # Legacy mode
@@ -210,6 +213,8 @@ class KanbanBoard:
                 card.project = project
             if parent_id is not None:
                 card.parent_id = parent_id
+            if color is not None:
+                card.color = color
             self.columns[Status.TODO].add_card(card)
         
         self.save_board()
@@ -217,13 +222,13 @@ class KanbanBoard:
     
     def edit_card(self, card_id: str, title: str = None, description: str = None, 
                   priority: Priority = None, assignee: str = None, project: str = None,
-                  parent_id: str = None) -> Optional[Card]:
+                  parent_id: str = None, color=UNSET) -> Optional[Card]:
         """Edit an existing card."""
         self._ensure_writable()
 
         card = self.find_card(card_id)
         if card:
-            card.update(title, description, priority, assignee, project, parent_id)
+            card.update(title, description, priority, assignee, project, parent_id, color)
             self.save_board()
             return card
         return None
@@ -269,7 +274,8 @@ class KanbanBoard:
         return card.status.value if card.status else 'Unknown'
 
     def create_subcard(self, parent_id: str, title: str, description: str = "",
-                       priority: Priority = Priority.MEDIUM, project: str = None) -> Card:
+                       priority: Priority = Priority.MEDIUM, project: str = None,
+                       color: str = None) -> Card:
         """Create a child card under an existing parent card."""
         parent_card = self.find_card(parent_id)
         if not parent_card:
@@ -278,7 +284,15 @@ class KanbanBoard:
             raise ValueError("Nested subcards are not supported")
 
         target = parent_card.column_id if self.use_custom_columns else parent_card.status
-        return self.create_card(title, description, priority, target, project or parent_card.project, parent_id)
+        return self.create_card(
+            title,
+            description,
+            priority,
+            target,
+            project or parent_card.project,
+            parent_id,
+            color if color is not None else parent_card.color,
+        )
     
     def delete_card(self, card_id: str) -> bool:
         """Delete a card from the board."""

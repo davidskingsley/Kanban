@@ -3,7 +3,7 @@
 """Multi-board graphical user interface for the Kanban board application."""
 
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog, filedialog
+from tkinter import ttk, messagebox, simpledialog, filedialog, colorchooser
 from typing import Dict, Optional, List
 
 from .board_manager import BoardManager
@@ -20,6 +20,23 @@ HOVER_BG = '#F5E9D5'
 PRIMARY_ACTION = '#557C65'
 SECONDARY_ACTION = '#8B7E74'
 ACCENT_ACTION = '#5D8AC8'
+def is_dark_color(color):
+    """Return whether a hex color is visually dark."""
+    if not color or not isinstance(color, str) or not color.startswith('#') or len(color) != 7:
+        return False
+    red = int(color[1:3], 16)
+    green = int(color[3:5], 16)
+    blue = int(color[5:7], 16)
+    luminance = (0.299 * red) + (0.587 * green) + (0.114 * blue)
+    return luminance < 150
+
+
+def get_card_palette(card):
+    """Return background and text colors for a card."""
+    background = card.color or SURFACE_ALT_BG
+    if card.color and is_dark_color(card.color):
+        return background, 'white', '#F1EEE9'
+    return background, '#2F2923', TEXT_MUTED
 
 
 def center_modal(dialog, parent, width, height):
@@ -200,7 +217,7 @@ class MultiBoardGUI:
         menubar.add_cascade(label="Columns", menu=columns_menu)
         columns_menu.add_command(label="New Column", command=lambda: self.invoke_current_board_action('create_column_dialog'),
                                  accelerator=self.get_shortcut_label('create_column_dialog'))
-        columns_menu.add_command(label="Rename Column", command=lambda: self.invoke_current_board_action('rename_column_dialog'),
+        columns_menu.add_command(label="Column Properties", command=lambda: self.invoke_current_board_action('rename_column_dialog'),
                                  accelerator=self.get_shortcut_label('rename_column_dialog'))
         columns_menu.add_command(label="Delete Column", command=lambda: self.invoke_current_board_action('delete_column_dialog'),
                                  accelerator=self.get_shortcut_label('delete_column_dialog'))
@@ -850,7 +867,7 @@ class MultiBoardGUI:
             f"{self.get_shortcut_label('clear_filters')} - Clear filters\n\n"
             "Columns and app:\n"
             f"{self.get_shortcut_label('create_column_dialog')} - New column\n"
-            f"{self.get_shortcut_label('rename_column_dialog')} - Rename column\n"
+            f"{self.get_shortcut_label('rename_column_dialog')} - Column properties\n"
             f"{self.get_shortcut_label('delete_column_dialog')} - Delete column\n"
             f"{self.get_shortcut_label('reorder_columns_dialog')} - Reorder columns\n"
             f"{self.get_shortcut_label('export_all_boards')} - Export all boards\n"
@@ -1151,9 +1168,10 @@ class EmbeddedKanbanGUI:
     
     def create_card_widget(self, parent, card):
         """Create a card widget."""
+        card_bg, text_fg, muted_fg = get_card_palette(card)
         card_frame = tk.Frame(
             parent,
-            bg=SURFACE_ALT_BG,
+            bg=card_bg,
             relief='flat',
             bd=0,
             cursor='hand2',
@@ -1162,6 +1180,7 @@ class EmbeddedKanbanGUI:
             highlightcolor='#E8DED1',
         )
         card_frame.pack(fill='x', pady=4, padx=2)
+        card_frame.default_bg = card_bg
         card_frame.drag_start_x = 0
         card_frame.drag_start_y = 0
         card_frame.is_dragging = False
@@ -1175,23 +1194,23 @@ class EmbeddedKanbanGUI:
         priority_bar.pack(fill='x')
         
         # Card content
-        content_frame = tk.Frame(card_frame, bg=SURFACE_ALT_BG)
+        content_frame = tk.Frame(card_frame, bg=card_bg)
         content_frame.pack(fill='both', expand=True, padx=5, pady=5)
         
         # Title
         title_label = tk.Label(content_frame, text=card.title, font=('Arial', 9, 'bold'),
-                              bg=SURFACE_ALT_BG, anchor='w', wraplength=220)
+                      bg=card_bg, fg=text_fg, anchor='w', wraplength=220)
         title_label.pack(fill='x')
         
         # Description (truncated)
         if card.description:
             desc_text = card.description[:50] + "..." if len(card.description) > 50 else card.description
             desc_label = tk.Label(content_frame, text=desc_text, font=('Arial', 8),
-                                 bg=SURFACE_ALT_BG, fg=TEXT_MUTED, anchor='w', wraplength=220)
+                                 bg=card_bg, fg=muted_fg, anchor='w', wraplength=220)
             desc_label.pack(fill='x')
         
         # Footer
-        footer_frame = tk.Frame(content_frame, bg=SURFACE_ALT_BG)
+        footer_frame = tk.Frame(content_frame, bg=card_bg)
         footer_frame.pack(fill='x', pady=(5, 0))
 
         if card.project:
@@ -1221,7 +1240,7 @@ class EmbeddedKanbanGUI:
             if len(card.tags) > 2:
                 tags_text += f" +{len(card.tags)-2}"
             tags_label = tk.Label(footer_frame, text=tags_text, font=('Arial', 8),
-                                 bg=SURFACE_ALT_BG, fg=TEXT_MUTED)
+                                 bg=card_bg, fg=muted_fg)
             tags_label.pack(side='right')
 
         card_frame.scroll_canvas = getattr(parent, 'scroll_canvas', None)
@@ -1274,7 +1293,7 @@ class EmbeddedKanbanGUI:
             target = self.get_drop_target(event.x_root, event.y_root)
             self.clear_drop_target_highlights()
             self.destroy_drag_preview()
-            card_frame.config(bg=SURFACE_ALT_BG, highlightbackground='#E8DED1', highlightcolor='#E8DED1')
+            card_frame.config(bg=getattr(card_frame, 'default_bg', SURFACE_ALT_BG), highlightbackground='#E8DED1', highlightcolor='#E8DED1')
             card_frame.is_dragging = False
 
             if target is not None and not self.is_same_column(card, target):
@@ -1298,7 +1317,8 @@ class EmbeddedKanbanGUI:
         preview.attributes('-topmost', True)
         preview.configure(bg='#DCE8F8')
 
-        preview_frame = tk.Frame(preview, bg=SURFACE_BG, relief='flat', bd=0,
+        preview_bg, preview_fg, preview_muted = get_card_palette(card)
+        preview_frame = tk.Frame(preview, bg=preview_bg, relief='flat', bd=0,
                      highlightthickness=1, highlightbackground='#C8D8F0')
         preview_frame.pack(fill='both', expand=True)
 
@@ -1310,10 +1330,10 @@ class EmbeddedKanbanGUI:
         }
         tk.Frame(preview_frame, bg=priority_colors.get(card.priority.value, '#E0E0E0'), height=4).pack(fill='x')
 
-        content = tk.Frame(preview_frame, bg=SURFACE_BG, padx=8, pady=6)
+        content = tk.Frame(preview_frame, bg=preview_bg, padx=8, pady=6)
         content.pack(fill='both', expand=True)
 
-        tk.Label(content, text=card.title, font=('Arial', 9, 'bold'), bg=SURFACE_BG, anchor='w',
+        tk.Label(content, text=card.title, font=('Arial', 9, 'bold'), bg=preview_bg, fg=preview_fg, anchor='w',
                  justify='left', wraplength=190).pack(fill='x')
 
         subtitle_parts = []
@@ -1331,7 +1351,7 @@ class EmbeddedKanbanGUI:
         if card.tags:
             subtitle_parts.append(" ".join(f"#{tag}" for tag in card.tags[:2]))
         if subtitle_parts:
-            tk.Label(content, text="  ".join(subtitle_parts), font=('Arial', 8), bg=SURFACE_BG, fg=TEXT_MUTED,
+            tk.Label(content, text="  ".join(subtitle_parts), font=('Arial', 8), bg=preview_bg, fg=preview_muted,
                      anchor='w', justify='left', wraplength=190).pack(fill='x', pady=(2, 0))
 
         preview.geometry(f"220x60+{x + 12}+{y + 12}")
@@ -1478,19 +1498,19 @@ class EmbeddedKanbanGUI:
 
         dialog = CardDialog(self.parent_frame, "Create New Card", board=self.board, on_change=self.refresh_display)
         if dialog.result:
-            title, description, priority, assignee, project, tags = dialog.result
+            title, description, priority, assignee, project, color, tags = dialog.result
             
             # Get target column
             if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns:
                 columns = self.board.get_columns_ordered()
                 if columns:
                     target_column = columns[0].id  # Add to first column
-                    card = self.board.create_card(title, description, priority, target_column, project)
+                    card = self.board.create_card(title, description, priority, target_column, project, color=color)
                 else:
                     messagebox.showerror("Error", "No columns available!")
                     return
             else:
-                card = self.board.create_card(title, description, priority, Status.TODO, project)
+                card = self.board.create_card(title, description, priority, Status.TODO, project, color=color)
             
             if assignee:
                 self.board.edit_card(card.id, assignee=assignee)
@@ -1519,15 +1539,16 @@ class EmbeddedKanbanGUI:
                           initial_priority=card.priority,
                           initial_assignee=card.assignee,
                           initial_project=card.project,
+                          initial_color=card.color,
                           initial_tags=list(card.tags),
                           board=self.board,
                           card=card,
                           on_change=self.refresh_display)
         
         if dialog.result:
-            title, description, priority, assignee, project, tags = dialog.result
+            title, description, priority, assignee, project, color, tags = dialog.result
             self.board.edit_card(card.id, title=title, description=description, 
-                               priority=priority, assignee=assignee, project=project)
+                               priority=priority, assignee=assignee, project=project, color=color)
             
             # Update tags
             card.tags.clear()
@@ -1677,23 +1698,16 @@ class EmbeddedKanbanGUI:
             messagebox.showinfo("Not Available", "Column management only available for custom column boards!")
             return
         
-        name = simpledialog.askstring("Create Column", "Enter column name:")
-        if not name:
+        dialog = ColumnDialog(self.parent_frame, "Create Column")
+        if not dialog.result:
             return
-        
-        # Ask for color (simplified)
-        colors = ['#FF9800', '#2196F3', '#4CAF50', '#F44336', '#9C27B0', '#FF5722']
-        color_names = ['Orange', 'Blue', 'Green', 'Red', 'Purple', 'Deep Orange']
-        color_map = {color_names[i]: colors[i] for i in range(len(colors))}
-        selected = self.choose_option("Select Color", "Select color:", color_names, initial_index=0)
-        color_value = color_map[selected] if selected is not None else colors[0]
-        
+        name, color_value = dialog.result
         column_id = self.board.create_column(name, color=color_value)
         self.refresh_display()
         self.status_bar.config(text=f"✅ Created column: {name}")
 
     def rename_column_dialog(self):
-        """Show dialog to rename a column."""
+        """Show dialog to edit a column's properties."""
         if not self.ensure_board_writable():
             return
 
@@ -1707,17 +1721,12 @@ class EmbeddedKanbanGUI:
             return
 
         option_map = {column.name: column for column in columns}
-        selected = self.choose_option("Rename Column", "Select column to rename:", list(option_map.keys()))
+        selected = self.choose_option("Column Properties", "Select column:", list(option_map.keys()))
         if selected is None:
             return
 
         column = option_map[selected]
-        new_name = simpledialog.askstring("Rename Column", 
-                                         f"Current name: {column.name}\nEnter new name:")
-        if new_name:
-            self.board.rename_column(column.id, new_name)
-            self.refresh_display()
-            self.status_bar.config(text=f"✅ Renamed column to: {new_name}")
+        self.modify_specific_column(column)
 
     def delete_column_dialog(self):
         """Show dialog to delete a column."""
@@ -1810,8 +1819,7 @@ class EmbeddedKanbanGUI:
             return
             
         menu = tk.Menu(self.parent_frame, tearoff=0)
-        menu.add_command(label="✏️ Rename", command=lambda: self.rename_specific_column(column))
-        menu.add_command(label="🎨 Change Color", command=lambda: self.change_column_color(column))  
+        menu.add_command(label="✏️ Column Properties", command=lambda: self.modify_specific_column(column))
         menu.add_separator()
         menu.add_command(label="🗑️ Delete", command=lambda: self.delete_specific_column(column))
         
@@ -1867,9 +1875,9 @@ class EmbeddedKanbanGUI:
         )
 
         if dialog.result:
-            title, description, priority, assignee, project, tags = dialog.result
+            title, description, priority, assignee, project, color, tags = dialog.result
             try:
-                subcard = self.board.create_subcard(parent_card.id, title, description, priority, project)
+                subcard = self.board.create_subcard(parent_card.id, title, description, priority, project, color)
                 if assignee:
                     self.board.edit_card(subcard.id, assignee=assignee)
 
@@ -1889,6 +1897,7 @@ class EmbeddedKanbanGUI:
         details += f"Priority: {card.priority.value.title()}\n"
         details += f"Project: {card.project or 'None'}\n"
         details += f"Assignee: {card.assignee or 'None'}\n"
+        details += f"Color: {card.color or 'Default'}\n"
         details += f"Tags: {', '.join(card.tags) if card.tags else 'None'}\n"
         parent_card = self.board.get_parent_card(card)
         details += f"Parent: {parent_card.title if parent_card else 'None'}\n"
@@ -1904,34 +1913,29 @@ class EmbeddedKanbanGUI:
         
         messagebox.showinfo("Card Details", details)
 
-    def rename_specific_column(self, column):
-        """Rename a specific column."""
+    def modify_specific_column(self, column):
+        """Modify a specific column's name and color."""
         if not self.ensure_board_writable():
             return
 
-        new_name = simpledialog.askstring("Rename Column", 
-                                         f"Current name: {column.name}\nEnter new name:")
-        if new_name:
-            self.board.rename_column(column.id, new_name)
-            self.refresh_display()
-            self.status_bar.config(text=f"✅ Renamed column to: {new_name}")
+        dialog = ColumnDialog(
+            self.parent_frame,
+            "Column Properties",
+            initial_name=column.name,
+            initial_color=column.color,
+        )
+        if not dialog.result:
+            return
+
+        new_name, new_color = dialog.result
+        self.board.rename_column(column.id, new_name)
+        self.board.change_column_color(column.id, new_color)
+        self.refresh_display()
+        self.status_bar.config(text=f"✅ Updated column: {new_name}")
 
     def change_column_color(self, column):
         """Change a column's color."""
-        if not self.ensure_board_writable():
-            return
-
-        colors = ['#FF9800', '#2196F3', '#4CAF50', '#F44336', '#9C27B0', '#FF5722']
-        color_names = ['Orange', 'Blue', 'Green', 'Red', 'Purple', 'Deep Orange']
-
-        color_map = {color_names[i]: colors[i] for i in range(len(colors))}
-        selected = self.choose_option("Change Color", f"Select a new color for '{column.name}':", color_names)
-        if selected is None:
-            return
-
-        self.board.change_column_color(column.id, color_map[selected])
-        self.refresh_display()
-        self.status_bar.config(text=f"🎨 Changed color for {column.name}")
+        self.modify_specific_column(column)
 
     def delete_specific_column(self, column):
         """Delete a specific column."""
@@ -2085,6 +2089,107 @@ class BoardDialog:
         self.result = (name, description, storage_dir)
         self.dialog.destroy()
     
+    def cancel(self):
+        """Cancel the dialog."""
+        self.dialog.destroy()
+
+
+## @brief Modal dialog for creating or editing column properties.
+class ColumnDialog:
+    """Dialog for creating or editing column properties."""
+
+    DEFAULT_COLORS = ['#FF9800', '#2196F3', '#4CAF50', '#F44336', '#9C27B0', '#FF5722']
+
+    def __init__(self, parent, title="Column Properties", initial_name="", initial_color="#FF9800"):
+        self.result = None
+
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title(title)
+        center_modal(self.dialog, parent, 420, 220)
+
+        self.setup_ui(initial_name, initial_color)
+        self.name_entry.focus()
+        self.dialog.wait_window()
+
+    def setup_ui(self, initial_name, initial_color):
+        """Set up the dialog UI."""
+        main_frame = tk.Frame(self.dialog, bg=APP_BG)
+        main_frame.pack(fill='both', expand=True, padx=20, pady=20)
+
+        tk.Label(main_frame, text="Column Name:", font=('Arial', 11, 'bold'), bg=APP_BG).pack(anchor='w')
+        self.name_entry = tk.Entry(main_frame, font=('Arial', 11), width=40)
+        self.name_entry.pack(fill='x', pady=(5, 15))
+        self.name_entry.insert(0, initial_name)
+        style_text_input(self.name_entry)
+
+        tk.Label(main_frame, text="Column Color:", font=('Arial', 11, 'bold'), bg=APP_BG).pack(anchor='w')
+
+        color_frame = tk.Frame(main_frame, bg=APP_BG)
+        color_frame.pack(fill='x', pady=(5, 12))
+
+        self.color_var = tk.StringVar(value=initial_color or self.DEFAULT_COLORS[0])
+        self.color_preview = tk.Label(
+            color_frame,
+            text="Current",
+            width=10,
+            bg=self.color_var.get(),
+            fg='white',
+            relief='solid',
+            bd=1,
+            font=('Arial', 9, 'bold'),
+            padx=8,
+            pady=6,
+        )
+        self.color_preview.pack(side='left')
+
+        create_soft_button(color_frame, "Pick Color", self.pick_color, variant='accent').pack(side='right')
+
+        palette_frame = tk.Frame(main_frame, bg=APP_BG)
+        palette_frame.pack(fill='x', pady=(0, 20))
+        for color in self.DEFAULT_COLORS:
+            swatch = tk.Button(
+                palette_frame,
+                bg=color,
+                width=3,
+                relief='flat',
+                bd=0,
+                command=lambda value=color: self.set_color(value),
+                cursor='hand2',
+            )
+            swatch.pack(side='left', padx=(0, 6), ipady=6)
+
+        button_frame = tk.Frame(main_frame, bg=APP_BG)
+        button_frame.pack(fill='x')
+
+        create_soft_button(button_frame, "Cancel", self.cancel, variant='secondary').pack(side='right', padx=(8, 0))
+        create_soft_button(button_frame, "Save", self.confirm, variant='primary').pack(side='right')
+
+        self.dialog.bind('<Return>', lambda e: self.confirm())
+        self.dialog.bind('<Escape>', lambda e: self.cancel())
+
+    def set_color(self, color):
+        """Update the selected color and preview."""
+        self.color_var.set(color)
+        self.color_preview.config(bg=color)
+
+    def pick_color(self):
+        """Choose a color using the native color picker."""
+        _, color = colorchooser.askcolor(color=self.color_var.get(), parent=self.dialog, title="Choose Column Color")
+        if color:
+            self.set_color(color)
+
+    def confirm(self):
+        """Confirm the dialog."""
+        name = self.name_entry.get().strip()
+        if not name:
+            messagebox.showerror("Error", "Column name is required!", parent=self.dialog)
+            return
+
+        color = self.color_var.get().strip() or self.DEFAULT_COLORS[0]
+
+        self.result = (name, color)
+        self.dialog.destroy()
+
     def cancel(self):
         """Cancel the dialog."""
         self.dialog.destroy()
@@ -2256,7 +2361,7 @@ class CardDialog:
     """Dialog for creating/editing cards."""
     
     def __init__(self, parent, title, initial_title="", initial_description="", 
-                 initial_priority=None, initial_assignee="", initial_project="", initial_tags=None,
+                 initial_priority=None, initial_assignee="", initial_project="", initial_color="", initial_tags=None,
                  board=None, card=None, on_change=None):
         self.result = None
         self.board = board
@@ -2268,22 +2373,23 @@ class CardDialog:
         initial_description = initial_description or ""
         initial_assignee = initial_assignee or ""
         initial_project = initial_project or ""
+        initial_color = initial_color or ""
         initial_tags = list(initial_tags or [])
         
         # Create dialog window
         self.dialog = tk.Toplevel(parent)
         self.dialog.title(title)
-        dialog_height = 660 if self._supports_subcard_management() else 500
+        dialog_height = 720 if self._supports_subcard_management() else 560
         center_modal(self.dialog, parent, 440, dialog_height)
         
         self.setup_ui(initial_title, initial_description, initial_priority, 
-                 initial_assignee, initial_project, initial_tags)
+             initial_assignee, initial_project, initial_color, initial_tags)
         
         # Wait for dialog to close
         self.dialog.wait_window()
     
     def setup_ui(self, initial_title, initial_description, initial_priority, 
-                 initial_assignee, initial_project, initial_tags):
+                 initial_assignee, initial_project, initial_color, initial_tags):
         """Set up the dialog UI."""
         main_frame = tk.Frame(self.dialog, padx=20, pady=20, bg=APP_BG)
         main_frame.pack(fill='both', expand=True)
@@ -2348,6 +2454,30 @@ class CardDialog:
         self.project_entry.pack(fill='x', pady=(0, 10))
         self.project_entry.insert(0, initial_project)
         style_text_input(self.project_entry)
+
+        tk.Label(fields_frame, text="Card Color:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+        color_frame = tk.Frame(fields_frame, bg=APP_BG)
+        color_frame.pack(fill='x', pady=(0, 10))
+
+        self.card_color_var = tk.StringVar(value=initial_color)
+        preview_bg = initial_color or SURFACE_ALT_BG
+        preview_fg = 'white' if initial_color and is_dark_color(initial_color) else '#2F2923'
+        self.card_color_preview = tk.Label(
+            color_frame,
+            text="Default" if not initial_color else "Preview",
+            width=10,
+            bg=preview_bg,
+            fg=preview_fg,
+            relief='solid',
+            bd=1,
+            font=('Arial', 9, 'bold'),
+            padx=8,
+            pady=6,
+        )
+        self.card_color_preview.pack(side='left')
+
+        create_soft_button(color_frame, "Pick", self.pick_card_color, variant='accent').pack(side='right')
+        create_soft_button(color_frame, "Default", self.clear_card_color, variant='secondary').pack(side='right', padx=(0, 8))
         
         # Tags
         tk.Label(fields_frame, text="Tags (comma-separated):", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
@@ -2382,6 +2512,23 @@ class CardDialog:
     def _supports_subcard_management(self):
         """Return whether the current dialog should allow subcard management."""
         return self.board is not None and self.card is not None and not self.card.parent_id
+
+    def set_card_color(self, color):
+        """Set the selected card color and refresh the preview."""
+        self.card_color_var.set(color)
+        preview_fg = 'white' if is_dark_color(color) else '#2F2923'
+        self.card_color_preview.config(text='Preview', bg=color, fg=preview_fg)
+
+    def clear_card_color(self):
+        """Reset the card color to the default board styling."""
+        self.card_color_var.set('')
+        self.card_color_preview.config(text='Default', bg=SURFACE_ALT_BG, fg='#2F2923')
+
+    def pick_card_color(self):
+        """Choose a card color using the native color picker."""
+        _, color = colorchooser.askcolor(color=self.card_color_var.get() or SURFACE_ALT_BG, parent=self.dialog, title='Choose Card Color')
+        if color:
+            self.set_card_color(color)
 
     def _build_subcards_section(self, parent):
         """Render subcard management controls for a top-level card."""
@@ -2431,9 +2578,9 @@ class CardDialog:
         if not dialog.result:
             return
 
-        title, description, priority, assignee, project, tags = dialog.result
+        title, description, priority, assignee, project, color, tags = dialog.result
         try:
-            subcard = self.board.create_subcard(self.card.id, title, description, priority, project or parent_project)
+            subcard = self.board.create_subcard(self.card.id, title, description, priority, project or parent_project, color)
             if assignee:
                 self.board.edit_card(subcard.id, assignee=assignee)
 
@@ -2490,12 +2637,13 @@ class CardDialog:
         
         assignee = self.assignee_entry.get().strip()
         project = self.project_entry.get().strip()
+        color = self.card_color_var.get().strip() or None
         
         # Parse tags
         tags_text = self.tags_entry.get().strip()
         tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()] if tags_text else []
         
-        self.result = (title, description, priority, assignee or None, project or None, tags)
+        self.result = (title, description, priority, assignee or None, project or None, color, tags)
         self.dialog.destroy()
     
     def cancel(self):

@@ -8,7 +8,7 @@ A Python Kanban application focused on multi-board management with a Tkinter GUI
 - Multi-board CLI for terminal-based board management
 - Legacy single-board CLI for working with a standalone board data file
 - Custom columns with rename, reorder, recolor, and delete support
-- Card priorities, assignees, tags, projects, and real subcards
+- Card priorities, assignees, tags, projects, custom colors, and real subcards
 - Drag-and-drop movement in the multi-board GUI
 - External board loading by reference
 - Lock files with automatic read-only fallback when another process owns the board
@@ -102,12 +102,14 @@ External board loading:
 3. Switch boards from the dropdown or with `Ctrl+O`.
 4. Double-click a card to edit it.
 5. Right-click cards or columns for context actions.
+6. Choose a custom card color in the create or edit card dialog, or leave it on the default board style.
 
 ### Visual Indicators
 
 - Priority bars show urgency from low to critical
 - Assignees display as `@name`
 - Tags display as `#tag`
+- Card backgrounds can use a custom color while preserving readable text contrast
 - Parent cards show subcard progress
 - Read-only mode is shown when another process holds the lock
 

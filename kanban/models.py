@@ -8,6 +8,9 @@ from enum import Enum
 import uuid
 
 
+UNSET = object()
+
+
 ## @brief Enumerates supported card priority values.
 class Priority(Enum):
     """Task priority levels."""
@@ -121,12 +124,13 @@ class Card:
         self.updated_at = datetime.now()
         self.project = None
         self.assignee = None
+        self.color = None
         self.parent_id = None
         self.tags = []
 
     def update(self, title: str = None, description: str = None,
                priority: Priority = None, assignee: str = None, project: str = None,
-               parent_id: str = None):
+                         parent_id: str = None, color=UNSET):
         """Update card properties."""
         if title is not None:
             self.title = title
@@ -140,6 +144,8 @@ class Card:
             self.project = project
         if parent_id is not None:
             self.parent_id = parent_id
+        if color is not UNSET:
+            self.color = color
         self.updated_at = datetime.now()
     
     def move_to_status(self, status: Union[Status, str]):
@@ -180,6 +186,7 @@ class Card:
             'updated_at': self.updated_at.isoformat(),
             'project': self.project,
             'assignee': self.assignee,
+            'color': self.color,
             'parent_id': self.parent_id,
             'tags': self.tags
         }
@@ -204,6 +211,7 @@ class Card:
         card.updated_at = datetime.fromisoformat(data['updated_at'])
         card.project = data.get('project')
         card.assignee = data.get('assignee')
+        card.color = data.get('color')
         card.parent_id = data.get('parent_id')
         card.tags = data.get('tags', [])
         return card

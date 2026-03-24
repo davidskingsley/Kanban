@@ -137,6 +137,7 @@ class KanbanCLI:
         
         description = input("Description (optional): ").strip()
         project = input("Project (optional): ").strip() or None
+        color = input("Card color hex (optional, e.g. #FDE68A): ").strip() or None
         print("\nPriority levels:")
         for i, priority in enumerate(Priority, 1):
             print(f"{i}. {priority.value}")
@@ -168,7 +169,7 @@ class KanbanCLI:
                     column_id = columns[0].id  # Default to first column
         
         try:
-            card = self.board.create_card(title, description, priority, column_id, project)
+            card = self.board.create_card(title, description, priority, column_id, project, color=color)
             if assignee:
                 self.board.edit_card(card.id, assignee=assignee)
             
@@ -221,7 +222,13 @@ class KanbanCLI:
         if new_project == "":
             new_project = None
 
-        self.board.edit_card(card_id, new_title, new_description, new_priority, new_assignee, new_project)
+        new_color = input(f"Color [{card.color or 'default'}]: ").strip()
+
+        edit_kwargs = {}
+        if new_color:
+            edit_kwargs['color'] = new_color
+
+        self.board.edit_card(card_id, new_title, new_description, new_priority, new_assignee, new_project, **edit_kwargs)
         print("✅ Card updated successfully!")
 
     def add_subcard(self):
@@ -247,6 +254,7 @@ class KanbanCLI:
 
         description = input("Description (optional): ").strip()
         project = input(f"Project [{parent_card.project or 'none'}]: ").strip() or parent_card.project
+        color = input(f"Card color [{parent_card.color or 'default'}]: ").strip() or parent_card.color
 
         print("\nPriority levels:")
         for i, priority in enumerate(Priority, 1):
@@ -264,7 +272,7 @@ class KanbanCLI:
         tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()] if tags_text else []
 
         try:
-            subcard = self.board.create_subcard(parent_id, title, description, priority, project)
+            subcard = self.board.create_subcard(parent_id, title, description, priority, project, color)
             if assignee:
                 self.board.edit_card(subcard.id, assignee=assignee)
             for tag in tags:
@@ -478,6 +486,7 @@ class KanbanCLI:
         print(f"Priority: {card.priority.value}")
         print(f"Project: {card.project or '(none)'}")
         print(f"Assignee: {card.assignee or '(unassigned)'}")
+        print(f"Color: {card.color or '(default)'}")
         print(f"Tags: {', '.join(card.tags) if card.tags else '(no tags)'}")
 
         parent_card = self.board.get_parent_card(card)
