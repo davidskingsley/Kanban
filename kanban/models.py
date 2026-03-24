@@ -29,6 +29,60 @@ class Status(Enum):
     DONE = "Done"
 
 
+## @brief Represents a reusable board-level card type with optional presets.
+class CardType:
+    """Represents a configurable card type with optional project and color presets."""
+
+    def __init__(self, name: str, description: str = "", default_project: str = None,
+                 default_color: str = None, card_type_id: str = None):
+        self.id = card_type_id if card_type_id else str(uuid.uuid4())
+        self.name = name
+        self.description = description or ""
+        self.default_project = default_project
+        self.default_color = default_color
+        self.created_at = datetime.now()
+        self.updated_at = datetime.now()
+
+    def update(self, name: str = None, description: str = None,
+               default_project=UNSET, default_color=UNSET):
+        """Update card type properties."""
+        if name is not None:
+            self.name = name
+        if description is not None:
+            self.description = description
+        if default_project is not UNSET:
+            self.default_project = default_project
+        if default_color is not UNSET:
+            self.default_color = default_color
+        self.updated_at = datetime.now()
+
+    def to_dict(self):
+        """Convert card type to dictionary for serialization."""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'default_project': self.default_project,
+            'default_color': self.default_color,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        """Create card type from dictionary."""
+        card_type = cls(
+            data['name'],
+            data.get('description', ''),
+            data.get('default_project'),
+            data.get('default_color'),
+            data.get('id'),
+        )
+        card_type.created_at = datetime.fromisoformat(data.get('created_at', datetime.now().isoformat()))
+        card_type.updated_at = datetime.fromisoformat(data.get('updated_at', datetime.now().isoformat()))
+        return card_type
+
+
 ## @brief Represents a configurable board column with custom ordering and color.
 class CustomColumn:
     """Represents a custom column on the Kanban board."""
@@ -125,12 +179,13 @@ class Card:
         self.project = None
         self.assignee = None
         self.color = None
+        self.card_type_id = None
         self.parent_id = None
         self.tags = []
 
     def update(self, title: str = None, description: str = None,
                priority: Priority = None, assignee: str = None, project: str = None,
-                         parent_id: str = None, color=UNSET):
+                         parent_id: str = None, color=UNSET, card_type_id=UNSET):
         """Update card properties."""
         if title is not None:
             self.title = title
@@ -146,6 +201,8 @@ class Card:
             self.parent_id = parent_id
         if color is not UNSET:
             self.color = color
+        if card_type_id is not UNSET:
+            self.card_type_id = card_type_id
         self.updated_at = datetime.now()
     
     def move_to_status(self, status: Union[Status, str]):
@@ -187,6 +244,7 @@ class Card:
             'project': self.project,
             'assignee': self.assignee,
             'color': self.color,
+            'card_type_id': self.card_type_id,
             'parent_id': self.parent_id,
             'tags': self.tags
         }
@@ -212,6 +270,7 @@ class Card:
         card.project = data.get('project')
         card.assignee = data.get('assignee')
         card.color = data.get('color')
+        card.card_type_id = data.get('card_type_id')
         card.parent_id = data.get('parent_id')
         card.tags = data.get('tags', [])
         return card

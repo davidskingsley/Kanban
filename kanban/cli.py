@@ -86,9 +86,15 @@ class KanbanCLI:
             print("15. Reorder columns")
             print("16. Change column color")
             print("17. View columns")
+
+        print("\nCARD TYPE ACTIONS:")
+        print("18. View card types")
+        print("19. Create card type")
+        print("20. Edit card type")
+        print("21. Delete card type")
         
         print("\nOTHER:")
-        print("18. Create backup")
+        print("22. Create backup")
         print("0. Exit")
         print()
     
@@ -112,7 +118,11 @@ class KanbanCLI:
             '15': self.reorder_columns if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
             '16': self.change_column_color if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
             '17': self.view_columns if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
-            '18': self.create_backup,
+            '18': self.view_card_types,
+            '19': self.create_card_type,
+            '20': self.edit_card_type,
+            '21': self.delete_card_type,
+            '22': self.create_backup,
             '0': self.exit_app
         }
         
@@ -136,8 +146,15 @@ class KanbanCLI:
             return
         
         description = input("Description (optional): ").strip()
-        project = input("Project (optional): ").strip() or None
-        color = input("Card color hex (optional, e.g. #FDE68A): ").strip() or None
+        card_type = self.select_card_type(default_type_id=self.board.get_last_used_card_type().id)
+        if not card_type:
+            return
+
+        preset_project = card_type.default_project
+        preset_color = card_type.default_color
+
+        project = input(f"Project [{preset_project or 'none'}]: ").strip() or preset_project
+        color = input(f"Card color [{preset_color or 'default'}]: ").strip() or preset_color
         print("\nPriority levels:")
         for i, priority in enumerate(Priority, 1):
             print(f"{i}. {priority.value}")
@@ -169,7 +186,7 @@ class KanbanCLI:
                     column_id = columns[0].id  # Default to first column
         
         try:
-            card = self.board.create_card(title, description, priority, column_id, project, color=color)
+            card = self.board.create_card(title, description, priority, column_id, project, color=color, card_type_id=card_type.id)
             if assignee:
                 self.board.edit_card(card.id, assignee=assignee)
             
@@ -218,6 +235,10 @@ class KanbanCLI:
         if new_assignee == "":
             new_assignee = None
 
+        new_card_type = self.select_card_type(default_type_id=card.card_type_id, allow_skip=True)
+        if new_card_type is False:
+            return
+
         new_project = input(f"Project [{card.project or 'none'}]: ").strip()
         if new_project == "":
             new_project = None
@@ -227,6 +248,8 @@ class KanbanCLI:
         edit_kwargs = {}
         if new_color:
             edit_kwargs['color'] = new_color
+        if new_card_type is not None:
+            edit_kwargs['card_type_id'] = new_card_type.id
 
         self.board.edit_card(card_id, new_title, new_description, new_priority, new_assignee, new_project, **edit_kwargs)
         print("✅ Card updated successfully!")
@@ -253,8 +276,14 @@ class KanbanCLI:
             return
 
         description = input("Description (optional): ").strip()
-        project = input(f"Project [{parent_card.project or 'none'}]: ").strip() or parent_card.project
-        color = input(f"Card color [{parent_card.color or 'default'}]: ").strip() or parent_card.color
+        card_type = self.select_card_type(default_type_id=parent_card.card_type_id or self.board.get_last_used_card_type().id)
+        if not card_type:
+            return
+
+        project_default = parent_card.project if parent_card.project is not None else card_type.default_project
+        color_default = parent_card.color if parent_card.color is not None else card_type.default_color
+        project = input(f"Project [{project_default or 'none'}]: ").strip() or project_default
+        color = input(f"Card color [{color_default or 'default'}]: ").strip() or color_default
 
         print("\nPriority levels:")
         for i, priority in enumerate(Priority, 1):
@@ -272,7 +301,7 @@ class KanbanCLI:
         tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()] if tags_text else []
 
         try:
-            subcard = self.board.create_subcard(parent_id, title, description, priority, project, color)
+            subcard = self.board.create_subcard(parent_id, title, description, priority, project, color, card_type.id)
             if assignee:
                 self.board.edit_card(subcard.id, assignee=assignee)
             for tag in tags:
@@ -484,6 +513,8 @@ class KanbanCLI:
         print(f"Description: {card.description or '(no description)'}")
         print(f"Status: {card.status.value}")
         print(f"Priority: {card.priority.value}")
+        card_type = self.board.get_card_type(card.card_type_id)
+        print(f"Type: {card_type.name if card_type else self.board.get_default_card_type().name}")
         print(f"Project: {card.project or '(none)'}")
         print(f"Assignee: {card.assignee or '(unassigned)'}")
         print(f"Color: {card.color or '(default)'}")
@@ -533,6 +564,163 @@ class KanbanCLI:
             print(f"✅ Backup created: {backup_path}")
         else:
             print("❌ Failed to create backup!")
+
+    def view_card_types(self):
+        """Display all configured card types."""
+        print("\n--- CARD TYPES ---")
+        default_type_id = self.board.get_default_card_type_id()
+        last_used_id = self.board.get_last_used_card_type().id
+        for index, card_type in enumerate(self.board.get_card_types_ordered(), start=1):
+            flags = []
+            if card_type.id == default_type_id:
+                flags.append('default')
+            if card_type.id == last_used_id:
+                flags.append('last used')
+            suffix = f" [{' | '.join(flags)}]" if flags else ""
+            print(f"{index}. {card_type.name}{suffix}")
+            if card_type.description:
+                print(f"   Description: {card_type.description}")
+            print(f"   Project preset: {card_type.default_project or '(none)'}")
+            print(f"   Color preset: {card_type.default_color or '(default)'}")
+
+    def create_card_type(self):
+        """Create a new card type."""
+        if not self.ensure_board_writable():
+            return
+
+        print("\n--- CREATE CARD TYPE ---")
+        name = input("Name: ").strip()
+        if not name:
+            print("Name is required!")
+            return
+
+        description = input("Description (optional): ").strip()
+        default_project = input("Project preset (optional): ").strip() or None
+        default_color = input("Color preset (optional): ").strip() or None
+
+        try:
+            self.board.create_card_type(name, description, default_project, default_color)
+            print(f"✅ Card type '{name}' created successfully!")
+        except ValueError as error:
+            print(f"❌ {error}")
+
+    def edit_card_type(self):
+        """Edit an existing card type."""
+        if not self.ensure_board_writable():
+            return
+
+        print("\n--- EDIT CARD TYPE ---")
+        card_type = self.select_card_type()
+        if not card_type:
+            return
+
+        print("(Leave blank to keep current value)")
+        new_name = input(f"Name [{card_type.name}]: ").strip() or None
+        new_description = input(f"Description [{card_type.description or 'none'}]: ").strip()
+        if new_description == '':
+            new_description = None
+
+        new_project = input(f"Project preset [{card_type.default_project or 'none'}]: ").strip()
+        new_color = input(f"Color preset [{card_type.default_color or 'default'}]: ").strip()
+
+        edit_kwargs = {}
+        if new_project:
+            edit_kwargs['default_project'] = new_project
+        if new_color:
+            edit_kwargs['default_color'] = new_color
+
+        try:
+            self.board.edit_card_type(card_type.id, new_name, new_description, **edit_kwargs)
+            print(f"✅ Card type '{card_type.name}' updated successfully!")
+        except ValueError as error:
+            print(f"❌ {error}")
+
+    def delete_card_type(self):
+        """Delete a card type and either delete or reassign its cards."""
+        if not self.ensure_board_writable():
+            return
+
+        print("\n--- DELETE CARD TYPE ---")
+        card_type = self.select_card_type(exclude_default=True)
+        if not card_type:
+            return
+
+        cards_using_type = self.board.get_cards_by_type(card_type.id)
+        print(f"Card type '{card_type.name}' is used by {len(cards_using_type)} card(s).")
+        print("1. Delete all cards of this type")
+        print("2. Change those cards to another type")
+        choice = input("Choose action (1-2): ").strip()
+
+        try:
+            if choice == '1':
+                self.board.delete_card_type(card_type.id, delete_cards=True)
+                print(f"✅ Deleted card type '{card_type.name}' and its cards.")
+                return
+            if choice == '2':
+                replacement = self.select_card_type(exclude_ids={card_type.id})
+                if not replacement:
+                    return
+                self.board.delete_card_type(card_type.id, delete_cards=False, replacement_type_id=replacement.id)
+                print(f"✅ Deleted card type '{card_type.name}' and reassigned cards to '{replacement.name}'.")
+                return
+            print("Invalid choice!")
+        except ValueError as error:
+            print(f"❌ {error}")
+
+    def select_card_type(self, default_type_id: str = None, allow_skip: bool = False,
+                         exclude_default: bool = False, exclude_ids=None):
+        """Select a card type from the board."""
+        exclude_ids = set(exclude_ids or [])
+        card_types = []
+        for card_type in self.board.get_card_types_ordered():
+            if exclude_default and card_type.id == self.board.get_default_card_type_id():
+                continue
+            if card_type.id in exclude_ids:
+                continue
+            card_types.append(card_type)
+
+        if not card_types:
+            print("No card types available!")
+            return None
+
+        print("\nAvailable card types:")
+        default_index = 0
+        for index, card_type in enumerate(card_types, start=1):
+            flags = []
+            if card_type.id == self.board.get_default_card_type_id():
+                flags.append('default')
+            if card_type.id == self.board.get_last_used_card_type().id:
+                flags.append('last used')
+            if card_type.id == default_type_id:
+                default_index = index - 1
+                flags.append('selected')
+            suffix = f" [{' | '.join(flags)}]" if flags else ''
+            print(f"{index}. {card_type.name}{suffix}")
+            if card_type.description:
+                print(f"   {card_type.description}")
+
+        prompt = f"Choose card type (1-{len(card_types)}"
+        if allow_skip:
+            prompt += ", blank to keep current"
+        else:
+            prompt += f", default={default_index + 1}"
+        prompt += "): "
+
+        choice = input(prompt).strip()
+        if not choice:
+            if allow_skip:
+                return None
+            return card_types[default_index]
+
+        try:
+            index = int(choice) - 1
+            if 0 <= index < len(card_types):
+                return card_types[index]
+        except ValueError:
+            pass
+
+        print("Invalid selection!")
+        return False
     
     def select_card(self, top_level_only: bool = False) -> Optional[str]:
         """Helper method to select a card from the board."""

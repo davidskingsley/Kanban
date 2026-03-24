@@ -194,6 +194,13 @@ class MultiBoardGUI:
         cards_menu.add_command(label="Delete Card", command=lambda: self.invoke_current_board_action('delete_card_dialog'),
                                accelerator=self.get_shortcut_label('delete_card_dialog'))
         cards_menu.add_separator()
+        card_types_menu = tk.Menu(cards_menu, tearoff=0)
+        cards_menu.add_cascade(label="Card Types", menu=card_types_menu)
+        card_types_menu.add_command(label="View Card Types", command=lambda: self.invoke_current_board_action('view_card_types_dialog'))
+        card_types_menu.add_command(label="Create Card Type", command=lambda: self.invoke_current_board_action('create_card_type_dialog'))
+        card_types_menu.add_command(label="Edit Card Type", command=lambda: self.invoke_current_board_action('edit_card_type_dialog'))
+        card_types_menu.add_command(label="Delete Card Type", command=lambda: self.invoke_current_board_action('delete_card_type_dialog'))
+        cards_menu.add_separator()
         cards_menu.add_command(label="Clear Done Cards", command=lambda: self.invoke_current_board_action('clear_done_cards'),
                                accelerator=self.get_shortcut_label('clear_done_cards'))
         cards_menu.add_command(label="Create Backup", command=lambda: self.invoke_current_board_action('create_backup'),
@@ -1169,6 +1176,8 @@ class EmbeddedKanbanGUI:
     def create_card_widget(self, parent, card):
         """Create a card widget."""
         card_bg, text_fg, muted_fg = get_card_palette(card)
+        card_type = self.board.get_card_type(card.card_type_id)
+        card_type_name = card_type.name if card_type else self.board.get_default_card_type().name
         card_frame = tk.Frame(
             parent,
             bg=card_bg,
@@ -1212,6 +1221,17 @@ class EmbeddedKanbanGUI:
         # Footer
         footer_frame = tk.Frame(content_frame, bg=card_bg)
         footer_frame.pack(fill='x', pady=(5, 0))
+
+        type_label = tk.Label(
+            footer_frame,
+            text=card_type_name,
+            font=('Arial', 8, 'bold'),
+            bg='#F3EEE4',
+            fg='#6A5847',
+            padx=6,
+            pady=2,
+        )
+        type_label.pack(side='left', padx=(0, 4))
 
         if card.project:
             project_label = tk.Label(footer_frame, text=f"[{card.project}]",
@@ -1318,6 +1338,8 @@ class EmbeddedKanbanGUI:
         preview.configure(bg='#DCE8F8')
 
         preview_bg, preview_fg, preview_muted = get_card_palette(card)
+        card_type = self.board.get_card_type(card.card_type_id)
+        card_type_name = card_type.name if card_type else self.board.get_default_card_type().name
         preview_frame = tk.Frame(preview, bg=preview_bg, relief='flat', bd=0,
                      highlightthickness=1, highlightbackground='#C8D8F0')
         preview_frame.pack(fill='both', expand=True)
@@ -1336,7 +1358,7 @@ class EmbeddedKanbanGUI:
         tk.Label(content, text=card.title, font=('Arial', 9, 'bold'), bg=preview_bg, fg=preview_fg, anchor='w',
                  justify='left', wraplength=190).pack(fill='x')
 
-        subtitle_parts = []
+        subtitle_parts = [card_type_name]
         if card.project:
             subtitle_parts.append(f"[{card.project}]")
         if card.assignee:
@@ -1498,19 +1520,19 @@ class EmbeddedKanbanGUI:
 
         dialog = CardDialog(self.parent_frame, "Create New Card", board=self.board, on_change=self.refresh_display)
         if dialog.result:
-            title, description, priority, assignee, project, color, tags = dialog.result
+            title, description, priority, assignee, project, color, card_type_id, tags = dialog.result
             
             # Get target column
             if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns:
                 columns = self.board.get_columns_ordered()
                 if columns:
                     target_column = columns[0].id  # Add to first column
-                    card = self.board.create_card(title, description, priority, target_column, project, color=color)
+                    card = self.board.create_card(title, description, priority, target_column, project, color=color, card_type_id=card_type_id)
                 else:
                     messagebox.showerror("Error", "No columns available!")
                     return
             else:
-                card = self.board.create_card(title, description, priority, Status.TODO, project, color=color)
+                card = self.board.create_card(title, description, priority, Status.TODO, project, color=color, card_type_id=card_type_id)
             
             if assignee:
                 self.board.edit_card(card.id, assignee=assignee)
@@ -1540,15 +1562,17 @@ class EmbeddedKanbanGUI:
                           initial_assignee=card.assignee,
                           initial_project=card.project,
                           initial_color=card.color,
+                          initial_card_type_id=card.card_type_id,
                           initial_tags=list(card.tags),
                           board=self.board,
                           card=card,
                           on_change=self.refresh_display)
         
         if dialog.result:
-            title, description, priority, assignee, project, color, tags = dialog.result
+            title, description, priority, assignee, project, color, card_type_id, tags = dialog.result
             self.board.edit_card(card.id, title=title, description=description, 
-                               priority=priority, assignee=assignee, project=project, color=color)
+                               priority=priority, assignee=assignee, project=project, color=color,
+                               card_type_id=card_type_id)
             
             # Update tags
             card.tags.clear()
@@ -1872,12 +1896,15 @@ class EmbeddedKanbanGUI:
             self.parent_frame,
             f"Add Subcard to '{parent_card.title}'",
             initial_project=parent_card.project,
+            initial_color=parent_card.color,
+            initial_card_type_id=parent_card.card_type_id,
+            board=self.board,
         )
 
         if dialog.result:
-            title, description, priority, assignee, project, color, tags = dialog.result
+            title, description, priority, assignee, project, color, card_type_id, tags = dialog.result
             try:
-                subcard = self.board.create_subcard(parent_card.id, title, description, priority, project, color)
+                subcard = self.board.create_subcard(parent_card.id, title, description, priority, project, color, card_type_id)
                 if assignee:
                     self.board.edit_card(subcard.id, assignee=assignee)
 
@@ -1895,6 +1922,8 @@ class EmbeddedKanbanGUI:
         details += f"Title: {card.title}\n"
         details += f"Description: {card.description or 'None'}\n"
         details += f"Priority: {card.priority.value.title()}\n"
+        card_type = self.board.get_card_type(card.card_type_id)
+        details += f"Type: {card_type.name if card_type else self.board.get_default_card_type().name}\n"
         details += f"Project: {card.project or 'None'}\n"
         details += f"Assignee: {card.assignee or 'None'}\n"
         details += f"Color: {card.color or 'Default'}\n"
@@ -1936,6 +1965,150 @@ class EmbeddedKanbanGUI:
     def change_column_color(self, column):
         """Change a column's color."""
         self.modify_specific_column(column)
+
+    def view_card_types_dialog(self):
+        """Show all configured card types for the current board."""
+        lines = []
+        default_type_id = self.board.get_default_card_type_id()
+        last_used_id = self.board.get_last_used_card_type().id
+        for card_type in self.board.get_card_types_ordered():
+            flags = []
+            if card_type.id == default_type_id:
+                flags.append('default')
+            if card_type.id == last_used_id:
+                flags.append('last used')
+            suffix = f" [{' | '.join(flags)}]" if flags else ''
+            lines.append(f"{card_type.name}{suffix}")
+            if card_type.description:
+                lines.append(f"  Description: {card_type.description}")
+            lines.append(f"  Project preset: {card_type.default_project or 'None'}")
+            lines.append(f"  Color preset: {card_type.default_color or 'Default'}")
+            lines.append("")
+        messagebox.showinfo("Card Types", "\n".join(lines).strip() or "No card types available.")
+
+    def create_card_type_dialog(self):
+        """Create a new card type."""
+        if not self.ensure_board_writable():
+            return
+
+        dialog = CardTypeDialog(self.parent_frame, "Create Card Type")
+        if not dialog.result:
+            return
+
+        name, description, default_project, default_color = dialog.result
+        try:
+            self.board.create_card_type(name, description, default_project, default_color)
+            self.refresh_display()
+            self.status_bar.config(text=f"✅ Created card type: {name}")
+        except ValueError as error:
+            messagebox.showerror("Error", str(error))
+
+    def edit_card_type_dialog(self):
+        """Edit an existing card type."""
+        if not self.ensure_board_writable():
+            return
+
+        card_type = self.select_card_type_dialog("Select Card Type to Edit")
+        if not card_type:
+            return
+
+        dialog = CardTypeDialog(
+            self.parent_frame,
+            "Edit Card Type",
+            initial_name=card_type.name,
+            initial_description=card_type.description,
+            initial_project=card_type.default_project,
+            initial_color=card_type.default_color,
+            allow_name_edit=card_type.id != self.board.get_default_card_type_id(),
+        )
+        if not dialog.result:
+            return
+
+        name, description, default_project, default_color = dialog.result
+        try:
+            self.board.edit_card_type(card_type.id, name, description, default_project, default_color)
+            self.refresh_display()
+            self.status_bar.config(text=f"✅ Updated card type: {name}")
+        except ValueError as error:
+            messagebox.showerror("Error", str(error))
+
+    def delete_card_type_dialog(self):
+        """Delete a card type and optionally delete or reassign affected cards."""
+        if not self.ensure_board_writable():
+            return
+
+        card_type = self.select_card_type_dialog("Select Card Type to Delete", exclude_default=True)
+        if not card_type:
+            return
+
+        cards_using_type = self.board.get_cards_by_type(card_type.id)
+        if cards_using_type:
+            action = self.choose_option(
+                "Delete Card Type",
+                f"'{card_type.name}' is used by {len(cards_using_type)} card(s). Choose what to do:",
+                ["Delete all cards of this type", "Change those cards to another type"],
+            )
+            if action is None:
+                return
+
+            try:
+                if action == "Delete all cards of this type":
+                    if messagebox.askyesno("Confirm Delete", f"Delete card type '{card_type.name}' and all cards using it?"):
+                        self.board.delete_card_type(card_type.id, delete_cards=True)
+                        self.refresh_display()
+                        self.status_bar.config(text=f"📋 Deleted card type: {card_type.name}")
+                    return
+
+                replacement = self.select_card_type_dialog(
+                    "Replacement Card Type",
+                    exclude_ids={card_type.id},
+                )
+                if not replacement:
+                    return
+                if messagebox.askyesno("Confirm Delete", f"Delete '{card_type.name}' and change its cards to '{replacement.name}'?"):
+                    self.board.delete_card_type(card_type.id, delete_cards=False, replacement_type_id=replacement.id)
+                    self.refresh_display()
+                    self.status_bar.config(text=f"📋 Deleted card type: {card_type.name}")
+            except ValueError as error:
+                messagebox.showerror("Error", str(error))
+            return
+
+        if messagebox.askyesno("Confirm Delete", f"Delete card type '{card_type.name}'?"):
+            self.board.delete_card_type(card_type.id, delete_cards=False)
+            self.refresh_display()
+            self.status_bar.config(text=f"📋 Deleted card type: {card_type.name}")
+
+    def select_card_type_dialog(self, title, exclude_default=False, exclude_ids=None):
+        """Show dialog to select a card type from the current board."""
+        exclude_ids = set(exclude_ids or [])
+        card_types = []
+        for card_type in self.board.get_card_types_ordered():
+            if exclude_default and card_type.id == self.board.get_default_card_type_id():
+                continue
+            if card_type.id in exclude_ids:
+                continue
+            card_types.append(card_type)
+
+        if not card_types:
+            messagebox.showinfo("No Card Types", "No matching card types are available!")
+            return None
+
+        option_map = {}
+        default_type_id = self.board.get_default_card_type_id()
+        last_used_id = self.board.get_last_used_card_type().id
+        for card_type in card_types:
+            flags = []
+            if card_type.id == default_type_id:
+                flags.append('default')
+            if card_type.id == last_used_id:
+                flags.append('last used')
+            suffix = f" [{' | '.join(flags)}]" if flags else ''
+            option_map[f"{card_type.name}{suffix}"] = card_type
+
+        selected = self.choose_option(title, "Select a card type:", list(option_map.keys()))
+        if selected is None:
+            return None
+        return option_map[selected]
 
     def delete_specific_column(self, column):
         """Delete a specific column."""
@@ -2356,12 +2529,126 @@ class ReorderColumnsDialog:
         self.dialog.destroy()
 
 
+## @brief Modal dialog for creating or editing reusable card types.
+class CardTypeDialog:
+    """Dialog for creating or editing a card type."""
+
+    def __init__(self, parent, title, initial_name="", initial_description="",
+                 initial_project="", initial_color="", allow_name_edit=True):
+        self.result = None
+        self.allow_name_edit = allow_name_edit
+
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title(title)
+        center_modal(self.dialog, parent, 460, 420)
+
+        self.setup_ui(initial_name or "", initial_description or "", initial_project or "", initial_color or "")
+        if self.allow_name_edit:
+            self.name_entry.focus()
+        else:
+            self.desc_text.focus()
+        self.dialog.wait_window()
+
+    def setup_ui(self, initial_name, initial_description, initial_project, initial_color):
+        """Set up the dialog UI."""
+        main_frame = tk.Frame(self.dialog, padx=20, pady=20, bg=APP_BG)
+        main_frame.pack(fill='both', expand=True)
+
+        tk.Label(main_frame, text="Name:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+        self.name_entry = tk.Entry(main_frame, width=50)
+        self.name_entry.pack(fill='x', pady=(0, 10))
+        self.name_entry.insert(0, initial_name)
+        style_text_input(self.name_entry)
+        if not self.allow_name_edit:
+            self.name_entry.configure(state='disabled')
+
+        tk.Label(main_frame, text="Description:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+        self.desc_text = tk.Text(main_frame, height=5, width=50)
+        self.desc_text.pack(fill='x', pady=(0, 10))
+        self.desc_text.insert('1.0', initial_description)
+        style_text_input(self.desc_text)
+
+        tk.Label(main_frame, text="Project Preset:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+        self.project_entry = tk.Entry(main_frame, width=50)
+        self.project_entry.pack(fill='x', pady=(0, 10))
+        self.project_entry.insert(0, initial_project)
+        style_text_input(self.project_entry)
+
+        tk.Label(main_frame, text="Color Preset:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+        color_frame = tk.Frame(main_frame, bg=APP_BG)
+        color_frame.pack(fill='x', pady=(0, 18))
+
+        self.color_var = tk.StringVar(value=initial_color)
+        self.color_preview = tk.Label(
+            color_frame,
+            text="Default" if not initial_color else "Preview",
+            width=10,
+            bg=initial_color or SURFACE_ALT_BG,
+            fg='white' if initial_color and is_dark_color(initial_color) else '#2F2923',
+            relief='solid',
+            bd=1,
+            font=('Arial', 9, 'bold'),
+            padx=8,
+            pady=6,
+        )
+        self.color_preview.pack(side='left')
+
+        create_soft_button(color_frame, "Pick", self.pick_color, variant='accent').pack(side='right')
+        create_soft_button(color_frame, "Default", self.clear_color, variant='secondary').pack(side='right', padx=(0, 8))
+
+        button_frame = tk.Frame(main_frame, bg=APP_BG)
+        button_frame.pack(fill='x')
+        create_soft_button(button_frame, "Cancel", self.cancel, variant='secondary').pack(side='right', padx=(10, 0))
+        create_soft_button(button_frame, "Save", self.confirm, variant='primary').pack(side='right')
+
+        self.dialog.bind('<Return>', lambda e: self.confirm())
+        self.dialog.bind('<Escape>', lambda e: self.cancel())
+
+    def set_color(self, color):
+        """Set the color preset preview."""
+        self.color_var.set(color)
+        self.color_preview.config(
+            text='Preview',
+            bg=color,
+            fg='white' if is_dark_color(color) else '#2F2923',
+        )
+
+    def clear_color(self):
+        """Clear the color preset."""
+        self.color_var.set('')
+        self.color_preview.config(text='Default', bg=SURFACE_ALT_BG, fg='#2F2923')
+
+    def pick_color(self):
+        """Choose a preset color using the native color picker."""
+        _, color = colorchooser.askcolor(color=self.color_var.get() or SURFACE_ALT_BG, parent=self.dialog, title='Choose Preset Card Color')
+        if color:
+            self.set_color(color)
+
+    def confirm(self):
+        """Confirm the dialog values."""
+        name = self.name_entry.get().strip()
+        if not name:
+            messagebox.showerror("Error", "Card type name is required!", parent=self.dialog)
+            return
+
+        description = self.desc_text.get('1.0', 'end-1c').strip()
+        default_project = self.project_entry.get().strip() or None
+        default_color = self.color_var.get().strip() or None
+        self.result = (name, description, default_project, default_color)
+        self.dialog.destroy()
+
+    def cancel(self):
+        """Cancel the dialog."""
+        self.dialog.destroy()
+
+
 ## @brief Modal dialog for creating or editing cards in the multi-board GUI.
 class CardDialog:
     """Dialog for creating/editing cards."""
     
     def __init__(self, parent, title, initial_title="", initial_description="", 
-                 initial_priority=None, initial_assignee="", initial_project="", initial_color="", initial_tags=None,
+                 initial_priority=None, initial_assignee="", initial_project="", initial_color="", initial_card_type_id=None,
+                 initial_tags=None,
                  board=None, card=None, on_change=None):
         self.result = None
         self.board = board
@@ -2375,15 +2662,20 @@ class CardDialog:
         initial_project = initial_project or ""
         initial_color = initial_color or ""
         initial_tags = list(initial_tags or [])
+        self.card_types = self.board.get_card_types_ordered() if self.board else []
+        self.current_card_type_id = initial_card_type_id
+        if self.board:
+            self.current_card_type_id = initial_card_type_id or self.board.get_last_used_card_type().id
+        self.last_applied_card_type_id = None
         
         # Create dialog window
         self.dialog = tk.Toplevel(parent)
         self.dialog.title(title)
-        dialog_height = 720 if self._supports_subcard_management() else 560
+        dialog_height = 780 if self._supports_subcard_management() else 620
         center_modal(self.dialog, parent, 440, dialog_height)
         
         self.setup_ui(initial_title, initial_description, initial_priority, 
-             initial_assignee, initial_project, initial_color, initial_tags)
+                 initial_assignee, initial_project, initial_color, initial_tags)
         
         # Wait for dialog to close
         self.dialog.wait_window()
@@ -2440,6 +2732,30 @@ class CardDialog:
         
         if not initial_priority:
             self.priority_var.set('medium')
+
+        if self.board and self.card_types:
+            tk.Label(fields_frame, text="Card Type:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+            self.card_type_map = {card_type.name: card_type for card_type in self.card_types}
+            type_names = list(self.card_type_map.keys())
+            self.card_type_var = tk.StringVar()
+            self.card_type_combo = ttk.Combobox(
+                fields_frame,
+                textvariable=self.card_type_var,
+                state='readonly',
+                values=type_names,
+                style='Soft.TCombobox',
+            )
+            self.card_type_combo.pack(fill='x', pady=(0, 4))
+
+            selected_type = self.board.get_card_type(self.current_card_type_id) or self.board.get_last_used_card_type()
+            self.card_type_combo.set(selected_type.name)
+            self.card_type_description = tk.Label(fields_frame, text="", font=('Arial', 9), fg=TEXT_MUTED, bg=APP_BG, justify='left', wraplength=360)
+            self.card_type_description.pack(anchor='w', pady=(0, 10))
+            self.card_type_combo.bind('<<ComboboxSelected>>', self.on_card_type_changed)
+        else:
+            self.card_type_map = {}
+            self.card_type_var = tk.StringVar(value="")
+            self.card_type_description = None
         
         # Assignee
         tk.Label(fields_frame, text="Assignee:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
@@ -2478,6 +2794,9 @@ class CardDialog:
 
         create_soft_button(color_frame, "Pick", self.pick_card_color, variant='accent').pack(side='right')
         create_soft_button(color_frame, "Default", self.clear_card_color, variant='secondary').pack(side='right', padx=(0, 8))
+
+        if self.board and self.card_types:
+            self.apply_selected_card_type_presets(force=not initial_project and not initial_color)
         
         # Tags
         tk.Label(fields_frame, text="Tags (comma-separated):", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
@@ -2530,6 +2849,46 @@ class CardDialog:
         if color:
             self.set_card_color(color)
 
+    def get_selected_card_type(self):
+        """Return the currently selected card type, if any."""
+        if not self.board or not self.card_type_map:
+            return None
+        return self.card_type_map.get(self.card_type_var.get().strip())
+
+    def on_card_type_changed(self, _event=None):
+        """Apply card type metadata when the selection changes."""
+        self.apply_selected_card_type_presets(force=False)
+
+    def apply_selected_card_type_presets(self, force=False):
+        """Apply the selected card type's optional presets to project and color fields."""
+        card_type = self.get_selected_card_type()
+        if card_type is None:
+            return
+
+        previous_type = self.board.get_card_type(self.last_applied_card_type_id) if self.board else None
+        if self.card_type_description is not None:
+            description = card_type.description or "No description"
+            self.card_type_description.config(text=description)
+
+        current_project = self.project_entry.get().strip()
+        current_color = self.card_color_var.get().strip()
+        previous_project = previous_type.default_project if previous_type else None
+        previous_color = previous_type.default_color if previous_type else None
+
+        if force or current_project == '' or current_project == (previous_project or ''):
+            self.project_entry.delete(0, tk.END)
+            if card_type.default_project:
+                self.project_entry.insert(0, card_type.default_project)
+
+        if force or current_color == '' or current_color == (previous_color or ''):
+            if card_type.default_color:
+                self.set_card_color(card_type.default_color)
+            else:
+                self.clear_card_color()
+
+        self.current_card_type_id = card_type.id
+        self.last_applied_card_type_id = card_type.id
+
     def _build_subcards_section(self, parent):
         """Render subcard management controls for a top-level card."""
         tk.Label(parent, text="Subcards:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
@@ -2574,13 +2933,20 @@ class CardDialog:
     def add_subcard(self):
         """Open a nested dialog to create a new subcard for this card."""
         parent_project = self.project_entry.get().strip() or self.card.project
-        dialog = CardDialog(self.dialog, f"Add Subcard to '{self.card.title}'")
+        dialog = CardDialog(
+            self.dialog,
+            f"Add Subcard to '{self.card.title}'",
+            initial_project=parent_project,
+            initial_color=self.card_color_var.get().strip(),
+            initial_card_type_id=self.current_card_type_id or self.card.card_type_id,
+            board=self.board,
+        )
         if not dialog.result:
             return
 
-        title, description, priority, assignee, project, color, tags = dialog.result
+        title, description, priority, assignee, project, color, card_type_id, tags = dialog.result
         try:
-            subcard = self.board.create_subcard(self.card.id, title, description, priority, project or parent_project, color)
+            subcard = self.board.create_subcard(self.card.id, title, description, priority, project or parent_project, color, card_type_id)
             if assignee:
                 self.board.edit_card(subcard.id, assignee=assignee)
 
@@ -2638,12 +3004,13 @@ class CardDialog:
         assignee = self.assignee_entry.get().strip()
         project = self.project_entry.get().strip()
         color = self.card_color_var.get().strip() or None
+        card_type = self.get_selected_card_type()
         
         # Parse tags
         tags_text = self.tags_entry.get().strip()
         tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()] if tags_text else []
         
-        self.result = (title, description, priority, assignee or None, project or None, color, tags)
+        self.result = (title, description, priority, assignee or None, project or None, color, card_type.id if card_type else None, tags)
         self.dialog.destroy()
     
     def cancel(self):

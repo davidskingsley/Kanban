@@ -3,7 +3,7 @@
 """Main Kanban board implementation with custom column support."""
 
 from typing import List, Optional, Dict, Union
-from .models import Card, Column, CustomColumn, Status, Priority, UNSET
+from .models import Card, Column, CustomColumn, Status, Priority, CardType, UNSET
 from .storage import DataStorage, get_default_single_board_file
 import os
 import uuid
@@ -12,6 +12,7 @@ import uuid
 ## @brief Encapsulates the state and operations of a single Kanban board.
 class KanbanBoard:
     """Main Kanban board class for managing cards and columns."""
+    DEFAULT_CARD_TYPE_NAME = 'Default'
     
     def __init__(self, data_file: str = None, use_custom_columns: bool = True):
         if data_file is None:
@@ -19,6 +20,8 @@ class KanbanBoard:
         
         self.storage = DataStorage(data_file)
         self.use_custom_columns = use_custom_columns
+        self.card_types: Dict[str, CardType] = {}
+        self.last_used_card_type_id = None
         
         # Initialize columns based on mode
         if use_custom_columns:
@@ -181,13 +184,137 @@ class KanbanBoard:
             return min(self.custom_columns.keys(), key=lambda cid: self.custom_columns[cid].position)
         else:
             return None  # Legacy mode uses Status enum
+
+    def _ensure_default_card_type(self):
+        """Ensure the board always has a non-deletable default card type."""
+        default_type = next((card_type for card_type in self.card_types.values()
+                             if card_type.name == self.DEFAULT_CARD_TYPE_NAME), None)
+        if default_type is None:
+            default_type = CardType(self.DEFAULT_CARD_TYPE_NAME, "Standard card type")
+            self.card_types[default_type.id] = default_type
+        return default_type
+
+    def get_default_card_type(self) -> CardType:
+        """Return the default card type."""
+        return self._ensure_default_card_type()
+
+    def get_default_card_type_id(self) -> str:
+        """Return the ID of the default card type."""
+        return self.get_default_card_type().id
+
+    def get_card_type(self, card_type_id: str) -> Optional[CardType]:
+        """Return a card type by ID."""
+        return self.card_types.get(card_type_id)
+
+    def get_card_types_ordered(self) -> List[CardType]:
+        """Return card types with the default type first and the rest by name."""
+        default_type = self.get_default_card_type()
+        other_types = [card_type for card_type in self.card_types.values() if card_type.id != default_type.id]
+        other_types.sort(key=lambda card_type: card_type.name.lower())
+        return [default_type] + other_types
+
+    def get_last_used_card_type(self) -> CardType:
+        """Return the last used card type, or the default type if unavailable."""
+        card_type = self.get_card_type(self.last_used_card_type_id)
+        if card_type is None:
+            card_type = self.get_default_card_type()
+            self.last_used_card_type_id = card_type.id
+        return card_type
+
+    def _resolve_card_type(self, card_type_id: str = None) -> CardType:
+        """Resolve a requested card type, falling back to last-used or default."""
+        if card_type_id:
+            card_type = self.get_card_type(card_type_id)
+            if card_type is None:
+                raise ValueError("Card type does not exist")
+            return card_type
+        return self.get_last_used_card_type()
+
+    def create_card_type(self, name: str, description: str = '', default_project: str = None,
+                         default_color: str = None) -> str:
+        """Create a new reusable card type."""
+        self._ensure_writable()
+
+        name = (name or '').strip()
+        if not name:
+            raise ValueError("Card type name is required")
+        if any(card_type.name.lower() == name.lower() for card_type in self.card_types.values()):
+            raise ValueError("A card type with that name already exists")
+
+        card_type = CardType(name, description, default_project, default_color)
+        self.card_types[card_type.id] = card_type
+        self.last_used_card_type_id = card_type.id
+        self.save_board()
+        return card_type.id
+
+    def edit_card_type(self, card_type_id: str, name: str = None, description: str = None,
+                       default_project=UNSET, default_color=UNSET) -> Optional[CardType]:
+        """Edit an existing card type."""
+        self._ensure_writable()
+
+        card_type = self.get_card_type(card_type_id)
+        if card_type is None:
+            return None
+
+        if name is not None:
+            name = name.strip()
+            if not name:
+                raise ValueError("Card type name is required")
+            duplicate = next((existing for existing in self.card_types.values()
+                              if existing.id != card_type_id and existing.name.lower() == name.lower()), None)
+            if duplicate is not None:
+                raise ValueError("A card type with that name already exists")
+            if card_type_id == self.get_default_card_type_id() and name != self.DEFAULT_CARD_TYPE_NAME:
+                raise ValueError("The default card type name cannot be changed")
+
+        card_type.update(name, description, default_project, default_color)
+        self.save_board()
+        return card_type
+
+    def get_cards_by_type(self, card_type_id: str) -> List[Card]:
+        """Return all cards using the given card type."""
+        return [card for card in self.get_all_cards() if card.card_type_id == card_type_id]
+
+    def delete_card_type(self, card_type_id: str, delete_cards: bool = False,
+                         replacement_type_id: str = None) -> bool:
+        """Delete a card type and either remove or reassign its cards."""
+        self._ensure_writable()
+
+        card_type = self.get_card_type(card_type_id)
+        if card_type is None:
+            return False
+        if card_type_id == self.get_default_card_type_id():
+            raise ValueError("The default card type cannot be deleted")
+
+        cards = self.get_cards_by_type(card_type_id)
+        if delete_cards:
+            top_level_cards = [card for card in cards if not card.parent_id]
+            nested_cards = [card for card in cards if card.parent_id]
+            for card in top_level_cards + nested_cards:
+                if self.find_card(card.id):
+                    self.delete_card(card.id)
+        else:
+            replacement_type = self._resolve_card_type(replacement_type_id or self.get_default_card_type_id())
+            if replacement_type.id == card_type_id:
+                raise ValueError("Replacement card type must be different")
+            for card in cards:
+                card.update(card_type_id=replacement_type.id)
+
+        del self.card_types[card_type_id]
+        if self.last_used_card_type_id == card_type_id:
+            self.last_used_card_type_id = replacement_type.id if not delete_cards else self.get_default_card_type_id()
+        self.save_board()
+        return True
     
     # Card Management Methods
     def create_card(self, title: str, description: str = "", priority: Priority = Priority.MEDIUM,
                    column_id: str = None, project: str = None, parent_id: str = None,
-                   color: str = None) -> Card:
+                   color: str = None, card_type_id: str = None) -> Card:
         """Create a new card and add it to the specified column (or first column if none specified)."""
         self._ensure_writable()
+        card_type = self._resolve_card_type(card_type_id)
+        effective_project = project if project is not None else card_type.default_project
+        effective_color = color if color is not None else card_type.default_color
 
         if self.use_custom_columns:
             if not column_id:
@@ -199,36 +326,40 @@ class KanbanBoard:
                 raise ValueError(f"Column {column_id} does not exist")
             
             card = Card(title, description, priority, column_id)
-            if project is not None:
-                card.project = project
+            card.project = effective_project
             if parent_id is not None:
                 card.parent_id = parent_id
-            if color is not None:
-                card.color = color
+            card.color = effective_color
+            card.card_type_id = card_type.id
             self.custom_columns[column_id].add_card(card)
         else:
             # Legacy mode
             card = Card(title, description, priority)
-            if project is not None:
-                card.project = project
+            card.project = effective_project
             if parent_id is not None:
                 card.parent_id = parent_id
-            if color is not None:
-                card.color = color
+            card.color = effective_color
+            card.card_type_id = card_type.id
             self.columns[Status.TODO].add_card(card)
-        
+
+        self.last_used_card_type_id = card_type.id
         self.save_board()
         return card
     
     def edit_card(self, card_id: str, title: str = None, description: str = None, 
                   priority: Priority = None, assignee: str = None, project: str = None,
-                  parent_id: str = None, color=UNSET) -> Optional[Card]:
+                  parent_id: str = None, color=UNSET, card_type_id=UNSET) -> Optional[Card]:
         """Edit an existing card."""
         self._ensure_writable()
 
         card = self.find_card(card_id)
         if card:
-            card.update(title, description, priority, assignee, project, parent_id, color)
+            resolved_type_id = card_type_id
+            if card_type_id is not UNSET:
+                resolved_type = self._resolve_card_type(card_type_id)
+                resolved_type_id = resolved_type.id
+                self.last_used_card_type_id = resolved_type.id
+            card.update(title, description, priority, assignee, project, parent_id, color, resolved_type_id)
             self.save_board()
             return card
         return None
@@ -275,7 +406,7 @@ class KanbanBoard:
 
     def create_subcard(self, parent_id: str, title: str, description: str = "",
                        priority: Priority = Priority.MEDIUM, project: str = None,
-                       color: str = None) -> Card:
+                       color: str = None, card_type_id: str = None) -> Card:
         """Create a child card under an existing parent card."""
         parent_card = self.find_card(parent_id)
         if not parent_card:
@@ -292,6 +423,7 @@ class KanbanBoard:
             project or parent_card.project,
             parent_id,
             color if color is not None else parent_card.color,
+            card_type_id if card_type_id is not None else parent_card.card_type_id,
         )
     
     def delete_card(self, card_id: str) -> bool:
@@ -481,6 +613,14 @@ class KanbanBoard:
     def _load_custom_columns(self, data: Dict):
         """Load custom columns format."""
         self.custom_columns.clear()
+        self.card_types.clear()
+
+        for card_type_data in data.get('card_types', []):
+            card_type = CardType.from_dict(card_type_data)
+            self.card_types[card_type.id] = card_type
+
+        self._ensure_default_card_type()
+        self.last_used_card_type_id = data.get('last_used_card_type_id') or self.get_default_card_type_id()
         
         # Load columns
         for column_data in data.get('columns', []):
@@ -490,11 +630,16 @@ class KanbanBoard:
         # Load cards into columns
         for card_data in data.get('cards', []):
             card = Card.from_dict(card_data)
+            if not card.card_type_id or card.card_type_id not in self.card_types:
+                card.card_type_id = self.get_default_card_type_id()
             if card.column_id in self.custom_columns:
                 self.custom_columns[card.column_id].add_card(card)
     
     def _load_legacy_data(self, data: Dict):
         """Load legacy format data."""
+        self.card_types.clear()
+        self._ensure_default_card_type()
+        self.last_used_card_type_id = data.get('last_used_card_type_id') or self.get_default_card_type_id()
         # Clear current columns
         for column in self.columns.values():
             column.cards.clear()
@@ -502,12 +647,17 @@ class KanbanBoard:
         # Load cards into appropriate columns
         for card_data in data.get('cards', []):
             card = Card.from_dict(card_data)
+            if not card.card_type_id or card.card_type_id not in self.card_types:
+                card.card_type_id = self.get_default_card_type_id()
             if card.status:
                 self.columns[card.status].add_card(card)
     
     def _convert_legacy_to_custom(self, data: Dict, persist: bool = True):
         """Convert legacy data to custom columns format."""
         self.custom_columns.clear()
+        self.card_types.clear()
+        self._ensure_default_card_type()
+        self.last_used_card_type_id = self.get_default_card_type_id()
         
         # Create default custom columns based on Status enum
         status_to_column_id = {}
@@ -522,6 +672,8 @@ class KanbanBoard:
         # Load and convert cards
         for card_data in data.get('cards', []):
             card = Card.from_dict(card_data)
+            if not card.card_type_id or card.card_type_id not in self.card_types:
+                card.card_type_id = self.get_default_card_type_id()
             if card.status in status_to_column_id:
                 column_id = status_to_column_id[card.status]
                 card.move_to_column(column_id)
@@ -533,6 +685,9 @@ class KanbanBoard:
     
     def _init_default_custom_columns(self, persist: bool = True):
         """Initialize default custom columns."""
+        self._ensure_default_card_type()
+        if not self.last_used_card_type_id:
+            self.last_used_card_type_id = self.get_default_card_type_id()
         default_columns = [
             ("To Do", "#FF9800"),
             ("In Progress", "#2196F3"),
@@ -550,9 +705,13 @@ class KanbanBoard:
     
     def save_board(self):
         """Save board data to storage."""
+        self._ensure_default_card_type()
+        if not self.last_used_card_type_id:
+            self.last_used_card_type_id = self.get_default_card_type_id()
         if self.use_custom_columns:
             # Save custom columns format
             columns_data = [column.to_dict() for column in self.custom_columns.values()]
+            card_types_data = [card_type.to_dict() for card_type in self.get_card_types_ordered()]
             cards_data = []
             
             for column in self.custom_columns.values():
@@ -561,17 +720,24 @@ class KanbanBoard:
             
             data = {
                 'columns': columns_data,
+                'card_types': card_types_data,
                 'cards': cards_data,
+                'last_used_card_type_id': self.last_used_card_type_id,
                 'format_version': '2.0'
             }
         else:
             # Save legacy format
+            card_types_data = [card_type.to_dict() for card_type in self.get_card_types_ordered()]
             cards_data = []
             for column in self.columns.values():
                 for card in column:
                     cards_data.append(card.to_dict())
             
-            data = {'cards': cards_data}
+            data = {
+                'cards': cards_data,
+                'card_types': card_types_data,
+                'last_used_card_type_id': self.last_used_card_type_id,
+            }
         
         self.storage.save(data)
     
