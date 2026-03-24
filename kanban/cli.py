@@ -2,6 +2,7 @@
 #  @brief Interactive command-line interface for operating a single Kanban board.
 """Command Line Interface for the Kanban board application."""
 
+from datetime import date
 from typing import Optional
 
 from .board import KanbanBoard
@@ -15,6 +16,16 @@ class KanbanCLI:
     def __init__(self, board: KanbanBoard):
         self.board = board
         self.running = True
+
+    def parse_optional_date(self, value: str, field_name: str) -> Optional[date]:
+        """Parse an optional ISO date string entered by the user."""
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            return date.fromisoformat(text)
+        except ValueError as error:
+            raise ValueError(f"{field_name} must use YYYY-MM-DD format.") from error
     
     def run(self):
         """Main CLI loop."""
@@ -154,7 +165,20 @@ class KanbanCLI:
         preset_color = card_type.default_color
 
         project = input(f"Project [{preset_project or 'none'}]: ").strip() or preset_project
+        start_date_text = input("Start date (YYYY-MM-DD, optional): ").strip()
+        end_date_text = input("End date (YYYY-MM-DD, optional): ").strip()
         color = input(f"Card color [{preset_color or 'default'}]: ").strip() or preset_color
+        try:
+            start_date = self.parse_optional_date(start_date_text, 'Start date')
+            end_date = self.parse_optional_date(end_date_text, 'End date')
+        except ValueError as error:
+            print(f"❌ {error}")
+            return
+
+        if start_date and end_date and end_date < start_date:
+            print("❌ End date cannot be earlier than start date.")
+            return
+
         print("\nPriority levels:")
         for i, priority in enumerate(Priority, 1):
             print(f"{i}. {priority.value}")
@@ -186,7 +210,7 @@ class KanbanCLI:
                     column_id = columns[0].id  # Default to first column
         
         try:
-            card = self.board.create_card(title, description, priority, column_id, project, color=color, card_type_id=card_type.id)
+            card = self.board.create_card(title, description, priority, column_id, project, start_date, end_date, color=color, card_type_id=card_type.id)
             if assignee:
                 self.board.edit_card(card.id, assignee=assignee)
             
@@ -243,9 +267,40 @@ class KanbanCLI:
         if new_project == "":
             new_project = None
 
+        start_default = card.start_date.isoformat() if card.start_date else 'none'
+        start_input = input(f"Start date [{start_default}] (blank to keep, 'none' to clear): ").strip()
+        end_default = card.end_date.isoformat() if card.end_date else 'none'
+        end_input = input(f"End date [{end_default}] (blank to keep, 'none' to clear): ").strip()
+
         new_color = input(f"Color [{card.color or 'default'}]: ").strip()
 
         edit_kwargs = {}
+        if start_input:
+            if start_input.lower() == 'none':
+                edit_kwargs['start_date'] = None
+            else:
+                try:
+                    edit_kwargs['start_date'] = self.parse_optional_date(start_input, 'Start date')
+                except ValueError as error:
+                    print(f"❌ {error}")
+                    return
+
+        if end_input:
+            if end_input.lower() == 'none':
+                edit_kwargs['end_date'] = None
+            else:
+                try:
+                    edit_kwargs['end_date'] = self.parse_optional_date(end_input, 'End date')
+                except ValueError as error:
+                    print(f"❌ {error}")
+                    return
+
+        effective_start = edit_kwargs.get('start_date', card.start_date)
+        effective_end = edit_kwargs.get('end_date', card.end_date)
+        if effective_start and effective_end and effective_end < effective_start:
+            print("❌ End date cannot be earlier than start date.")
+            return
+
         if new_color:
             edit_kwargs['color'] = new_color
         if new_card_type is not None:
@@ -283,7 +338,20 @@ class KanbanCLI:
         project_default = parent_card.project if parent_card.project is not None else card_type.default_project
         color_default = parent_card.color if parent_card.color is not None else card_type.default_color
         project = input(f"Project [{project_default or 'none'}]: ").strip() or project_default
+        start_date_text = input("Start date (YYYY-MM-DD, optional): ").strip()
+        end_date_text = input("End date (YYYY-MM-DD, optional): ").strip()
         color = input(f"Card color [{color_default or 'default'}]: ").strip() or color_default
+
+        try:
+            start_date = self.parse_optional_date(start_date_text, 'Start date')
+            end_date = self.parse_optional_date(end_date_text, 'End date')
+        except ValueError as error:
+            print(f"❌ {error}")
+            return
+
+        if start_date and end_date and end_date < start_date:
+            print("❌ End date cannot be earlier than start date.")
+            return
 
         print("\nPriority levels:")
         for i, priority in enumerate(Priority, 1):
@@ -301,7 +369,7 @@ class KanbanCLI:
         tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()] if tags_text else []
 
         try:
-            subcard = self.board.create_subcard(parent_id, title, description, priority, project, color, card_type.id)
+            subcard = self.board.create_subcard(parent_id, title, description, priority, project, color, card_type.id, start_date, end_date)
             if assignee:
                 self.board.edit_card(subcard.id, assignee=assignee)
             for tag in tags:
@@ -517,6 +585,9 @@ class KanbanCLI:
         print(f"Type: {card_type.name if card_type else self.board.get_default_card_type().name}")
         print(f"Project: {card.project or '(none)'}")
         print(f"Assignee: {card.assignee or '(unassigned)'}")
+        print(f"Start Date: {card.start_date.isoformat() if card.start_date else '(none)'}")
+        print(f"End Date: {card.end_date.isoformat() if card.end_date else '(none)'}")
+        print(f"Late: {'yes' if card.has_past_end_date() and not self.board.is_card_done(card) else 'no'}")
         print(f"Color: {card.color or '(default)'}")
         print(f"Tags: {', '.join(card.tags) if card.tags else '(no tags)'}")
 

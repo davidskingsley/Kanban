@@ -2,7 +2,7 @@
 #  @brief Shared enums and data objects for boards, cards, and columns.
 """Data models for the Kanban board application."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional, Union
 from enum import Enum
 import uuid
@@ -210,10 +210,13 @@ class Card:
         self.parent_id = None
         self.tags = []
         self.notes: List[CardNote] = []
+        self.start_date: Optional[date] = None
+        self.end_date: Optional[date] = None
 
     def update(self, title: str = None, description: str = None,
-               priority: Priority = None, assignee: str = None, project: str = None,
-                         parent_id: str = None, color=UNSET, card_type_id=UNSET):
+             priority: Priority = None, assignee: str = None, project: str = None,
+             start_date=UNSET, end_date=UNSET, parent_id: str = None, color=UNSET,
+             card_type_id=UNSET):
         """Update card properties."""
         if title is not None:
             self.title = title
@@ -225,6 +228,10 @@ class Card:
             self.assignee = assignee
         if project is not None:
             self.project = project
+        if start_date is not UNSET:
+            self.start_date = start_date
+        if end_date is not UNSET:
+            self.end_date = end_date
         if parent_id is not None:
             self.parent_id = parent_id
         if color is not UNSET:
@@ -232,6 +239,13 @@ class Card:
         if card_type_id is not UNSET:
             self.card_type_id = card_type_id
         self.updated_at = datetime.now()
+
+    def has_past_end_date(self, today: Optional[date] = None) -> bool:
+        """Return whether the card's end date is before today."""
+        if self.end_date is None:
+            return False
+        reference = today or date.today()
+        return self.end_date < reference
     
     def move_to_status(self, status: Union[Status, str]):
         """Move card to a different status column (backward compatibility)."""
@@ -290,6 +304,8 @@ class Card:
             'color': self.color,
             'card_type_id': self.card_type_id,
             'parent_id': self.parent_id,
+            'start_date': self.start_date.isoformat() if self.start_date else None,
+            'end_date': self.end_date.isoformat() if self.end_date else None,
             'tags': self.tags,
             'notes': [note.to_dict() for note in self.notes],
         }
@@ -317,6 +333,8 @@ class Card:
         card.color = data.get('color')
         card.card_type_id = data.get('card_type_id')
         card.parent_id = data.get('parent_id')
+        card.start_date = date.fromisoformat(data['start_date']) if data.get('start_date') else None
+        card.end_date = date.fromisoformat(data['end_date']) if data.get('end_date') else None
         card.tags = data.get('tags', [])
         card.notes = [CardNote.from_dict(note_data) for note_data in data.get('notes', [])]
         return card

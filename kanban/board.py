@@ -2,6 +2,7 @@
 #  @brief Board domain logic for cards, columns, persistence, and read-only guards.
 """Main Kanban board implementation with custom column support."""
 
+from datetime import date
 from typing import List, Optional, Dict, Union
 from .models import Card, Column, CustomColumn, Status, Priority, CardType, UNSET
 from .storage import DataStorage, get_default_single_board_file
@@ -308,8 +309,9 @@ class KanbanBoard:
     
     # Card Management Methods
     def create_card(self, title: str, description: str = "", priority: Priority = Priority.MEDIUM,
-                   column_id: str = None, project: str = None, parent_id: str = None,
-                   color: str = None, card_type_id: str = None) -> Card:
+                   column_id: str = None, project: str = None, start_date: date = None,
+                   end_date: date = None, parent_id: str = None, color: str = None,
+                   card_type_id: str = None) -> Card:
         """Create a new card and add it to the specified column (or first column if none specified)."""
         self._ensure_writable()
         card_type = self._resolve_card_type(card_type_id)
@@ -327,6 +329,8 @@ class KanbanBoard:
             
             card = Card(title, description, priority, column_id)
             card.project = effective_project
+            card.start_date = start_date
+            card.end_date = end_date
             if parent_id is not None:
                 card.parent_id = parent_id
             card.color = effective_color
@@ -336,6 +340,8 @@ class KanbanBoard:
             # Legacy mode
             card = Card(title, description, priority)
             card.project = effective_project
+            card.start_date = start_date
+            card.end_date = end_date
             if parent_id is not None:
                 card.parent_id = parent_id
             card.color = effective_color
@@ -348,7 +354,8 @@ class KanbanBoard:
     
     def edit_card(self, card_id: str, title: str = None, description: str = None, 
                   priority: Priority = None, assignee: str = None, project: str = None,
-                  parent_id: str = None, color=UNSET, card_type_id=UNSET) -> Optional[Card]:
+                  start_date=UNSET, end_date=UNSET, parent_id: str = None, color=UNSET,
+                  card_type_id=UNSET) -> Optional[Card]:
         """Edit an existing card."""
         self._ensure_writable()
 
@@ -359,7 +366,7 @@ class KanbanBoard:
                 resolved_type = self._resolve_card_type(card_type_id)
                 resolved_type_id = resolved_type.id
                 self.last_used_card_type_id = resolved_type.id
-            card.update(title, description, priority, assignee, project, parent_id, color, resolved_type_id)
+            card.update(title, description, priority, assignee, project, start_date, end_date, parent_id, color, resolved_type_id)
             self.save_board()
             return card
         return None
@@ -431,7 +438,8 @@ class KanbanBoard:
 
     def create_subcard(self, parent_id: str, title: str, description: str = "",
                        priority: Priority = Priority.MEDIUM, project: str = None,
-                       color: str = None, card_type_id: str = None) -> Card:
+                       color: str = None, card_type_id: str = None, start_date: date = None,
+                       end_date: date = None) -> Card:
         """Create a child card under an existing parent card."""
         parent_card = self.find_card(parent_id)
         if not parent_card:
@@ -446,6 +454,8 @@ class KanbanBoard:
             priority,
             target,
             project or parent_card.project,
+            start_date,
+            end_date,
             parent_id,
             color if color is not None else parent_card.color,
             card_type_id if card_type_id is not None else parent_card.card_type_id,

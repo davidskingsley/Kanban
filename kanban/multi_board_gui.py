@@ -2,6 +2,7 @@
 #  @brief Multi-board Tkinter interface with embedded board views and dialogs.
 """Multi-board graphical user interface for the Kanban board application."""
 
+from datetime import date
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, filedialog, colorchooser
 from typing import Dict, Optional, List
@@ -37,6 +38,22 @@ def get_card_palette(card):
     if card.color and is_dark_color(card.color):
         return background, 'white', '#F1EEE9'
     return background, '#2F2923', TEXT_MUTED
+
+
+def format_optional_date(value: Optional[date]) -> str:
+    """Return an ISO date string for an optional date value."""
+    return value.isoformat() if value else ""
+
+
+def parse_optional_date(value: str, field_name: str) -> Optional[date]:
+    """Parse an optional ISO date string and raise a readable error on invalid input."""
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        return date.fromisoformat(text)
+    except ValueError as error:
+        raise ValueError(f"{field_name} must use YYYY-MM-DD format.") from error
 
 
 def center_modal(dialog, parent, width, height):
@@ -110,6 +127,7 @@ class MultiBoardGUI:
         'search_dialog': ('Ctrl+F', '<Control-f>'),
         'filter_priority_dialog': ('Ctrl+Shift+P', '<Control-Shift-P>'),
         'filter_assignee_dialog': ('Ctrl+Shift+A', '<Control-Shift-A>'),
+        'filter_overdue_dialog': ('Ctrl+Shift+L', '<Control-Shift-L>'),
         'clear_filters': ('Ctrl+Shift+F', '<Control-Shift-F>'),
         'create_column_dialog': ('Ctrl+Shift+C', '<Control-Shift-C>'),
         'rename_column_dialog': ('Ctrl+Alt+R', '<Control-Alt-r>'),
@@ -215,6 +233,8 @@ class MultiBoardGUI:
                                  accelerator=self.get_shortcut_label('filter_priority_dialog'))
         filters_menu.add_command(label="Filter by Assignee", command=lambda: self.invoke_current_board_action('filter_assignee_dialog'),
                                  accelerator=self.get_shortcut_label('filter_assignee_dialog'))
+        filters_menu.add_command(label="Show Late Cards", command=lambda: self.invoke_current_board_action('filter_overdue_dialog'),
+                     accelerator=self.get_shortcut_label('filter_overdue_dialog'))
         filters_menu.add_separator()
         filters_menu.add_command(label="Clear Filters", command=lambda: self.invoke_current_board_action('clear_filters'),
                                  accelerator=self.get_shortcut_label('clear_filters'))
@@ -287,6 +307,8 @@ class MultiBoardGUI:
                            lambda: self.invoke_current_board_action('filter_priority_dialog'))
         self.bind_shortcut(self.MENU_SHORTCUTS['filter_assignee_dialog'][1],
                            lambda: self.invoke_current_board_action('filter_assignee_dialog'))
+        self.bind_shortcut(self.MENU_SHORTCUTS['filter_overdue_dialog'][1],
+                   lambda: self.invoke_current_board_action('filter_overdue_dialog'))
         self.bind_shortcut(self.MENU_SHORTCUTS['clear_filters'][1],
                            lambda: self.invoke_current_board_action('clear_filters'))
         self.bind_shortcut(self.MENU_SHORTCUTS['create_column_dialog'][1],
@@ -871,6 +893,7 @@ class MultiBoardGUI:
             f"{self.get_shortcut_label('search_dialog')} - Search cards\n"
             f"{self.get_shortcut_label('filter_priority_dialog')} - Filter by priority\n"
             f"{self.get_shortcut_label('filter_assignee_dialog')} - Filter by assignee\n"
+            f"{self.get_shortcut_label('filter_overdue_dialog')} - Show late cards\n"
             f"{self.get_shortcut_label('clear_filters')} - Clear filters\n\n"
             "Columns and app:\n"
             f"{self.get_shortcut_label('create_column_dialog')} - New column\n"
@@ -922,6 +945,7 @@ class EmbeddedKanbanGUI:
         self.search_filter = None
         self.priority_filter = None
         self.assignee_filter = None
+        self.overdue_filter = False
         self.drop_targets = []
         self.drag_preview = None
         
@@ -1178,18 +1202,23 @@ class EmbeddedKanbanGUI:
         card_bg, text_fg, muted_fg = get_card_palette(card)
         card_type = self.board.get_card_type(card.card_type_id)
         card_type_name = card_type.name if card_type else self.board.get_default_card_type().name
+        is_late = card.has_past_end_date() and not self.board.is_card_done(card)
+        border_color = '#D6453D' if is_late else '#E8DED1'
+        border_width = 2 if is_late else 1
         card_frame = tk.Frame(
             parent,
             bg=card_bg,
             relief='flat',
             bd=0,
             cursor='hand2',
-            highlightthickness=1,
-            highlightbackground='#E8DED1',
-            highlightcolor='#E8DED1',
+            highlightthickness=border_width,
+            highlightbackground=border_color,
+            highlightcolor=border_color,
         )
         card_frame.pack(fill='x', pady=4, padx=2)
         card_frame.default_bg = card_bg
+        card_frame.default_highlight = border_color
+        card_frame.default_highlight_thickness = border_width
         card_frame.drag_start_x = 0
         card_frame.drag_start_y = 0
         card_frame.is_dragging = False
@@ -1217,6 +1246,39 @@ class EmbeddedKanbanGUI:
             desc_label = tk.Label(content_frame, text=desc_text, font=('Arial', 8),
                                  bg=card_bg, fg=muted_fg, anchor='w', wraplength=220)
             desc_label.pack(fill='x')
+
+        if card.start_date or card.end_date or is_late:
+            schedule_frame = tk.Frame(content_frame, bg=card_bg)
+            schedule_frame.pack(fill='x', pady=(4, 0))
+
+            schedule_parts = []
+            if card.start_date and card.end_date:
+                schedule_parts.append(f"{card.start_date.isoformat()} -> {card.end_date.isoformat()}")
+            elif card.start_date:
+                schedule_parts.append(f"Starts {card.start_date.isoformat()}")
+            elif card.end_date:
+                schedule_parts.append(f"Due {card.end_date.isoformat()}")
+
+            if schedule_parts:
+                tk.Label(
+                    schedule_frame,
+                    text="  ".join(schedule_parts),
+                    font=('Arial', 8),
+                    bg=card_bg,
+                    fg=muted_fg,
+                    anchor='w',
+                ).pack(side='left')
+
+            if is_late:
+                tk.Label(
+                    schedule_frame,
+                    text='LATE',
+                    font=('Arial', 8, 'bold'),
+                    bg='#F8D6D2',
+                    fg='#A1261A',
+                    padx=6,
+                    pady=2,
+                ).pack(side='right')
         
         # Footer
         footer_frame = tk.Frame(content_frame, bg=card_bg)
@@ -1313,7 +1375,13 @@ class EmbeddedKanbanGUI:
             target = self.get_drop_target(event.x_root, event.y_root)
             self.clear_drop_target_highlights()
             self.destroy_drag_preview()
-            card_frame.config(bg=getattr(card_frame, 'default_bg', SURFACE_ALT_BG), highlightbackground='#E8DED1', highlightcolor='#E8DED1')
+            default_highlight = getattr(card_frame, 'default_highlight', '#E8DED1')
+            card_frame.config(
+                bg=getattr(card_frame, 'default_bg', SURFACE_ALT_BG),
+                highlightthickness=getattr(card_frame, 'default_highlight_thickness', 1),
+                highlightbackground=default_highlight,
+                highlightcolor=default_highlight,
+            )
             card_frame.is_dragging = False
 
             if target is not None and not self.is_same_column(card, target):
@@ -1372,6 +1440,10 @@ class EmbeddedKanbanGUI:
                 subtitle_parts.append(f"{completed}/{total} done")
         if card.tags:
             subtitle_parts.append(" ".join(f"#{tag}" for tag in card.tags[:2]))
+        if card.end_date:
+            subtitle_parts.append(f"due {card.end_date.isoformat()}")
+        if card.has_past_end_date() and not self.board.is_card_done(card):
+            subtitle_parts.append('LATE')
         if subtitle_parts:
             tk.Label(content, text="  ".join(subtitle_parts), font=('Arial', 8), bg=preview_bg, fg=preview_muted,
                      anchor='w', justify='left', wraplength=190).pack(fill='x', pady=(2, 0))
@@ -1494,6 +1566,9 @@ class EmbeddedKanbanGUI:
         
         if self.assignee_filter:
             filtered = [c for c in filtered if c.assignee == self.assignee_filter]
+
+        if self.overdue_filter:
+            filtered = [c for c in filtered if c.has_past_end_date() and not self.board.is_card_done(c)]
         
         return filtered
     
@@ -1501,11 +1576,12 @@ class EmbeddedKanbanGUI:
         """Update the status bar with current information."""
         stats = self.board.get_board_stats()
         filter_info = ""
-        if any([self.search_filter, self.priority_filter, self.assignee_filter]):
+        if any([self.search_filter, self.priority_filter, self.assignee_filter, self.overdue_filter]):
             filters = []
             if self.search_filter: filters.append(f"Search: {self.search_filter}")
             if self.priority_filter: filters.append(f"Priority: {self.priority_filter}")
             if self.assignee_filter: filters.append(f"Assignee: {self.assignee_filter}")
+            if self.overdue_filter: filters.append("Late only")
             filter_info = f" | Filtered: {', '.join(filters)}"
         
         access_info = " | Read only" if self.board.is_read_only() else ""
@@ -1520,19 +1596,19 @@ class EmbeddedKanbanGUI:
 
         dialog = CardDialog(self.parent_frame, "Create New Card", board=self.board, on_change=self.refresh_display)
         if dialog.result:
-            title, description, priority, assignee, project, color, card_type_id, tags = dialog.result
+            title, description, priority, assignee, project, start_date, end_date, color, card_type_id, tags = dialog.result
             
             # Get target column
             if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns:
                 columns = self.board.get_columns_ordered()
                 if columns:
                     target_column = columns[0].id  # Add to first column
-                    card = self.board.create_card(title, description, priority, target_column, project, color=color, card_type_id=card_type_id)
+                    card = self.board.create_card(title, description, priority, target_column, project, start_date, end_date, color=color, card_type_id=card_type_id)
                 else:
                     messagebox.showerror("Error", "No columns available!")
                     return
             else:
-                card = self.board.create_card(title, description, priority, Status.TODO, project, color=color, card_type_id=card_type_id)
+                card = self.board.create_card(title, description, priority, Status.TODO, project, start_date, end_date, color=color, card_type_id=card_type_id)
             
             if assignee:
                 self.board.edit_card(card.id, assignee=assignee)
@@ -1561,6 +1637,8 @@ class EmbeddedKanbanGUI:
                           initial_priority=card.priority,
                           initial_assignee=card.assignee,
                           initial_project=card.project,
+                          initial_start_date=card.start_date,
+                          initial_end_date=card.end_date,
                           initial_color=card.color,
                           initial_card_type_id=card.card_type_id,
                           initial_tags=list(card.tags),
@@ -1569,9 +1647,10 @@ class EmbeddedKanbanGUI:
                           on_change=self.refresh_display)
         
         if dialog.result:
-            title, description, priority, assignee, project, color, card_type_id, tags = dialog.result
+            title, description, priority, assignee, project, start_date, end_date, color, card_type_id, tags = dialog.result
             self.board.edit_card(card.id, title=title, description=description, 
-                               priority=priority, assignee=assignee, project=project, color=color,
+                               priority=priority, assignee=assignee, project=project, start_date=start_date,
+                               end_date=end_date, color=color,
                                card_type_id=card_type_id)
             
             # Update tags
@@ -1704,11 +1783,26 @@ class EmbeddedKanbanGUI:
         self.assignee_filter = selected
         self.refresh_display()
 
+    def filter_overdue_dialog(self):
+        """Show only cards whose end date has passed and are not done."""
+        has_overdue_cards = any(
+            card.has_past_end_date() and not self.board.is_card_done(card)
+            for card in self.board.get_all_cards()
+        )
+        if not has_overdue_cards:
+            messagebox.showinfo("No Late Cards", "No cards are currently late.")
+            return
+
+        self.overdue_filter = True
+        self.refresh_display()
+        self.status_bar.config(text="⏰ Showing late cards only")
+
     def clear_filters(self):
         """Clear all active filters."""
         self.search_filter = None
         self.priority_filter = None
         self.assignee_filter = None
+        self.overdue_filter = False
         self.refresh_display()
         self.status_bar.config(text="🔄 Filters cleared")
 
@@ -1902,9 +1996,9 @@ class EmbeddedKanbanGUI:
         )
 
         if dialog.result:
-            title, description, priority, assignee, project, color, card_type_id, tags = dialog.result
+            title, description, priority, assignee, project, start_date, end_date, color, card_type_id, tags = dialog.result
             try:
-                subcard = self.board.create_subcard(parent_card.id, title, description, priority, project, color, card_type_id)
+                subcard = self.board.create_subcard(parent_card.id, title, description, priority, project, color, card_type_id, start_date, end_date)
                 if assignee:
                     self.board.edit_card(subcard.id, assignee=assignee)
 
@@ -1926,6 +2020,9 @@ class EmbeddedKanbanGUI:
         details += f"Type: {card_type.name if card_type else self.board.get_default_card_type().name}\n"
         details += f"Project: {card.project or 'None'}\n"
         details += f"Assignee: {card.assignee or 'None'}\n"
+        details += f"Start Date: {card.start_date.isoformat() if card.start_date else 'None'}\n"
+        details += f"End Date: {card.end_date.isoformat() if card.end_date else 'None'}\n"
+        details += f"Late: {'Yes' if card.has_past_end_date() and not self.board.is_card_done(card) else 'No'}\n"
         details += f"Color: {card.color or 'Default'}\n"
         details += f"Tags: {', '.join(card.tags) if card.tags else 'None'}\n"
         details += f"Notes: {len(card.notes)}\n"
@@ -2841,7 +2938,8 @@ class CardDialog:
     """Dialog for creating/editing cards."""
     
     def __init__(self, parent, title, initial_title="", initial_description="", 
-                 initial_priority=None, initial_assignee="", initial_project="", initial_color="", initial_card_type_id=None,
+                 initial_priority=None, initial_assignee="", initial_project="", initial_start_date=None,
+                 initial_end_date=None, initial_color="", initial_card_type_id=None,
                  initial_tags=None,
                  board=None, card=None, on_change=None):
         self.result = None
@@ -2869,13 +2967,13 @@ class CardDialog:
         center_modal(self.dialog, parent, 440, dialog_height)
         
         self.setup_ui(initial_title, initial_description, initial_priority, 
-                 initial_assignee, initial_project, initial_color, initial_tags)
+                 initial_assignee, initial_project, initial_start_date, initial_end_date, initial_color, initial_tags)
         
         # Wait for dialog to close
         self.dialog.wait_window()
     
     def setup_ui(self, initial_title, initial_description, initial_priority, 
-                 initial_assignee, initial_project, initial_color, initial_tags):
+                 initial_assignee, initial_project, initial_start_date, initial_end_date, initial_color, initial_tags):
         """Set up the dialog UI."""
         main_frame = tk.Frame(self.dialog, padx=20, pady=20, bg=APP_BG)
         main_frame.pack(fill='both', expand=True)
@@ -2964,6 +3062,18 @@ class CardDialog:
         self.project_entry.pack(fill='x', pady=(0, 10))
         self.project_entry.insert(0, initial_project)
         style_text_input(self.project_entry)
+
+        tk.Label(fields_frame, text="Start Date (YYYY-MM-DD):", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+        self.start_date_entry = tk.Entry(fields_frame, width=50)
+        self.start_date_entry.pack(fill='x', pady=(0, 10))
+        self.start_date_entry.insert(0, format_optional_date(initial_start_date))
+        style_text_input(self.start_date_entry)
+
+        tk.Label(fields_frame, text="End Date (YYYY-MM-DD):", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+        self.end_date_entry = tk.Entry(fields_frame, width=50)
+        self.end_date_entry.pack(fill='x', pady=(0, 10))
+        self.end_date_entry.insert(0, format_optional_date(initial_end_date))
+        style_text_input(self.end_date_entry)
 
         tk.Label(fields_frame, text="Card Color:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
         color_frame = tk.Frame(fields_frame, bg=APP_BG)
@@ -3250,9 +3360,9 @@ class CardDialog:
         if not dialog.result:
             return
 
-        title, description, priority, assignee, project, color, card_type_id, tags = dialog.result
+        title, description, priority, assignee, project, start_date, end_date, color, card_type_id, tags = dialog.result
         try:
-            subcard = self.board.create_subcard(self.card.id, title, description, priority, project or parent_project, color, card_type_id)
+            subcard = self.board.create_subcard(self.card.id, title, description, priority, project or parent_project, color, card_type_id, start_date, end_date)
             if assignee:
                 self.board.edit_card(subcard.id, assignee=assignee)
 
@@ -3309,6 +3419,17 @@ class CardDialog:
         
         assignee = self.assignee_entry.get().strip()
         project = self.project_entry.get().strip()
+        try:
+            start_date = parse_optional_date(self.start_date_entry.get(), 'Start date')
+            end_date = parse_optional_date(self.end_date_entry.get(), 'End date')
+        except ValueError as error:
+            messagebox.showerror("Error", str(error), parent=self.dialog)
+            return
+
+        if start_date and end_date and end_date < start_date:
+            messagebox.showerror("Error", "End date cannot be earlier than start date.", parent=self.dialog)
+            return
+
         color = self.card_color_var.get().strip() or None
         card_type = self.get_selected_card_type()
         
@@ -3316,7 +3437,7 @@ class CardDialog:
         tags_text = self.tags_entry.get().strip()
         tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()] if tags_text else []
         
-        self.result = (title, description, priority, assignee or None, project or None, color, card_type.id if card_type else None, tags)
+        self.result = (title, description, priority, assignee or None, project or None, start_date, end_date, color, card_type.id if card_type else None, tags)
         self.dialog.destroy()
     
     def cancel(self):
