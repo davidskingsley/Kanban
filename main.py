@@ -7,7 +7,6 @@ import argparse
 import sys
 from kanban.cli import KanbanCLI
 from kanban.multi_board_cli import MultiBoardCLI
-from kanban.gui import KanbanGUI
 from kanban.multi_board_gui import MultiBoardGUI
 from kanban.board import KanbanBoard
 from kanban.board_manager import BoardManager
@@ -18,11 +17,11 @@ def main():
     """Main entry point of the Kanban application."""
     parser = argparse.ArgumentParser(description="Multi-Board Kanban Manager")
     parser.add_argument('--cli', action='store_true', 
-                       help='Use command-line interface instead of GUI')
+                       help='Use command-line interface instead of the multi-board GUI')
     parser.add_argument('--single-board', action='store_true',
-                       help='Use legacy single-board mode')
+                       help='Use legacy single-board CLI mode')
     parser.add_argument('--data-file', type=str,
-                       help='Specify custom data file path (single-board mode only)')
+                       help='Specify custom data file path (single-board CLI mode only)')
     parser.add_argument('--boards-dir', type=str,
                        help='Specify custom boards directory')
     
@@ -30,27 +29,11 @@ def main():
     
     try:
         if args.single_board:
-            # Legacy single-board mode
-            print("Starting in single-board mode...")
+            # Legacy single-board CLI mode
+            print("Starting in single-board CLI mode...")
             board = KanbanBoard(args.data_file)
-            
-            if args.cli:
-                cli = KanbanCLI(board)
-                cli.run()
-            else:
-                try:
-                    import tkinter
-                    gui = KanbanGUI(board)
-                    gui.run()
-                except ImportError:
-                    print("Tkinter not available. Falling back to CLI mode...")
-                    cli = KanbanCLI(board)
-                    cli.run()
-                except Exception as e:
-                    print(f"GUI error: {e}")
-                    print("Falling back to CLI mode...")
-                    cli = KanbanCLI(board)
-                    cli.run()
+            cli = KanbanCLI(board)
+            cli.run()
         else:
             # Multi-board mode (default)
             print("Starting Multi-Board Kanban Manager...")

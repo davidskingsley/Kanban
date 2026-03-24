@@ -7,7 +7,6 @@ from tkinter import ttk, messagebox, simpledialog
 from typing import Dict, Optional, List
 
 from .board_manager import BoardManager
-from .gui import KanbanGUI
 from .models import Status, Priority
 
 
@@ -108,7 +107,7 @@ class MultiBoardGUI:
     def __init__(self, board_manager: BoardManager):
         self.board_manager = board_manager
         self.root = tk.Tk()
-        self.current_board_gui: Optional[KanbanGUI] = None
+        self.current_board_gui: Optional['EmbeddedKanbanGUI'] = None
         self.board_frame = None
         
         self.setup_window()
