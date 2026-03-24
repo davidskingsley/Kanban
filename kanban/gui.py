@@ -503,7 +503,7 @@ class KanbanGUI:
     
     def create_card_dialog(self):
         """Show dialog to create a new card."""
-        dialog = CardEditDialog(self.root, "Create New Card")
+        dialog = CardEditDialog(self.root, "Create New Card", board=self.board, on_change=self.refresh_board)
         if dialog.result:
             card_data = dialog.result
             card = self.board.create_card(
@@ -524,7 +524,7 @@ class KanbanGUI:
     
     def edit_card_dialog(self, card: Card):
         """Show dialog to edit an existing card."""
-        dialog = CardEditDialog(self.root, "Edit Card", card)
+        dialog = CardEditDialog(self.root, "Edit Card", card, self.board, self.refresh_board)
         if dialog.result:
             card_data = dialog.result
             self.board.edit_card(
@@ -764,13 +764,19 @@ Version 1.0.0
 class CardEditDialog:
     """Dialog for creating and editing cards."""
     
-    def __init__(self, parent, title: str, card: Card = None):
+    def __init__(self, parent, title: str, card: Card = None,
+                 board: KanbanBoard = None, on_change=None):
         self.result = None
+        self.card = card
+        self.board = board
+        self.on_change = on_change
+        self.subcards = []
         
         # Create dialog window
         self.dialog = tk.Toplevel(parent)
         self.dialog.title(title)
-        self.dialog.geometry("400x500")
+        dialog_height = 660 if self._supports_subcard_management() else 500
+        self.dialog.geometry(f"430x{dialog_height}")
         self.dialog.resizable(False, False)
         self.dialog.configure(bg='white')
         
@@ -827,6 +833,9 @@ class CardEditDialog:
         tk.Label(main_frame, text="Tags (comma-separated)", font=('Arial', 10, 'bold'), bg='white').pack(anchor='w')
         self.tags_entry = tk.Entry(main_frame, font=('Arial', 10), width=50)
         self.tags_entry.pack(fill='x', pady=(0, 20))
+
+        if self._supports_subcard_management():
+            self._build_subcards_section(main_frame)
         
         # Buttons
         button_frame = tk.Frame(main_frame, bg='white')
@@ -856,6 +865,110 @@ class CardEditDialog:
         
         # Focus on title field
         self.title_entry.focus()
+
+    def _supports_subcard_management(self) -> bool:
+        """Return whether the current dialog should allow subcard management."""
+        return self.board is not None and self.card is not None and not self.card.parent_id
+
+    def _build_subcards_section(self, parent):
+        """Render subcard management controls for a top-level card."""
+        tk.Label(parent, text="Subcards", font=('Arial', 10, 'bold'), bg='white').pack(anchor='w')
+
+        subcards_frame = tk.Frame(parent, bg='white')
+        subcards_frame.pack(fill='both', expand=True, pady=(0, 20))
+
+        list_frame = tk.Frame(subcards_frame, bg='white')
+        list_frame.pack(fill='both', expand=True)
+
+        self.subcards_listbox = tk.Listbox(list_frame, height=7, font=('Arial', 9), activestyle='dotbox')
+        self.subcards_listbox.pack(side='left', fill='both', expand=True)
+
+        scrollbar = ttk.Scrollbar(list_frame, orient='vertical', command=self.subcards_listbox.yview)
+        scrollbar.pack(side='right', fill='y')
+        self.subcards_listbox.configure(yscrollcommand=scrollbar.set)
+
+        actions_frame = tk.Frame(subcards_frame, bg='white')
+        actions_frame.pack(fill='x', pady=(8, 0))
+
+        tk.Button(actions_frame, text="Add Subcard", command=self.add_subcard,
+                 bg='#1976D2', fg='white', font=('Arial', 9),
+                 padx=14, pady=4).pack(side='left')
+        tk.Button(actions_frame, text="Delete Selected", command=self.delete_selected_subcard,
+                 bg='#F44336', fg='white', font=('Arial', 9),
+                 padx=14, pady=4).pack(side='left', padx=(8, 0))
+
+        self.refresh_subcards_list()
+
+    def refresh_subcards_list(self):
+        """Refresh the list of current subcards and their locations."""
+        if not hasattr(self, 'subcards_listbox'):
+            return
+
+        self.subcards = self.board.get_subcards(self.card.id)
+        self.subcards_listbox.delete(0, tk.END)
+        for subcard in self.subcards:
+            tick = "[x]" if self.board.is_card_done(subcard) else "[ ]"
+            location = self.board.get_card_location_label(subcard)
+            self.subcards_listbox.insert(tk.END, f"{tick} {subcard.title} ({location})")
+
+        if not self.subcards:
+            self.subcards_listbox.insert(tk.END, "No subcards yet")
+
+    def add_subcard(self):
+        """Open a nested dialog to create a new subcard for this card."""
+        parent_project = self.project_entry.get().strip() or self.card.project
+        dialog = CardEditDialog(self.dialog, f"Add Subcard to '{self.card.title}'")
+        if not dialog.result:
+            return
+
+        card_data = dialog.result
+        try:
+            subcard = self.board.create_subcard(
+                self.card.id,
+                card_data['title'],
+                card_data['description'],
+                card_data['priority'],
+                card_data['project'] or parent_project,
+            )
+            if card_data['assignee']:
+                self.board.edit_card(subcard.id, assignee=card_data['assignee'])
+
+            for tag in card_data['tags']:
+                subcard.add_tag(tag)
+            self.board.save_board()
+            self.refresh_subcards_list()
+            if self.on_change:
+                self.on_change()
+        except ValueError as error:
+            messagebox.showerror("Error", str(error), parent=self.dialog)
+
+    def delete_selected_subcard(self):
+        """Delete the selected subcard from the current card."""
+        selection = getattr(self, 'subcards_listbox', None)
+        if selection is None:
+            return
+
+        current = self.subcards_listbox.curselection()
+        if not current or not self.subcards:
+            messagebox.showinfo("Delete Subcard", "Select a subcard to delete.", parent=self.dialog)
+            return
+
+        index = current[0]
+        if index >= len(self.subcards):
+            return
+
+        subcard = self.subcards[index]
+        if not messagebox.askyesno(
+            "Delete Subcard",
+            f"Delete subcard '{subcard.title}'?",
+            parent=self.dialog,
+        ):
+            return
+
+        self.board.delete_card(subcard.id)
+        self.refresh_subcards_list()
+        if self.on_change:
+            self.on_change()
     
     def save(self):
         """Save the card data."""
