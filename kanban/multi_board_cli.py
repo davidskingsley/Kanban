@@ -75,10 +75,14 @@ class MultiBoardCLI:
             print("7. Export all boards")
             print("8. Import boards")
             print("9. Load board from folder")
+            print("10. Undo last board-management change")
+            print("11. Redo last undone board-management change")
         else:
             print("3. Create new board")
             print("8. Import boards")
             print("9. Load board from folder")
+            print("10. Undo last board-management change")
+            print("11. Redo last undone board-management change")
         print("0. Exit")
         print()
     
@@ -96,6 +100,8 @@ class MultiBoardCLI:
             '7': self.export_all_boards if boards else None,
             '8': self.import_boards,
             '9': self.load_board_from_folder,
+            '10': self.undo_last_change,
+            '11': self.redo_last_change,
             '0': self.exit_app
         }
         
@@ -436,6 +442,24 @@ class MultiBoardCLI:
                 print(f"🔒 {board.get_read_only_message()}")
         except Exception as error:
             print(f"❌ Failed to load board: {error}")
+
+    def undo_last_change(self):
+        """Undo the most recent board-management change."""
+        description = self.board_manager.undo_last_action()
+        if not description:
+            print("No board-management action is available to undo.")
+            return
+
+        print(f"↩ Undid: {description}")
+
+    def redo_last_change(self):
+        """Redo the most recently undone board-management change."""
+        description = self.board_manager.redo_last_action()
+        if not description:
+            print("No board-management action is available to redo.")
+            return
+
+        print(f"↪ Redid: {description}")
     
     def exit_app(self):
         """Exit the application."""

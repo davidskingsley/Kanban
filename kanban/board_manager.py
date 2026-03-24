@@ -2,6 +2,7 @@
 #  @brief Multi-board registry and metadata management for the Kanban application.
 """Board Manager for handling multiple Kanban boards."""
 
+from copy import deepcopy
 import json
 import os
 from datetime import datetime
@@ -14,6 +15,7 @@ from .storage import get_default_boards_dir, load_json_file
 ## @brief Manage board metadata, loading, switching, import, and export flows.
 class BoardManager:
     """Manages multiple Kanban boards and their metadata."""
+    MAX_UNDO_STEPS = 100
     
     def __init__(self, boards_directory: str = None):
         if boards_directory is None:
@@ -23,12 +25,119 @@ class BoardManager:
         self.metadata_file = os.path.join(boards_directory, "boards_metadata.json")
         self.boards: Dict[str, KanbanBoard] = {}
         self.current_board_id: Optional[str] = None
+        self._undo_stack: List[Dict[str, object]] = []
+        self._redo_stack: List[Dict[str, object]] = []
         
         # Ensure boards directory exists
         os.makedirs(boards_directory, exist_ok=True)
         
         # Load existing boards
         self.load_boards_metadata()
+
+    def _capture_state(self) -> Dict[str, object]:
+        """Capture metadata and board files for board-management undo."""
+        metadata = deepcopy(self.load_metadata())
+        boards_data = {}
+
+        for board_id, board_info in metadata['boards'].items():
+            if board_id in self.boards:
+                boards_data[board_id] = self.boards[board_id].export_data()
+            elif os.path.exists(board_info['data_file']):
+                boards_data[board_id] = load_json_file(board_info['data_file'])
+            else:
+                boards_data[board_id] = None
+
+        return {
+            'metadata': metadata,
+            'boards': boards_data,
+        }
+
+    def _push_history_state(self, stack: List[Dict[str, object]], description: str):
+        """Capture the current manager state on the provided history stack."""
+        stack.append({
+            'description': description,
+            'state': self._capture_state(),
+        })
+        if len(stack) > self.MAX_UNDO_STEPS:
+            stack.pop(0)
+
+    def _push_undo_state(self, description: str):
+        """Capture the current manager state so the next change can be undone."""
+        self._push_history_state(self._undo_stack, description)
+        self._redo_stack.clear()
+
+    def can_undo(self) -> bool:
+        """Return whether a board-management undo snapshot is available."""
+        return bool(self._undo_stack)
+
+    def can_redo(self) -> bool:
+        """Return whether a board-management redo snapshot is available."""
+        return bool(self._redo_stack)
+
+    def get_next_undo_description(self) -> Optional[str]:
+        """Return the description of the next manager action to undo."""
+        if not self._undo_stack:
+            return None
+        return self._undo_stack[-1]['description']
+
+    def get_next_redo_description(self) -> Optional[str]:
+        """Return the description of the next manager action to redo."""
+        if not self._redo_stack:
+            return None
+        return self._redo_stack[-1]['description']
+
+    def _restore_state(self, state: Dict[str, object]):
+        """Restore metadata and board files from a captured snapshot."""
+        current_metadata = self.load_metadata()
+        target_metadata = deepcopy(state['metadata'])
+
+        for board in self.boards.values():
+            board.close()
+        self.boards = {}
+
+        current_board_ids = set(current_metadata['boards'].keys())
+        target_board_ids = set(target_metadata['boards'].keys())
+        for board_id in current_board_ids - target_board_ids:
+            board_info = current_metadata['boards'][board_id]
+            data_file = board_info['data_file']
+            if not board_info.get('external') and os.path.exists(data_file):
+                os.remove(data_file)
+
+        for board_id, board_info in target_metadata['boards'].items():
+            board_data = state['boards'].get(board_id)
+            if board_data is None:
+                continue
+
+            data_file = board_info['data_file']
+            directory = os.path.dirname(data_file)
+            if directory and not os.path.exists(directory):
+                os.makedirs(directory, exist_ok=True)
+            with open(data_file, 'w', encoding='utf-8') as output_file:
+                json.dump(board_data, output_file, indent=2, ensure_ascii=False)
+
+        self.save_metadata(target_metadata)
+        self.current_board_id = target_metadata.get('current_board')
+        self.load_boards_metadata()
+
+    def undo_last_action(self) -> Optional[str]:
+        """Restore the most recent board-management snapshot."""
+        if not self._undo_stack:
+            return None
+
+        snapshot = self._undo_stack.pop()
+        self._push_history_state(self._redo_stack, snapshot['description'])
+        self._restore_state(snapshot['state'])
+        return snapshot['description']
+
+    def redo_last_action(self) -> Optional[str]:
+        """Reapply the most recently undone board-management snapshot."""
+        if not self._redo_stack:
+            return None
+
+        snapshot = self._redo_stack.pop()
+        self._push_history_state(self._undo_stack, snapshot['description'])
+        self._restore_state(snapshot['state'])
+        return snapshot['description']
 
     def _load_board_from_metadata(self, board_id: str, board_info: Dict) -> KanbanBoard:
         """Load a board instance from stored metadata."""
@@ -67,6 +176,8 @@ class BoardManager:
                     self.switch_board(existing_board_id)
                 return existing_board_id
 
+        self._push_undo_state(f"Load board '{name or inspected['name']}' from folder")
+
         board_name = name or inspected['name']
         board_id = self._generate_board_id(board_name)
         board = KanbanBoard(absolute_path, use_custom_columns if use_custom_columns is not None else inspected['use_custom_columns'])
@@ -101,6 +212,8 @@ class BoardManager:
     def create_board(self, name: str, description: str = "", use_custom_columns: bool = True,
                      target_directory: str = None) -> str:
         """Create a new Kanban board."""
+        self._push_undo_state(f"Create board '{name}'")
+
         # Generate unique board ID
         board_id = self._generate_board_id(name)
 
@@ -143,6 +256,8 @@ class BoardManager:
         
         if board_id not in metadata['boards']:
             return False
+
+        self._push_undo_state(f"Delete board '{metadata['boards'][board_id]['name']}'")
         
         board_info = metadata['boards'][board_id]
 
@@ -174,6 +289,12 @@ class BoardManager:
         
         if board_id not in metadata['boards']:
             return False
+
+        current_name = metadata['boards'][board_id]['name']
+        if current_name == new_name:
+            return False
+
+        self._push_undo_state(f"Rename board '{current_name}'")
         
         metadata['boards'][board_id]['name'] = new_name
         self.save_metadata(metadata)
@@ -185,6 +306,10 @@ class BoardManager:
         
         if board_id not in metadata['boards']:
             return False
+        if metadata.get('current_board') == board_id:
+            return False
+
+        self._push_undo_state(f"Switch to board '{metadata['boards'][board_id]['name']}'")
         
         metadata['current_board'] = board_id
         self.current_board_id = board_id
@@ -299,6 +424,7 @@ class BoardManager:
     def import_boards(self, import_data: Dict) -> bool:
         """Import boards data from backup."""
         try:
+            self._push_undo_state("Import boards")
             # Save current metadata as backup
             current_metadata = self.load_metadata()
             backup_file = f"{self.metadata_file}.backup"

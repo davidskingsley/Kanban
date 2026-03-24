@@ -41,6 +41,10 @@ class MultiBoardGUI:
     """Multi-board GUI wrapper for managing multiple Kanban boards."""
 
     MENU_SHORTCUTS = {
+        'undo_current_board_action': ('Ctrl+Z', '<Control-z>'),
+        'undo_board_management_action': ('Ctrl+Shift+Z', '<Control-Shift-Z>'),
+        'redo_current_board_action': ('Ctrl+Y', '<Control-y>'),
+        'redo_board_management_action': ('Ctrl+Shift+Y', '<Control-Shift-Y>'),
         'create_board_dialog': ('Ctrl+N', '<Control-n>'),
         'load_board_from_folder_dialog': ('Ctrl+Shift+O', '<Control-Shift-O>'),
         'switch_board_dialog': ('Ctrl+O', '<Control-o>'),
@@ -230,6 +234,34 @@ class MultiBoardGUI:
             return
 
         action()
+
+    def undo_current_board_action(self):
+        """Undo the last change on the currently active board."""
+        self.invoke_current_board_action('undo_last_action')
+
+    def undo_board_management_action(self):
+        """Undo the last board-management action."""
+        description = self.board_manager.undo_last_action()
+        if not description:
+            messagebox.showinfo("Nothing to Undo", "No board-management action is available to undo.")
+            return
+
+        self.refresh_board_display()
+        messagebox.showinfo("Undo Complete", f"Undid: {description}")
+
+    def redo_current_board_action(self):
+        """Redo the last undone change on the currently active board."""
+        self.invoke_current_board_action('redo_last_action')
+
+    def redo_board_management_action(self):
+        """Redo the last undone board-management action."""
+        description = self.board_manager.redo_last_action()
+        if not description:
+            messagebox.showinfo("Nothing to Redo", "No board-management action is available to redo.")
+            return
+
+        self.refresh_board_display()
+        messagebox.showinfo("Redo Complete", f"Redid: {description}")
     
     def run(self):
         """Run the GUI application."""

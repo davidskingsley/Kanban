@@ -13,6 +13,30 @@ def setup_menu(app):
     menubar = tk.Menu(app.root)
     app.root.config(menu=menubar)
 
+    edit_menu = tk.Menu(menubar, tearoff=0)
+    menubar.add_cascade(label="Edit", menu=edit_menu)
+    edit_menu.add_command(
+        label="Undo Board Action",
+        command=app.undo_current_board_action,
+        accelerator=app.get_shortcut_label('undo_current_board_action'),
+    )
+    edit_menu.add_command(
+        label="Undo Board Management Action",
+        command=app.undo_board_management_action,
+        accelerator=app.get_shortcut_label('undo_board_management_action'),
+    )
+    edit_menu.add_separator()
+    edit_menu.add_command(
+        label="Redo Board Action",
+        command=app.redo_current_board_action,
+        accelerator=app.get_shortcut_label('redo_current_board_action'),
+    )
+    edit_menu.add_command(
+        label="Redo Board Management Action",
+        command=app.redo_board_management_action,
+        accelerator=app.get_shortcut_label('redo_board_management_action'),
+    )
+
     boards_menu = tk.Menu(menubar, tearoff=0)
     menubar.add_cascade(label="Boards", menu=boards_menu)
     boards_menu.add_command(
@@ -181,6 +205,10 @@ def setup_menu(app):
 
 def bind_menu_shortcuts(app):
     """Bind keyboard shortcuts for primary menu actions."""
+    app.bind_shortcut(app.MENU_SHORTCUTS['undo_current_board_action'][1], app.undo_current_board_action)
+    app.bind_shortcut(app.MENU_SHORTCUTS['undo_board_management_action'][1], app.undo_board_management_action)
+    app.bind_shortcut(app.MENU_SHORTCUTS['redo_current_board_action'][1], app.redo_current_board_action)
+    app.bind_shortcut(app.MENU_SHORTCUTS['redo_board_management_action'][1], app.redo_board_management_action)
     app.bind_shortcut(app.MENU_SHORTCUTS['create_board_dialog'][1], app.create_board_dialog)
     app.bind_shortcut(app.MENU_SHORTCUTS['load_board_from_folder_dialog'][1], app.load_board_from_folder_dialog)
     app.bind_shortcut(app.MENU_SHORTCUTS['switch_board_dialog'][1], app.switch_board_dialog)
@@ -305,6 +333,11 @@ def build_shortcuts_text(app):
     """Return the keyboard shortcuts help text."""
     return (
         "⌨️ Keyboard Shortcuts\n\n"
+        "Undo:\n"
+        f"{app.get_shortcut_label('undo_current_board_action')} - Undo current board action\n"
+        f"{app.get_shortcut_label('undo_board_management_action')} - Undo board management action\n"
+        f"{app.get_shortcut_label('redo_current_board_action')} - Redo current board action\n"
+        f"{app.get_shortcut_label('redo_board_management_action')} - Redo board management action\n\n"
         "Boards:\n"
         f"{app.get_shortcut_label('create_board_dialog')} - Create new board\n"
         f"{app.get_shortcut_label('load_board_from_folder_dialog')} - Load board from folder\n"

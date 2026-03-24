@@ -1213,13 +1213,19 @@ class CardDialog:
 
         title, description, priority, assignee, project, start_date, end_date, color, card_type_id, tags = dialog.result
         try:
-            subcard = self.board.create_subcard(self.card.id, title, description, priority, project or parent_project, color, card_type_id, start_date, end_date)
-            if assignee:
-                self.board.edit_card(subcard.id, assignee=assignee)
-
-            for tag in tags:
-                subcard.add_tag(tag)
-            self.board.save_board()
+            self.board.create_subcard(
+                self.card.id,
+                title,
+                description,
+                priority,
+                project or parent_project,
+                color,
+                card_type_id,
+                start_date,
+                end_date,
+                assignee,
+                tags,
+            )
             self.refresh_subcards_list()
             if self.on_change:
                 self.on_change()

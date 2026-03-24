@@ -2,7 +2,8 @@
 #  @brief Board domain logic for cards, columns, persistence, and read-only guards.
 """Main Kanban board implementation with custom column support."""
 
-from datetime import date
+from copy import deepcopy
+from datetime import date, datetime
 from typing import List, Optional, Dict, Union
 from .models import Card, Column, CustomColumn, Status, Priority, CardType, UNSET
 from .storage import DataStorage, get_default_single_board_file
@@ -14,6 +15,7 @@ import uuid
 class KanbanBoard:
     """Main Kanban board class for managing cards and columns."""
     DEFAULT_CARD_TYPE_NAME = 'Default'
+    MAX_UNDO_STEPS = 100
     
     def __init__(self, data_file: str = None, use_custom_columns: bool = True):
         if data_file is None:
@@ -23,6 +25,8 @@ class KanbanBoard:
         self.use_custom_columns = use_custom_columns
         self.card_types: Dict[str, CardType] = {}
         self.last_used_card_type_id = None
+        self._undo_stack: List[Dict[str, object]] = []
+        self._redo_stack: List[Dict[str, object]] = []
         
         # Initialize columns based on mode
         if use_custom_columns:
@@ -57,6 +61,97 @@ class KanbanBoard:
         """Raise if the board is currently read-only."""
         if self.is_read_only():
             raise PermissionError(self.get_read_only_message())
+
+    def export_data(self) -> Dict:
+        """Return the current board state as serializable data."""
+        self._ensure_default_card_type()
+        if not self.last_used_card_type_id:
+            self.last_used_card_type_id = self.get_default_card_type_id()
+
+        card_types_data = [card_type.to_dict() for card_type in self.get_card_types_ordered()]
+        if self.use_custom_columns:
+            columns_data = [column.to_dict() for column in self.custom_columns.values()]
+            cards_data = []
+            for column in self.custom_columns.values():
+                for card in column:
+                    cards_data.append(card.to_dict())
+
+            return {
+                'columns': columns_data,
+                'card_types': card_types_data,
+                'cards': cards_data,
+                'last_used_card_type_id': self.last_used_card_type_id,
+                'format_version': '2.0'
+            }
+
+        cards_data = []
+        for column in self.columns.values():
+            for card in column:
+                cards_data.append(card.to_dict())
+
+        return {
+            'cards': cards_data,
+            'card_types': card_types_data,
+            'last_used_card_type_id': self.last_used_card_type_id,
+        }
+
+    def _push_history_state(self, stack: List[Dict[str, object]], description: str):
+        """Capture the current state on the provided history stack."""
+        stack.append({
+            'description': description,
+            'data': deepcopy(self.export_data()),
+        })
+        if len(stack) > self.MAX_UNDO_STEPS:
+            stack.pop(0)
+
+    def _push_undo_state(self, description: str):
+        """Capture the current state so the next change can be undone."""
+        self._push_history_state(self._undo_stack, description)
+        self._redo_stack.clear()
+
+    def can_undo(self) -> bool:
+        """Return whether an undo snapshot is available."""
+        return bool(self._undo_stack)
+
+    def can_redo(self) -> bool:
+        """Return whether a redo snapshot is available."""
+        return bool(self._redo_stack)
+
+    def get_next_undo_description(self) -> Optional[str]:
+        """Return the description of the next undo action, if any."""
+        if not self._undo_stack:
+            return None
+        return self._undo_stack[-1]['description']
+
+    def get_next_redo_description(self) -> Optional[str]:
+        """Return the description of the next redo action, if any."""
+        if not self._redo_stack:
+            return None
+        return self._redo_stack[-1]['description']
+
+    def undo_last_action(self) -> Optional[str]:
+        """Restore the most recently captured board state."""
+        self._ensure_writable()
+        if not self._undo_stack:
+            return None
+
+        snapshot = self._undo_stack.pop()
+        self._push_history_state(self._redo_stack, snapshot['description'])
+        self._load_from_data(deepcopy(snapshot['data']), persist_defaults=False)
+        self.save_board()
+        return snapshot['description']
+
+    def redo_last_action(self) -> Optional[str]:
+        """Reapply the most recently undone board state."""
+        self._ensure_writable()
+        if not self._redo_stack:
+            return None
+
+        snapshot = self._redo_stack.pop()
+        self._push_history_state(self._undo_stack, snapshot['description'])
+        self._load_from_data(deepcopy(snapshot['data']), persist_defaults=False)
+        self.save_board()
+        return snapshot['description']
     
     # Column Management Methods
     def create_column(self, name: str, position: int = None, color: str = "#2196F3") -> str:
@@ -68,6 +163,8 @@ class KanbanBoard:
         
         if position is None:
             position = len(self.custom_columns)
+
+        self._push_undo_state(f"Create column '{name}'")
         
         column_id = str(uuid.uuid4())
         column = CustomColumn(column_id, name, position, color)
@@ -85,8 +182,29 @@ class KanbanBoard:
 
         if not self.use_custom_columns or column_id not in self.custom_columns:
             return False
+
+        self._push_undo_state(f"Rename column '{self.custom_columns[column_id].name}'")
         
         self.custom_columns[column_id].rename(new_name)
+        self.save_board()
+        return True
+
+    def update_column(self, column_id: str, name: str = None, color: str = None) -> bool:
+        """Update one or more custom column properties in a single undo step."""
+        self._ensure_writable()
+
+        if not self.use_custom_columns or column_id not in self.custom_columns:
+            return False
+
+        column = self.custom_columns[column_id]
+        if name is None and color is None:
+            return False
+
+        self._push_undo_state(f"Update column '{column.name}'")
+        if name is not None:
+            column.rename(name)
+        if color is not None:
+            column.change_color(color)
         self.save_board()
         return True
     
@@ -101,6 +219,7 @@ class KanbanBoard:
             return False  # Cannot delete the last column
         
         column = self.custom_columns[column_id]
+        self._push_undo_state(f"Delete column '{column.name}'")
         
         # Move cards to another column if specified
         if move_cards_to and move_cards_to in self.custom_columns:
@@ -136,6 +255,8 @@ class KanbanBoard:
         # Validate that all column IDs exist
         if set(column_order) != set(self.custom_columns.keys()):
             return False
+
+        self._push_undo_state("Reorder columns")
         
         # Update positions
         for index, column_id in enumerate(column_order):
@@ -150,6 +271,8 @@ class KanbanBoard:
 
         if not self.use_custom_columns or column_id not in self.custom_columns:
             return False
+
+        self._push_undo_state(f"Change color of column '{self.custom_columns[column_id].name}'")
         
         self.custom_columns[column_id].change_color(color)
         self.save_board()
@@ -242,6 +365,8 @@ class KanbanBoard:
         if any(card_type.name.lower() == name.lower() for card_type in self.card_types.values()):
             raise ValueError("A card type with that name already exists")
 
+        self._push_undo_state(f"Create card type '{name}'")
+
         card_type = CardType(name, description, default_project, default_color)
         self.card_types[card_type.id] = card_type
         self.last_used_card_type_id = card_type.id
@@ -268,6 +393,8 @@ class KanbanBoard:
             if card_type_id == self.get_default_card_type_id() and name != self.DEFAULT_CARD_TYPE_NAME:
                 raise ValueError("The default card type name cannot be changed")
 
+        self._push_undo_state(f"Edit card type '{card_type.name}'")
+
         card_type.update(name, description, default_project, default_color)
         self.save_board()
         return card_type
@@ -287,13 +414,15 @@ class KanbanBoard:
         if card_type_id == self.get_default_card_type_id():
             raise ValueError("The default card type cannot be deleted")
 
+        self._push_undo_state(f"Delete card type '{card_type.name}'")
+
         cards = self.get_cards_by_type(card_type_id)
         if delete_cards:
             top_level_cards = [card for card in cards if not card.parent_id]
             nested_cards = [card for card in cards if card.parent_id]
             for card in top_level_cards + nested_cards:
                 if self.find_card(card.id):
-                    self.delete_card(card.id)
+                    self._delete_card_internal(card.id)
         else:
             replacement_type = self._resolve_card_type(replacement_type_id or self.get_default_card_type_id())
             if replacement_type.id == card_type_id:
@@ -311,7 +440,8 @@ class KanbanBoard:
     def create_card(self, title: str, description: str = "", priority: Priority = Priority.MEDIUM,
                    column_id: str = None, project: str = None, start_date: date = None,
                    end_date: date = None, parent_id: str = None, color: str = None,
-                   card_type_id: str = None) -> Card:
+                   card_type_id: str = None, assignee: str = None,
+                   tags: Optional[List[str]] = None) -> Card:
         """Create a new card and add it to the specified column (or first column if none specified)."""
         self._ensure_writable()
         card_type = self._resolve_card_type(card_type_id)
@@ -326,7 +456,8 @@ class KanbanBoard:
             
             if column_id not in self.custom_columns:
                 raise ValueError(f"Column {column_id} does not exist")
-            
+
+            self._push_undo_state(f"Create card '{title}'")
             card = Card(title, description, priority, column_id)
             card.project = effective_project
             card.start_date = start_date
@@ -335,9 +466,13 @@ class KanbanBoard:
                 card.parent_id = parent_id
             card.color = effective_color
             card.card_type_id = card_type.id
+            card.assignee = assignee
+            if tags:
+                card.tags = list(dict.fromkeys(tags))
             self.custom_columns[column_id].add_card(card)
         else:
             # Legacy mode
+            self._push_undo_state(f"Create card '{title}'")
             card = Card(title, description, priority)
             card.project = effective_project
             card.start_date = start_date
@@ -346,6 +481,9 @@ class KanbanBoard:
                 card.parent_id = parent_id
             card.color = effective_color
             card.card_type_id = card_type.id
+            card.assignee = assignee
+            if tags:
+                card.tags = list(dict.fromkeys(tags))
             self.columns[Status.TODO].add_card(card)
 
         self.last_used_card_type_id = card_type.id
@@ -355,6 +493,7 @@ class KanbanBoard:
     def edit_card(self, card_id: str, title: str = None, description: str = None, 
                   priority: Priority = None, assignee: str = None, project: str = None,
                   start_date=UNSET, end_date=UNSET, parent_id: str = None, color=UNSET,
+                  tags=UNSET,
                   card_type_id=UNSET) -> Optional[Card]:
         """Edit an existing card."""
         self._ensure_writable()
@@ -366,10 +505,41 @@ class KanbanBoard:
                 resolved_type = self._resolve_card_type(card_type_id)
                 resolved_type_id = resolved_type.id
                 self.last_used_card_type_id = resolved_type.id
+            self._push_undo_state(f"Edit card '{card.title}'")
             card.update(title, description, priority, assignee, project, start_date, end_date, parent_id, color, resolved_type_id)
+            if tags is not UNSET:
+                card.tags = list(dict.fromkeys(tags or []))
+                card.updated_at = datetime.now()
             self.save_board()
             return card
         return None
+
+    def update_card_tags(self, card_id: str, tags: List[str]) -> Optional[Card]:
+        """Replace the tag list for a card in a single undo step."""
+        self._ensure_writable()
+
+        card = self.find_card(card_id)
+        if not card:
+            return None
+
+        self._push_undo_state(f"Update tags on '{card.title}'")
+        card.tags = list(dict.fromkeys(tags or []))
+        card.updated_at = datetime.now()
+        self.save_board()
+        return card
+
+    def add_card_tag(self, card_id: str, tag: str) -> bool:
+        """Add a single tag to a card in a reversible way."""
+        self._ensure_writable()
+
+        card = self.find_card(card_id)
+        if not card or not tag or tag in card.tags:
+            return False
+
+        self._push_undo_state(f"Add tag to '{card.title}'")
+        card.add_tag(tag)
+        self.save_board()
+        return True
 
     def get_all_cards(self) -> List[Card]:
         """Return every card currently on the board."""
@@ -397,6 +567,7 @@ class KanbanBoard:
         if not card:
             return None
 
+        self._push_undo_state(f"Add note to '{card.title}'")
         note = card.add_note(text)
         self.save_board()
         return note
@@ -409,9 +580,12 @@ class KanbanBoard:
         if not card:
             return False
 
+        self._push_undo_state(f"Delete note from '{card.title}'")
         removed = card.remove_note(note_id)
         if removed:
             self.save_board()
+        else:
+            self._undo_stack.pop()
         return removed
 
     def edit_card_note(self, card_id: str, note_id: str, text: str = ""):
@@ -422,9 +596,12 @@ class KanbanBoard:
         if not card:
             return None
 
+        self._push_undo_state(f"Edit note on '{card.title}'")
         note = card.update_note(note_id, text)
         if note is not None:
             self.save_board()
+        else:
+            self._undo_stack.pop()
         return note
 
     def get_subcard_progress(self, parent_id: str) -> tuple[int, int]:
@@ -452,7 +629,8 @@ class KanbanBoard:
     def create_subcard(self, parent_id: str, title: str, description: str = "",
                        priority: Priority = Priority.MEDIUM, project: str = None,
                        color: str = None, card_type_id: str = None, start_date: date = None,
-                       end_date: date = None) -> Card:
+                       end_date: date = None, assignee: str = None,
+                       tags: Optional[List[str]] = None) -> Card:
         """Create a child card under an existing parent card."""
         parent_card = self.find_card(parent_id)
         if not parent_card:
@@ -472,34 +650,51 @@ class KanbanBoard:
             parent_id,
             color if color is not None else parent_card.color,
             card_type_id if card_type_id is not None else parent_card.card_type_id,
+            assignee,
+            tags,
         )
     
-    def delete_card(self, card_id: str) -> bool:
-        """Delete a card from the board."""
-        self._ensure_writable()
-
+    def _delete_card_internal(self, card_id: str) -> bool:
+        """Delete a card without capturing a second undo snapshot."""
         for subcard in list(self.get_subcards(card_id)):
-            self.delete_card(subcard.id)
+            self._delete_card_internal(subcard.id)
 
         if self.use_custom_columns:
             for column in self.custom_columns.values():
                 removed_card = column.remove_card(card_id)
                 if removed_card:
-                    self.save_board()
                     return True
         else:
             for column in self.columns.values():
                 removed_card = column.remove_card(card_id)
                 if removed_card:
-                    self.save_board()
                     return True
         return False
+
+    def delete_card(self, card_id: str) -> bool:
+        """Delete a card from the board."""
+        self._ensure_writable()
+
+        card = self.find_card(card_id)
+        if not card:
+            return False
+
+        self._push_undo_state(f"Delete card '{card.title}'")
+
+        removed = self._delete_card_internal(card_id)
+        if removed:
+            self.save_board()
+        return removed
     
     def move_card(self, card_id: str, to_column: Union[str, Status]) -> bool:
         """Move a card to a different column."""
         self._ensure_writable()
 
         card = None
+        existing_card = self.find_card(card_id)
+        if not existing_card:
+            return False
+        self._push_undo_state(f"Move card '{existing_card.title}'")
         
         if self.use_custom_columns:
             # Find and remove the card from its current column
@@ -525,7 +720,8 @@ class KanbanBoard:
                 self.columns[to_column].add_card(card)
                 self.save_board()
                 return True
-        
+
+        self._undo_stack.pop()
         return False
     
     def find_card(self, card_id: str) -> Optional[Card]:
@@ -618,6 +814,9 @@ class KanbanBoard:
 
         if not self.use_custom_columns:
             done_count = len(self.columns[Status.DONE])
+            if done_count == 0:
+                return 0
+            self._push_undo_state("Clear done cards")
             self.columns[Status.DONE].cards.clear()
             self.save_board()
             return done_count
@@ -628,6 +827,9 @@ class KanbanBoard:
             
             last_column = max(self.custom_columns.values(), key=lambda col: col.position)
             card_count = len(last_column.cards)
+            if card_count == 0:
+                return 0
+            self._push_undo_state("Clear done cards")
             last_column.cards.clear()
             self.save_board()
             return card_count
@@ -635,6 +837,17 @@ class KanbanBoard:
     def load_board(self):
         """Load board data from storage."""
         data = self.storage.load()
+        self._load_from_data(data, persist_defaults=not self.is_read_only())
+
+    def _load_from_data(self, data: Dict, persist_defaults: bool = True):
+        """Load board data from a provided serialized representation."""
+        if self.use_custom_columns:
+            self.custom_columns.clear()
+        else:
+            for column in self.columns.values():
+                column.cards.clear()
+        self.card_types.clear()
+        self.last_used_card_type_id = None
         
         # Check if data contains custom columns
         has_custom_columns = 'columns' in data
@@ -642,7 +855,7 @@ class KanbanBoard:
         is_empty_board = not data.get('cards') and not has_custom_columns
 
         if self.use_custom_columns and is_empty_board:
-            self._init_default_custom_columns(persist=not self.is_read_only())
+            self._init_default_custom_columns(persist=persist_defaults)
             return
         
         if has_custom_columns and self.use_custom_columns:
@@ -651,12 +864,12 @@ class KanbanBoard:
         elif is_legacy_data:
             # Handle legacy data or convert to custom columns
             if self.use_custom_columns:
-                self._convert_legacy_to_custom(data, persist=not self.is_read_only())
+                self._convert_legacy_to_custom(data, persist=persist_defaults)
             else:
                 self._load_legacy_data(data)
         elif self.use_custom_columns and not self.custom_columns:
             # Initialize default custom columns if empty
-            self._init_default_custom_columns(persist=not self.is_read_only())
+            self._init_default_custom_columns(persist=persist_defaults)
     
     def _load_custom_columns(self, data: Dict):
         """Load custom columns format."""
@@ -753,41 +966,7 @@ class KanbanBoard:
     
     def save_board(self):
         """Save board data to storage."""
-        self._ensure_default_card_type()
-        if not self.last_used_card_type_id:
-            self.last_used_card_type_id = self.get_default_card_type_id()
-        if self.use_custom_columns:
-            # Save custom columns format
-            columns_data = [column.to_dict() for column in self.custom_columns.values()]
-            card_types_data = [card_type.to_dict() for card_type in self.get_card_types_ordered()]
-            cards_data = []
-            
-            for column in self.custom_columns.values():
-                for card in column:
-                    cards_data.append(card.to_dict())
-            
-            data = {
-                'columns': columns_data,
-                'card_types': card_types_data,
-                'cards': cards_data,
-                'last_used_card_type_id': self.last_used_card_type_id,
-                'format_version': '2.0'
-            }
-        else:
-            # Save legacy format
-            card_types_data = [card_type.to_dict() for card_type in self.get_card_types_ordered()]
-            cards_data = []
-            for column in self.columns.values():
-                for card in column:
-                    cards_data.append(card.to_dict())
-            
-            data = {
-                'cards': cards_data,
-                'card_types': card_types_data,
-                'last_used_card_type_id': self.last_used_card_type_id,
-            }
-        
-        self.storage.save(data)
+        self.storage.save(self.export_data())
     
     def export_board(self, format_type: str = "text") -> str:
         """Export board in different formats."""

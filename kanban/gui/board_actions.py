@@ -187,7 +187,7 @@ def delete_current_board_dialog(app):
     result = messagebox.askyesno(
         "Confirm Deletion",
         f"Are you sure you want to delete board '{current_name}'?\n\n"
-        + "This action cannot be undone. If this is the last board, the app will return to the empty welcome state.",
+        + "If this is the last board, the app will return to the empty welcome state.",
     )
 
     if result:

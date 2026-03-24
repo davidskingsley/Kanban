@@ -106,6 +106,8 @@ class KanbanCLI:
         
         print("\nOTHER:")
         print("22. Create backup")
+        print("23. Undo last change")
+        print("24. Redo last undone change")
         print("0. Exit")
         print()
     
@@ -134,6 +136,8 @@ class KanbanCLI:
             '20': self.edit_card_type,
             '21': self.delete_card_type,
             '22': self.create_backup,
+            '23': self.undo_last_change,
+            '24': self.redo_last_change,
             '0': self.exit_app
         }
         
@@ -210,9 +214,18 @@ class KanbanCLI:
                     column_id = columns[0].id  # Default to first column
         
         try:
-            card = self.board.create_card(title, description, priority, column_id, project, start_date, end_date, color=color, card_type_id=card_type.id)
-            if assignee:
-                self.board.edit_card(card.id, assignee=assignee)
+            self.board.create_card(
+                title,
+                description,
+                priority,
+                column_id,
+                project,
+                start_date,
+                end_date,
+                color=color,
+                card_type_id=card_type.id,
+                assignee=assignee,
+            )
             
             print(f"✅ Card '{title}' created successfully!")
         except ValueError as e:
@@ -369,12 +382,19 @@ class KanbanCLI:
         tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()] if tags_text else []
 
         try:
-            subcard = self.board.create_subcard(parent_id, title, description, priority, project, color, card_type.id, start_date, end_date)
-            if assignee:
-                self.board.edit_card(subcard.id, assignee=assignee)
-            for tag in tags:
-                subcard.add_tag(tag)
-            self.board.save_board()
+            self.board.create_subcard(
+                parent_id,
+                title,
+                description,
+                priority,
+                project,
+                color,
+                card_type.id,
+                start_date,
+                end_date,
+                assignee,
+                tags,
+            )
             print(f"✅ Subcard '{title}' created successfully!")
         except ValueError as error:
             print(f"❌ Error creating subcard: {error}")
@@ -557,11 +577,36 @@ class KanbanCLI:
         
         tag = input("Enter tag name: ").strip()
         if tag:
-            card.add_tag(tag)
-            self.board.save_board()
-            print(f"✅ Tag '{tag}' added to card!")
+            if self.board.add_card_tag(card.id, tag):
+                print(f"✅ Tag '{tag}' added to card!")
+            else:
+                print("Tag already exists or could not be added.")
         else:
             print("Tag name cannot be empty!")
+
+    def undo_last_change(self):
+        """Undo the most recent board change."""
+        if not self.ensure_board_writable():
+            return
+
+        description = self.board.undo_last_action()
+        if not description:
+            print("No board action is available to undo.")
+            return
+
+        print(f"↩ Undid: {description}")
+
+    def redo_last_change(self):
+        """Redo the most recently undone board change."""
+        if not self.ensure_board_writable():
+            return
+
+        description = self.board.redo_last_action()
+        if not description:
+            print("No board action is available to redo.")
+            return
+
+        print(f"↪ Redid: {description}")
     
     def show_card_details(self):
         """Show detailed information about a card."""

@@ -698,18 +698,36 @@ class EmbeddedKanbanGUI:
                 columns = self.board.get_columns_ordered()
                 if columns:
                     target_column = columns[0].id  # Add to first column
-                    card = self.board.create_card(title, description, priority, target_column, project, start_date, end_date, color=color, card_type_id=card_type_id)
+                    self.board.create_card(
+                        title,
+                        description,
+                        priority,
+                        target_column,
+                        project,
+                        start_date,
+                        end_date,
+                        color=color,
+                        card_type_id=card_type_id,
+                        assignee=assignee,
+                        tags=tags,
+                    )
                 else:
                     messagebox.showerror("Error", "No columns available!")
                     return
             else:
-                card = self.board.create_card(title, description, priority, Status.TODO, project, start_date, end_date, color=color, card_type_id=card_type_id)
-            
-            if assignee:
-                self.board.edit_card(card.id, assignee=assignee)
-            
-            for tag in tags:
-                card.add_tag(tag)
+                self.board.create_card(
+                    title,
+                    description,
+                    priority,
+                    Status.TODO,
+                    project,
+                    start_date,
+                    end_date,
+                    color=color,
+                    card_type_id=card_type_id,
+                    assignee=assignee,
+                    tags=tags,
+                )
             
             self.refresh_display()
             self.status_bar.config(text=f"✅ Created card: {title}")
@@ -745,13 +763,8 @@ class EmbeddedKanbanGUI:
             title, description, priority, assignee, project, start_date, end_date, color, card_type_id, tags = dialog.result
             self.board.edit_card(card.id, title=title, description=description, 
                                priority=priority, assignee=assignee, project=project, start_date=start_date,
-                               end_date=end_date, color=color,
+                               end_date=end_date, color=color, tags=tags,
                                card_type_id=card_type_id)
-            
-            # Update tags
-            card.tags.clear()
-            for tag in tags:
-                card.add_tag(tag)
             
             self.refresh_display()
             self.status_bar.config(text=f"✅ Updated card: {title}")
@@ -798,7 +811,7 @@ class EmbeddedKanbanGUI:
         if not card:
             return
         
-        if messagebox.askyesno("Confirm Delete", f"Delete card '{card.title}'?\nThis cannot be undone."):
+        if messagebox.askyesno("Confirm Delete", f"Delete card '{card.title}'?"):
             self.board.delete_card(card.id)
             self.refresh_display()
             self.status_bar.config(text=f"📋 Deleted card: {card.title}")
@@ -1072,9 +1085,9 @@ class EmbeddedKanbanGUI:
 
         tag = simpledialog.askstring("Add Tag", f"Add tag to '{card.title}':")
         if tag:
-            card.add_tag(tag)
-            self.refresh_display()
-            self.status_bar.config(text=f"🏷️ Added tag '{tag}' to {card.title}")
+            if self.board.add_card_tag(card.id, tag):
+                self.refresh_display()
+                self.status_bar.config(text=f"🏷️ Added tag '{tag}' to {card.title}")
 
     def add_subcard_dialog(self, parent_card):
         """Create a real child card under the provided parent card."""
@@ -1093,12 +1106,19 @@ class EmbeddedKanbanGUI:
         if dialog.result:
             title, description, priority, assignee, project, start_date, end_date, color, card_type_id, tags = dialog.result
             try:
-                subcard = self.board.create_subcard(parent_card.id, title, description, priority, project, color, card_type_id, start_date, end_date)
-                if assignee:
-                    self.board.edit_card(subcard.id, assignee=assignee)
-
-                for tag in tags:
-                    subcard.add_tag(tag)
+                self.board.create_subcard(
+                    parent_card.id,
+                    title,
+                    description,
+                    priority,
+                    project,
+                    color,
+                    card_type_id,
+                    start_date,
+                    end_date,
+                    assignee,
+                    tags,
+                )
 
                 self.refresh_display()
                 self.status_bar.config(text=f"✅ Created subcard: {title}")
@@ -1155,8 +1175,7 @@ class EmbeddedKanbanGUI:
             return
 
         new_name, new_color = dialog.result
-        self.board.rename_column(column.id, new_name)
-        self.board.change_column_color(column.id, new_color)
+        self.board.update_column(column.id, name=new_name, color=new_color)
         self.refresh_display()
         self.status_bar.config(text=f"✅ Updated column: {new_name}")
 
@@ -1337,6 +1356,26 @@ class EmbeddedKanbanGUI:
             self.status_bar.config(text=f"🗑️ Cleared {count} done cards")
         else:
             messagebox.showinfo("No Cards", "No done cards to clear!")
+
+    def undo_last_action(self):
+        """Undo the most recent change on the current board."""
+        description = self.board.undo_last_action()
+        if not description:
+            messagebox.showinfo("Nothing to Undo", "No board action is available to undo.")
+            return
+
+        self.refresh_display()
+        self.status_bar.config(text=f"↩ Undid: {description}")
+
+    def redo_last_action(self):
+        """Redo the most recently undone change on the current board."""
+        description = self.board.redo_last_action()
+        if not description:
+            messagebox.showinfo("Nothing to Redo", "No board action is available to redo.")
+            return
+
+        self.refresh_display()
+        self.status_bar.config(text=f"↪ Redid: {description}")
 
     def create_backup(self):
         """Create a backup of the board."""
