@@ -2263,25 +2263,40 @@ class CardDialog:
         """Set up the dialog UI."""
         main_frame = tk.Frame(self.dialog, padx=20, pady=20, bg=APP_BG)
         main_frame.pack(fill='both', expand=True)
+
+        content_frame = tk.Frame(main_frame, bg=APP_BG)
+        content_frame.pack(fill='both', expand=True)
+
+        self.form_canvas = tk.Canvas(content_frame, bg=APP_BG, highlightthickness=0, bd=0)
+        self.form_canvas.pack(side='left', fill='both', expand=True)
+
+        form_scrollbar = ttk.Scrollbar(content_frame, orient='vertical', command=self.form_canvas.yview)
+        form_scrollbar.pack(side='right', fill='y')
+        self.form_canvas.configure(yscrollcommand=form_scrollbar.set)
+
+        fields_frame = tk.Frame(self.form_canvas, bg=APP_BG)
+        self.form_window = self.form_canvas.create_window((0, 0), window=fields_frame, anchor='nw')
+        fields_frame.bind('<Configure>', self._update_scroll_region)
+        self.form_canvas.bind('<Configure>', self._resize_form_width)
         
         # Title
-        tk.Label(main_frame, text="Title:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
-        self.title_entry = tk.Entry(main_frame, width=50)
+        tk.Label(fields_frame, text="Title:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+        self.title_entry = tk.Entry(fields_frame, width=50)
         self.title_entry.pack(fill='x', pady=(0, 10))
         self.title_entry.insert(0, initial_title)
         style_text_input(self.title_entry)
         
         # Description
-        tk.Label(main_frame, text="Description:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
-        self.description_text = tk.Text(main_frame, height=6, width=50)
+        tk.Label(fields_frame, text="Description:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+        self.description_text = tk.Text(fields_frame, height=6, width=50)
         self.description_text.pack(fill='x', pady=(0, 10))
         self.description_text.insert("1.0", initial_description)
         style_text_input(self.description_text)
         
         # Priority
-        tk.Label(main_frame, text="Priority:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+        tk.Label(fields_frame, text="Priority:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
         self.priority_var = tk.StringVar()
-        priority_frame = tk.Frame(main_frame, bg=APP_BG)
+        priority_frame = tk.Frame(fields_frame, bg=APP_BG)
         priority_frame.pack(fill='x', pady=(0, 10))
         
         priorities = ['low', 'medium', 'high', 'critical']
@@ -2297,32 +2312,32 @@ class CardDialog:
             self.priority_var.set('medium')
         
         # Assignee
-        tk.Label(main_frame, text="Assignee:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
-        self.assignee_entry = tk.Entry(main_frame, width=50)
+        tk.Label(fields_frame, text="Assignee:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+        self.assignee_entry = tk.Entry(fields_frame, width=50)
         self.assignee_entry.pack(fill='x', pady=(0, 10))
         self.assignee_entry.insert(0, initial_assignee)
         style_text_input(self.assignee_entry)
 
         # Project
-        tk.Label(main_frame, text="Project:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
-        self.project_entry = tk.Entry(main_frame, width=50)
+        tk.Label(fields_frame, text="Project:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+        self.project_entry = tk.Entry(fields_frame, width=50)
         self.project_entry.pack(fill='x', pady=(0, 10))
         self.project_entry.insert(0, initial_project)
         style_text_input(self.project_entry)
         
         # Tags
-        tk.Label(main_frame, text="Tags (comma-separated):", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
-        self.tags_entry = tk.Entry(main_frame, width=50)
+        tk.Label(fields_frame, text="Tags (comma-separated):", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+        self.tags_entry = tk.Entry(fields_frame, width=50)
         self.tags_entry.pack(fill='x', pady=(0, 20))
         self.tags_entry.insert(0, ', '.join(initial_tags))
         style_text_input(self.tags_entry)
 
         if self._supports_subcard_management():
-            self._build_subcards_section(main_frame)
+            self._build_subcards_section(fields_frame)
         
         # Buttons
         button_frame = tk.Frame(main_frame, bg=APP_BG)
-        button_frame.pack(fill='x')
+        button_frame.pack(fill='x', pady=(12, 0))
         
         create_soft_button(button_frame, "Cancel", self.cancel, variant='secondary').pack(side='right', padx=(10, 0))
         create_soft_button(button_frame, "OK", self.ok, variant='primary').pack(side='right')
@@ -2331,6 +2346,14 @@ class CardDialog:
         self.title_entry.focus()
         self.dialog.bind('<Return>', lambda e: self.ok())
         self.dialog.bind('<Escape>', lambda e: self.cancel())
+
+    def _update_scroll_region(self, _event=None):
+        """Keep the form canvas scroll region in sync with its content."""
+        self.form_canvas.configure(scrollregion=self.form_canvas.bbox('all'))
+
+    def _resize_form_width(self, event):
+        """Resize the embedded form to match the visible canvas width."""
+        self.form_canvas.itemconfigure(self.form_window, width=event.width)
 
     def _supports_subcard_management(self):
         """Return whether the current dialog should allow subcard management."""
