@@ -112,8 +112,31 @@ class EmbeddedKanbanGUI:
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         if self.multi_board_gui:
             self.multi_board_gui.update_board_info(self.board.get_board_stats(), self.board)
+            self.multi_board_gui.sync_toolbar_filters()
         
         self.update_status_bar()
+
+    def get_available_assignees(self):
+        """Return sorted assignee names available on the board."""
+        assignees = {card.assignee for card in self.board.get_all_cards() if card.assignee}
+        return sorted(assignees)
+
+    def get_filter_state(self):
+        """Return the currently active board-filter values."""
+        return {
+            'search': self.search_filter or '',
+            'priority': self.priority_filter or '',
+            'assignee': self.assignee_filter or '',
+            'overdue': bool(self.overdue_filter),
+        }
+
+    def apply_toolbar_filters(self, search_text=None, priority=None, assignee=None, overdue=None):
+        """Apply compact toolbar filter values in one refresh."""
+        self.search_filter = (search_text or '').strip() or None
+        self.priority_filter = (priority or '').strip() or None
+        self.assignee_filter = (assignee or '').strip() or None
+        self.overdue_filter = bool(overdue)
+        self.refresh_display()
 
     def ensure_board_writable(self):
         """Show a message and return False if the current board is read-only."""
@@ -938,8 +961,8 @@ class EmbeddedKanbanGUI:
     def search_dialog(self):
         """Show search dialog."""
         search_term = simpledialog.askstring("Search Cards", "Enter search term:")
-        if search_term:
-            self.search_filter = search_term
+        if search_term is not None:
+            self.search_filter = search_term.strip() or None
             self.refresh_display()
         
     def filter_priority_dialog(self):
@@ -955,26 +978,13 @@ class EmbeddedKanbanGUI:
 
     def filter_assignee_dialog(self):
         """Show assignee filter dialog."""
-        # Get unique assignees
-        assignees = set()
-        if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns:
-            columns = self.board.get_columns_ordered()
-            for column in columns:
-                for card in column.cards:
-                    if card.assignee:
-                        assignees.add(card.assignee)
-        else:
-            for status in Status:
-                for card in self.board.columns[status]:
-                    if card.assignee:
-                        assignees.add(card.assignee)
+        assignees = self.get_available_assignees()
         
         if not assignees:
             messagebox.showinfo("No Assignees", "No cards have assignees!")
             return
 
-        assignee_list = sorted(assignees)
-        selected = self.choose_option("Filter by Assignee", "Select assignee:", assignee_list)
+        selected = self.choose_option("Filter by Assignee", "Select assignee:", assignees)
         if selected is None:
             return
 

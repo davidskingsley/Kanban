@@ -145,6 +145,7 @@ class MultiBoardGUI:
     def refresh_board_display(self):
         """Refresh the board display and selector."""
         refresh_board_display_impl(self)
+        self.sync_toolbar_filters()
 
     def clear_board_selector(self):
         """Clear the board selector state, including readonly combobox text."""
@@ -237,6 +238,75 @@ class MultiBoardGUI:
             return
 
         action()
+
+    def set_toolbar_filter_controls_enabled(self, enabled):
+        """Enable or disable compact toolbar filter controls."""
+        state = 'normal' if enabled else 'disabled'
+        readonly_state = 'readonly' if enabled else 'disabled'
+
+        if hasattr(self, 'toolbar_search_entry'):
+            self.toolbar_search_entry.configure(state=state)
+        if hasattr(self, 'toolbar_priority_combo'):
+            self.toolbar_priority_combo.configure(state=readonly_state)
+        if hasattr(self, 'toolbar_assignee_combo'):
+            self.toolbar_assignee_combo.configure(state=readonly_state)
+        if hasattr(self, 'toolbar_overdue_check'):
+            self.toolbar_overdue_check.configure(state=state)
+        if hasattr(self, 'toolbar_clear_filters_button'):
+            self.toolbar_clear_filters_button.configure(state=state)
+
+    def sync_toolbar_filters(self):
+        """Sync compact toolbar filter controls with the active board state."""
+        if not hasattr(self, 'toolbar_search_var'):
+            return
+
+        board_gui = self.current_board_gui
+        self._updating_toolbar_filters = True
+        try:
+            if board_gui is None:
+                self.toolbar_search_var.set('')
+                self.toolbar_priority_var.set('')
+                self.toolbar_assignee_var.set('')
+                self.toolbar_overdue_var.set(False)
+                if hasattr(self, 'toolbar_assignee_combo'):
+                    self.toolbar_assignee_combo['values'] = ()
+                self.set_toolbar_filter_controls_enabled(False)
+                return
+
+            filter_state = board_gui.get_filter_state()
+            self.toolbar_search_var.set(filter_state['search'])
+            self.toolbar_priority_var.set(filter_state['priority'])
+            self.toolbar_assignee_var.set(filter_state['assignee'])
+            self.toolbar_overdue_var.set(filter_state['overdue'])
+            if hasattr(self, 'toolbar_assignee_combo'):
+                self.toolbar_assignee_combo['values'] = [''] + board_gui.get_available_assignees()
+            self.set_toolbar_filter_controls_enabled(True)
+        finally:
+            self._updating_toolbar_filters = False
+
+    def apply_toolbar_filters(self, _event=None):
+        """Apply the compact toolbar filters to the current board."""
+        if getattr(self, '_updating_toolbar_filters', False):
+            return
+        if self.current_board_gui is None:
+            return
+
+        self.current_board_gui.apply_toolbar_filters(
+            search_text=self.toolbar_search_var.get(),
+            priority=self.toolbar_priority_var.get(),
+            assignee=self.toolbar_assignee_var.get(),
+            overdue=self.toolbar_overdue_var.get(),
+        )
+
+    def clear_toolbar_filters(self):
+        """Clear toolbar filters on the current board."""
+        if self.current_board_gui is None:
+            return
+        self.toolbar_search_var.set('')
+        self.toolbar_priority_var.set('')
+        self.toolbar_assignee_var.set('')
+        self.toolbar_overdue_var.set(False)
+        self.apply_toolbar_filters()
 
     def undo_current_board_action(self):
         """Undo the last change on the currently active board."""
