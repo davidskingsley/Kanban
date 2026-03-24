@@ -2163,6 +2163,11 @@ class CardDialog:
     def __init__(self, parent, title, initial_title="", initial_description="", 
                  initial_priority=None, initial_assignee="", initial_tags=None):
         self.result = None
+
+        initial_title = initial_title or ""
+        initial_description = initial_description or ""
+        initial_assignee = initial_assignee or ""
+        initial_tags = list(initial_tags or [])
         
         # Create dialog window
         self.dialog = tk.Toplevel(parent)
@@ -2170,7 +2175,7 @@ class CardDialog:
         center_modal(self.dialog, parent, 400, 500)
         
         self.setup_ui(initial_title, initial_description, initial_priority, 
-                     initial_assignee, initial_tags or [])
+                 initial_assignee, initial_tags)
         
         # Wait for dialog to close
         self.dialog.wait_window()
