@@ -100,7 +100,7 @@ class MultiBoardGUI:
             style.theme_use('vista')
         except tk.TclError:
             pass
-        style.configure('Soft.TCombobox', padding=6)
+        style.configure('Soft.TCombobox', padding=(6, 4, 6, 4))
         style.configure('SoftPrimary.TButton', font=('Arial', 10, 'bold'), padding=(16, 8))
         style.configure('SoftSecondary.TButton', font=('Arial', 10, 'bold'), padding=(16, 8))
         style.configure('SoftAccent.TButton', font=('Arial', 10, 'bold'), padding=(16, 8))

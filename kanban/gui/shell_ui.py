@@ -306,83 +306,100 @@ def setup_toolbar(app):
     toolbar_frame = tk.Frame(
         app.root,
         bg=PANEL_BG,
-        height=66,
+        height=54,
         highlightthickness=1,
         highlightbackground=OUTLINE_COLOR,
     )
-    toolbar_frame.pack(fill='x', padx=8, pady=(8, 4))
+    toolbar_frame.pack(fill='x', padx=8, pady=(6, 3))
     toolbar_frame.pack_propagate(False)
 
+    content_frame = tk.Frame(toolbar_frame, bg=PANEL_BG)
+    content_frame.pack(fill='both', expand=True, padx=10, pady=6)
+
+    def create_toolbar_group(parent):
+        group = tk.Frame(
+            parent,
+            bg='#F7F1E8',
+            highlightthickness=1,
+            highlightbackground='#E2D8CB',
+            bd=0,
+        )
+        return group
+
+    board_group = create_toolbar_group(content_frame)
+    board_group.pack(side='left', padx=(0, 8), pady=0)
+
     tk.Label(
-        toolbar_frame,
-        text="Current Board:",
-        bg=PANEL_BG,
-        font=('Arial', 10, 'bold'),
-    ).pack(side='left', padx=12)
+        board_group,
+        text="Board",
+        bg='#F7F1E8',
+        fg=TEXT_MUTED,
+        font=('Arial', 8, 'bold'),
+    ).pack(side='left', padx=(8, 6), pady=6)
 
     app.board_var = tk.StringVar()
     app.board_selector = ttk.Combobox(
-        toolbar_frame,
+        board_group,
         textvariable=app.board_var,
-        width=30,
+        width=24,
         state='readonly',
         style='Soft.TCombobox',
     )
-    app.board_selector.pack(side='left', padx=5)
+    app.board_selector.pack(side='left', padx=(0, 8), pady=4)
     app.board_selector.bind('<<ComboboxSelected>>', app.on_board_selected)
 
-    filters_frame = tk.Frame(toolbar_frame, bg=PANEL_BG)
-    filters_frame.pack(side='left', padx=(16, 0))
+    filters_frame = create_toolbar_group(content_frame)
+    filters_frame.pack(side='left', padx=(0, 8), pady=0)
 
-    tk.Label(filters_frame, text="Search:", bg=PANEL_BG, fg=TEXT_MUTED, font=('Arial', 9)).pack(side='left', padx=(0, 4))
+    tk.Label(filters_frame, text="Filter", bg='#F7F1E8', fg=TEXT_MUTED, font=('Arial', 8, 'bold')).pack(side='left', padx=(8, 6), pady=6)
     app.toolbar_search_var = tk.StringVar()
-    app.toolbar_search_entry = tk.Entry(filters_frame, textvariable=app.toolbar_search_var, width=18, font=('Arial', 9))
-    app.toolbar_search_entry.pack(side='left')
+    app.toolbar_search_entry = tk.Entry(filters_frame, textvariable=app.toolbar_search_var, width=14, font=('Arial', 9))
+    app.toolbar_search_entry.pack(side='left', pady=4)
     style_text_input(app.toolbar_search_entry)
     app.toolbar_search_entry.bind('<Return>', app.apply_toolbar_filters)
     app.toolbar_search_entry.bind('<KeyRelease>', app.apply_toolbar_filters)
 
-    tk.Label(filters_frame, text="Priority:", bg=PANEL_BG, fg=TEXT_MUTED, font=('Arial', 9)).pack(side='left', padx=(10, 4))
     app.toolbar_priority_var = tk.StringVar()
     app.toolbar_priority_combo = ttk.Combobox(
         filters_frame,
         textvariable=app.toolbar_priority_var,
-        width=10,
+        width=8,
         state='readonly',
         values=('', 'low', 'medium', 'high', 'critical'),
         style='Soft.TCombobox',
     )
-    app.toolbar_priority_combo.pack(side='left')
+    app.toolbar_priority_combo.pack(side='left', padx=(6, 0), pady=4)
     app.toolbar_priority_combo.bind('<<ComboboxSelected>>', app.apply_toolbar_filters)
 
-    tk.Label(filters_frame, text="Assignee:", bg=PANEL_BG, fg=TEXT_MUTED, font=('Arial', 9)).pack(side='left', padx=(10, 4))
     app.toolbar_assignee_var = tk.StringVar()
     app.toolbar_assignee_combo = ttk.Combobox(
         filters_frame,
         textvariable=app.toolbar_assignee_var,
-        width=14,
+        width=12,
         state='readonly',
         style='Soft.TCombobox',
     )
-    app.toolbar_assignee_combo.pack(side='left')
+    app.toolbar_assignee_combo.pack(side='left', padx=(6, 0), pady=4)
     app.toolbar_assignee_combo.bind('<<ComboboxSelected>>', app.apply_toolbar_filters)
 
     app.toolbar_overdue_var = tk.BooleanVar(value=False)
     app.toolbar_overdue_check = tk.Checkbutton(
         filters_frame,
-        text='Late only',
+        text='Late',
         variable=app.toolbar_overdue_var,
         command=app.apply_toolbar_filters,
-        bg=PANEL_BG,
+        bg='#F7F1E8',
         fg='#3F3A34',
-        activebackground=PANEL_BG,
-        font=('Arial', 9),
+        activebackground='#F7F1E8',
+        font=('Arial', 8, 'bold'),
+        padx=4,
+        pady=0,
     )
-    app.toolbar_overdue_check.pack(side='left', padx=(10, 0))
+    app.toolbar_overdue_check.pack(side='left', padx=(6, 0), pady=4)
 
     app.toolbar_clear_filters_button = tk.Button(
         filters_frame,
-        text='Clear',
+        text='Reset',
         command=app.clear_toolbar_filters,
         bg='white',
         fg='#3F3A34',
@@ -391,26 +408,28 @@ def setup_toolbar(app):
         relief='flat',
         bd=0,
         cursor='hand2',
-        font=('Arial', 9, 'bold'),
-        padx=10,
-        pady=4,
+        font=('Arial', 8, 'bold'),
+        padx=8,
+        pady=3,
     )
-    app.toolbar_clear_filters_button.pack(side='left', padx=(8, 0))
+    app.toolbar_clear_filters_button.pack(side='left', padx=(6, 8), pady=4)
 
-    spacer = tk.Frame(toolbar_frame, bg=PANEL_BG)
+    spacer = tk.Frame(content_frame, bg=PANEL_BG)
     spacer.pack(side='left', fill='x', expand=True)
 
     app.board_info_var = tk.StringVar(value="0 cards | 0 completed")
+    summary_group = create_toolbar_group(content_frame)
+    summary_group.pack(side='right', pady=0)
     app.board_info_label = tk.Label(
-        toolbar_frame,
+        summary_group,
         textvariable=app.board_info_var,
-        bg=PANEL_BG,
+        bg='#F7F1E8',
         fg='#3F3A34',
-        font=('Arial', 10, 'bold'),
+        font=('Arial', 9, 'bold'),
         anchor='e',
         justify='right',
     )
-    app.board_info_label.pack(side='right', padx=12)
+    app.board_info_label.pack(side='right', padx=10, pady=6)
     app.set_toolbar_filter_controls_enabled(False)
 
 
