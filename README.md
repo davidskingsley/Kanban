@@ -296,141 +296,201 @@ Kanban/
 │   ├── gui.py                 # 🖱️ Single-board drag-and-drop GUI
 │   └── multi_board_gui.py     # 🗂️ Multi-board GUI with board management
 ├── requirements.txt           # 📋 Dependencies (minimal)
-├── README.md                  # 📖 This comprehensive guide
-├── kanban_data.json          # 💾 Example legacy single-board data file in the repo
-└── kanban_boards/            # 📁 Example multi-board data directory in the repo
+# Multi-Board Kanban Manager 🗂️
 
-Default runtime storage is now under `$HOME/.kanban-ds/`:
-- `$HOME/.kanban-ds/kanban_data.json`
-- `$HOME/.kanban-ds/boards/`
-    ├── boards_metadata.json  # 🗃️ Board registry and metadata
-    ├── board_1.json          # 💾 Individual board data files
-    └── board_2.json          # 💾 (created automatically)
+A Python Kanban application with both GUI and CLI workflows. It supports multiple boards, custom columns, drag-and-drop card movement, external board loading, and read-only fallback when a board is already open elsewhere.
+
+## Features
+
+### 🗂️ Multi-Board Management
+- Create, rename, switch, and delete separate boards
+- View board-level statistics and summaries
+- Keep board data isolated per project
+- Load external boards by reference instead of copying them
+
+### 📋 Task and Column Management
+- Create, edit, move, and delete cards
+- Assign priorities, assignees, and tags
+- Create, rename, delete, recolor, and reorder custom columns
+- Use the legacy single-board workflow when needed
+
+### 🖱️ GUI Support
+- Drag and drop cards between columns
+- Use context menus and dialogs for common actions
+- See keyboard shortcuts directly in the application menus
+- View read-only state in the GUI when a lock is active
+
+### 💾 Storage and Safety
+- Store runtime data under `$HOME/.kanban-ds`
+- Export and import boards for backup
+- Use per-board `.lock` files to prevent conflicting writes
+- Open a board read-only if another process already owns the lock
+
+## Installation
+
+1. Clone or download the project.
+2. Use Python 3.8 or newer.
+3. Change into the project directory.
+
+```bash
+cd Kanban
 ```
 
-## Keyboard Shortcuts ⌨️
+## Usage
 
-### **Multi-Board Shortcuts**
+### Multi-Board GUI
+
+```bash
+python main.py
+```
+
+Use this as the default mode for board switching, drag-and-drop management, statistics, backups, and external board loading.
+
+### Multi-Board CLI
+
+```bash
+python main.py --cli
+```
+
+Use this for headless environments or quick terminal-based management.
+
+### Single-Board Mode
+
+```bash
+python main.py --single-board
+```
+
+Add `--cli` as well if you want the legacy single-board CLI.
+
+### Demo Scripts
+
+```bash
+python gui_demo.py
+python demo_multiboard.py
+python example_usage.py
+```
+
+## Command Options
+
+```bash
+python main.py [options]
+
+Options:
+  --cli              Use command-line mode
+  --single-board     Use legacy single-board mode
+  --data-file FILE   Specify a custom data file for single-board mode
+  --boards-dir DIR   Specify a custom boards directory for multi-board mode
+  --help             Show help message
+```
+
+## Storage
+
+Default runtime storage locations:
+- Multi-board mode: `$HOME/.kanban-ds/boards`
+- Single-board mode: `$HOME/.kanban-ds/kanban_data.json`
+
+External board loading:
+- GUI: `Boards -> Load Board From Folder`
+- Multi-board CLI: `9. Load board from folder`
+- You can select either a folder containing `boards_metadata.json` or a folder with standalone board `.json` files
+- External boards remain in their original location and are registered by reference
+- If a board is already open in another process, it opens read-only until that lock is released
+
+## Multi-Board GUI Guide
+
+### Main Areas
+- Menu bar for boards, cards, filters, columns, tools, and help
+- Toolbar board selector for switching the active board
+- Summary area showing card counts, completed counts, and read-only status
+- Board canvas with draggable cards and per-column add-card actions
+
+### Common Actions
+1. Create a board from the Boards menu.
+2. Load an external board with `Boards -> Load Board From Folder`.
+3. Switch boards from the dropdown or with `Ctrl+O`.
+4. Double-click a card to edit it.
+5. Right-click cards or columns for context actions.
+
+### Visual Indicators
+- Priority bars show urgency from low to critical
+- Assignees display as `@name`
+- Tags display as `#tag`
+- Read-only mode is shown when another process holds the lock
+
+## Keyboard Shortcuts
+
+### Multi-Board GUI
 | Shortcut | Action |
 |----------|---------|
-| **Ctrl+N** | Create new board |
-| **Ctrl+O** | Switch board |
-| **Ctrl+Q** | Exit application |
+| `Ctrl+N` | Create new board |
+| `Ctrl+Shift+O` | Load board from folder |
+| `Ctrl+O` | Switch board |
+| `Ctrl+R` | Rename current board |
+| `Ctrl+Shift+D` | Delete current board |
+| `Ctrl+I` | Board statistics |
+| `Ctrl+Q` | Quit application |
 
-### **Card Operations**
+### Single-Board GUI
 | Shortcut | Action |
 |----------|---------|
-| **Double-Click** | Edit card |
-| **Right-Click** | Context menu |
-| **Drag & Drop** | Move between columns |
+| `Ctrl+N` | Create new card |
+| `Ctrl+E` | Export board |
+| `Ctrl+B` | Create backup |
+| `Ctrl+F` | Search cards |
+| `Ctrl+I` | Show statistics |
+| `F1` | Show keyboard shortcuts |
+| `Ctrl+Q` | Quit application |
 
-### **CLI Column Management**
-| Command | Action |
-|---------|---------|
-| **11** | Create new column |
-| **12** | Rename column |
-| **13** | Delete column |
-| **14** | Reorder columns |
-| **15** | Change column color |
-| **16** | View columns |
+### Mouse Actions
+| Action | Result |
+|--------|--------|
+| Double-click card | Edit card |
+| Right-click card | Open card context menu |
+| Drag and drop | Move card between columns |
 
-### **Legacy Single-Board Mode**
-| Shortcut | Action |
-|----------|---------|
-| **Ctrl+N** | Create new card |
-| **Ctrl+F** | Search cards |
-| **Ctrl+Q** | Exit application |
+## Project Structure
 
-## Card Properties 📋
+```text
+Kanban/
+├── main.py
+├── gui_demo.py
+├── demo_multiboard.py
+├── example_usage.py
+├── README.md
+├── requirements.txt
+├── demo_kanban.json
+├── example_kanban.json
+├── kanban_data.json
+└── kanban/
+    ├── __init__.py
+    ├── board.py
+    ├── board_manager.py
+    ├── cli.py
+    ├── gui.py
+    ├── models.py
+    ├── multi_board_cli.py
+    ├── multi_board_gui.py
+    └── storage.py
+```
 
-Each card includes:
-- **Unique ID**: Auto-generated identifier  
-- **Title**: Short task description
-- **Description**: Detailed information (optional)
-- **Status**: To Do, In Progress, Review, or Done
-- **Priority**: Low, Medium, High, or Critical (with color coding)
-- **Assignee**: Person responsible (optional)
-- **Tags**: Custom labels for organization
-- **Timestamps**: Creation and last update times
+## Development Notes
 
-## Development 🛠️
+- The project uses only the Python standard library
+- Data is stored as JSON
+- The application supports both legacy fixed columns and custom-column workflows
+- Lock handling lives in the storage layer so both GUI and CLI flows respect read-only mode
 
-### **Code Architecture**
+## Troubleshooting
 
-- **`models.py`**: Core data structures (Card, Column, Priority, Status)
-- **`board.py`**: Main KanbanBoard class with business logic
-- **`storage.py`**: Data persistence, backups, lock files, and read-only access handling
-- **`cli.py`**: Command-line interface and user interactions
-- **`gui.py`**: Tkinter-based drag-and-drop interface
-- **`main.py`**: Application launcher with mode selection
+1. GUI will not start:
+   Try `python -m tkinter` to confirm Tkinter is available, or run `python main.py --cli`.
+2. Permission errors:
+   Check write access to `$HOME/.kanban-ds` or the external board folder, and verify the board file and adjacent `.lock` file are writable.
+3. Board opens read-only:
+   Another process currently owns the lock. Close that instance or reopen the board after the lock is released.
+4. Backup or import problems:
+   Verify the target path exists and that the JSON files are not corrupted.
 
-### **Extending the Application**
+## License
 
-The modular design makes it easy to:
-- Add new card properties and fields
-- Implement different storage backends (database, cloud)
-- Create additional interface types (web, mobile)
-- Add advanced filtering and reporting options
-- Integrate with external tools and APIs
-- Implement real-time collaboration features
-
-### **GUI Components**
-
-- **`KanbanGUI`**: Main application window and controller
-- **`CardWidget`**: Draggable card representation with event handling
-- **`ColumnWidget`**: Scrollable column with drop zone highlighting
-- **`CardEditDialog`**: Modal dialog for creating/editing cards
-- **`PriorityFilterDialog`**: Priority filtering interface
-
-## Troubleshooting 🔍
-
-### **Common Issues**
-
-1. **GUI won't start**: 
-   - Ensure Tkinter is installed (`python -m tkinter` should work)
-   - Try CLI mode: `python main.py --cli`
-
-2. **Permission errors**: 
-   - Ensure write access to `$HOME/.kanban-ds` or the external board folder you selected
-   - If a board is already open elsewhere, this instance will open it read-only until the other lock is released
-   - Check file permissions for the board JSON file and its adjacent `.lock` file
-
-3. **JSON corruption**: 
-   - Use backup restoration: File → Create Backup
-   - Restore from `.backup` files if needed
-
-4. **Python version**: 
-   - Requires Python 3.8 or higher
-   - Check version: `python --version`
-
-### **Performance Tips**
-
-- For large numbers of cards, use search and filtering
-- Regular backups prevent data loss
-- Close and restart application if performance degrades
-
-### **Getting Help**
-
-- Check console output for error messages
-- Verify file permissions and directory structure
-- Use `--help` flag for command-line options
-- Try CLI mode if GUI has issues
-
-## Contributing 🤝
-
-Feel free to extend this project:
-- **Add Features**: New card types, advanced filtering, reporting
-- **Improve UI**: Better themes, animations, accessibility  
-- **Add Tests**: Unit tests, integration tests, UI tests
-- **Optimize Performance**: Caching, async operations
-- **Create Integrations**: APIs, webhooks, third-party tools
-
-## License 📄
-
-This project is created for educational and personal use. Feel free to modify and distribute as needed.
-
----
-
-**🎉 Happy Task Management!** 
-
-Start organizing your work more efficiently with this powerful drag-and-drop Kanban board system. Whether you prefer the visual GUI or the efficient CLI, all your productivity needs are covered!
+This project is intended for educational and personal use. Modify and distribute it as needed.
