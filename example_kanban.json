@@ -1,0 +1,88 @@
+{
+  "cards": [
+    {
+      "id": "78100558-e372-4c88-a697-547d4073ed11",
+      "title": "Deploy to production",
+      "description": "Set up CI/CD pipeline and deploy",
+      "priority": "critical",
+      "status": "To Do",
+      "created_at": "2026-03-24T13:42:41.374274",
+      "updated_at": "2026-03-24T13:42:41.378233",
+      "assignee": "charlie",
+      "tags": [
+        "deployment",
+        "urgent"
+      ]
+    },
+    {
+      "id": "903aa1cf-960f-43ca-bb48-4b6877ea2ecb",
+      "title": "Deploy to production",
+      "description": "Set up CI/CD pipeline and deploy",
+      "priority": "critical",
+      "status": "To Do",
+      "created_at": "2026-03-24T13:44:33.085870",
+      "updated_at": "2026-03-24T13:44:33.091383",
+      "assignee": "charlie",
+      "tags": [
+        "deployment",
+        "urgent"
+      ]
+    },
+    {
+      "id": "5055c4d0-e947-46c4-b5cb-2b21c35a7ec2",
+      "title": "Write unit tests",
+      "description": "Create comprehensive test suite",
+      "priority": "medium",
+      "status": "In Progress",
+      "created_at": "2026-03-24T13:42:41.372030",
+      "updated_at": "2026-03-24T13:42:41.380356",
+      "assignee": "bob",
+      "tags": [
+        "testing",
+        "quality"
+      ]
+    },
+    {
+      "id": "fb5b2da6-85b1-4afc-a3e6-9ab07ba2f383",
+      "title": "Write unit tests",
+      "description": "Create comprehensive test suite",
+      "priority": "medium",
+      "status": "In Progress",
+      "created_at": "2026-03-24T13:44:33.084605",
+      "updated_at": "2026-03-24T13:44:33.094524",
+      "assignee": "bob",
+      "tags": [
+        "testing",
+        "quality"
+      ]
+    },
+    {
+      "id": "73f68d9e-ac67-40f7-920a-72285ef80d24",
+      "title": "Set up development environment",
+      "description": "Install Python, IDE, and dependencies",
+      "priority": "high",
+      "status": "Done",
+      "created_at": "2026-03-24T13:42:41.370583",
+      "updated_at": "2026-03-24T13:42:41.381205",
+      "assignee": "alice",
+      "tags": [
+        "setup",
+        "environment"
+      ]
+    },
+    {
+      "id": "53fee29b-f876-45e9-82a5-40404f06ca37",
+      "title": "Set up development environment",
+      "description": "Install Python, IDE, and dependencies",
+      "priority": "high",
+      "status": "Done",
+      "created_at": "2026-03-24T13:44:33.083078",
+      "updated_at": "2026-03-24T13:44:33.096546",
+      "assignee": "alice",
+      "tags": [
+        "setup",
+        "environment"
+      ]
+    }
+  ]
+}

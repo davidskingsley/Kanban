@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.lock
+*.backup
+.venv/
+.lock_test_path.txt
+tmp_lock_test_board.json
+
+# Generated demo and runtime data
+demo_multiboard/
+demo_column_management/
+simple_column_demo/
+test_boards/
+tmp_new_board_display/
+kanban_boards/

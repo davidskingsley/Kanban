@@ -1,0 +1,115 @@
+{
+  "cards": [
+    {
+      "id": "74a2b947-3d41-41cb-a978-4483e7e72320",
+      "title": "Design user interface mockups",
+      "description": "Create wireframes and visual designs for the new dashboard",
+      "priority": "high",
+      "status": "To Do",
+      "created_at": "2026-03-24T13:47:47.993214",
+      "updated_at": "2026-03-24T13:47:47.995175",
+      "assignee": "alice",
+      "tags": [
+        "design",
+        "ui"
+      ]
+    },
+    {
+      "id": "8d8f81c9-a4d4-4921-b93a-23ffc9625454",
+      "title": "Update documentation",
+      "description": "Revise API documentation and add installation guide",
+      "priority": "medium",
+      "status": "To Do",
+      "created_at": "2026-03-24T13:47:48.008302",
+      "updated_at": "2026-03-24T13:47:48.010498",
+      "assignee": "charlie",
+      "tags": [
+        "docs"
+      ]
+    },
+    {
+      "id": "30109803-7815-495e-8624-1cbbcb1116f2",
+      "title": "Mobile app responsiveness",
+      "description": "Ensure all views work correctly on mobile devices",
+      "priority": "high",
+      "status": "To Do",
+      "created_at": "2026-03-24T13:47:48.010522",
+      "updated_at": "2026-03-24T13:47:48.012781",
+      "assignee": "alice",
+      "tags": [
+        "mobile",
+        "responsive"
+      ]
+    },
+    {
+      "id": "fed979c9-5ea2-40c3-8663-070d672f1a27",
+      "title": "Implement user authentication",
+      "description": "Set up login system with JWT tokens and password hashing",
+      "priority": "critical",
+      "status": "In Progress",
+      "created_at": "2026-03-24T13:47:47.995200",
+      "updated_at": "2026-03-24T13:47:47.997967",
+      "assignee": "bob",
+      "tags": [
+        "backend",
+        "security"
+      ]
+    },
+    {
+      "id": "3c7c6347-c63e-49b9-a670-b2c64169deb9",
+      "title": "Write unit tests for API",
+      "description": "Create comprehensive test suite for all API endpoints",
+      "priority": "medium",
+      "status": "In Progress",
+      "created_at": "2026-03-24T13:47:47.998882",
+      "updated_at": "2026-03-24T13:47:48.000727",
+      "assignee": "charlie",
+      "tags": [
+        "testing",
+        "api"
+      ]
+    },
+    {
+      "id": "f145feae-1a4b-43ec-9be4-5ea8c1ab5538",
+      "title": "Set up CI/CD pipeline",
+      "description": "Configure automated testing and deployment workflow",
+      "priority": "high",
+      "status": "Review",
+      "created_at": "2026-03-24T13:47:48.001638",
+      "updated_at": "2026-03-24T13:47:48.003376",
+      "assignee": "alice",
+      "tags": [
+        "devops",
+        "automation"
+      ]
+    },
+    {
+      "id": "4def016e-13af-421f-9892-6ce721d5eb22",
+      "title": "Fix login redirect bug",
+      "description": "Users are redirected to wrong page after successful login",
+      "priority": "critical",
+      "status": "Review",
+      "created_at": "2026-03-24T13:47:48.012801",
+      "updated_at": "2026-03-24T13:47:48.014840",
+      "assignee": "bob",
+      "tags": [
+        "bugfix",
+        "urgent"
+      ]
+    },
+    {
+      "id": "d4bf43aa-ad46-44dd-8e12-376ae642a442",
+      "title": "Database schema optimization",
+      "description": "Analyze and optimize database queries for better performance",
+      "priority": "low",
+      "status": "Done",
+      "created_at": "2026-03-24T13:47:48.004786",
+      "updated_at": "2026-03-24T13:47:48.006968",
+      "assignee": "bob",
+      "tags": [
+        "database",
+        "performance"
+      ]
+    }
+  ]
+}

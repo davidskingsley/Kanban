@@ -1,0 +1,9 @@
+# Kanban Board Application Dependencies
+# No external dependencies required - uses only Python standard library
+# Ensure you're using Python 3.8 or higher
+
+# Optional development dependencies (uncomment if needed):
+# pytest>=7.0.0          # For testing
+# black>=22.0.0          # Code formatting
+# flake8>=4.0.0          # Code linting
+# mypy>=0.950            # Type checking
