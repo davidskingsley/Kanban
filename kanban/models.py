@@ -287,6 +287,15 @@ class Card:
                 self.updated_at = datetime.now()
                 return True
         return False
+
+    def update_note(self, note_id: str, text: str = "") -> Optional[CardNote]:
+        """Update an existing note on the card by ID."""
+        for note in self.notes:
+            if note.id == note_id:
+                note.text = text or ""
+                self.updated_at = datetime.now()
+                return note
+        return None
     
     def to_dict(self):
         """Convert card to dictionary for serialization."""

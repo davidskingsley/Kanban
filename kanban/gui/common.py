@@ -86,6 +86,31 @@ def can_scroll_target(widget, orient='y') -> bool:
     return not (first <= 0.0 and last >= 1.0)
 
 
+def scroll_target_by_units(widget, units, orient='y') -> bool:
+    """Scroll a Tk target by the requested units and report whether it succeeded."""
+    if widget is None or units == 0:
+        return False
+
+    try:
+        if orient == 'x':
+            widget.xview_scroll(units, 'units')
+        else:
+            widget.yview_scroll(units, 'units')
+    except (AttributeError, tk.TclError):
+        return False
+    return True
+
+
+def iter_mousewheel_bindings(widget):
+    """Yield configured mouse-wheel bindings for a widget and its ancestors."""
+    current = widget
+    while current is not None:
+        bindings = getattr(current, '_kanban_mousewheel_bindings', ())
+        for orient, target in bindings:
+            yield orient, target
+        current = getattr(current, 'master', None)
+
+
 def bind_mousewheel(widget, target=None, orient='y'):
     """Bind the mouse wheel to a scrollable Tk widget target."""
     if widget is None:
@@ -93,26 +118,29 @@ def bind_mousewheel(widget, target=None, orient='y'):
 
     scroll_target = target or widget
 
-    def on_mousewheel(event, active_target=scroll_target, axis=orient):
+    bindings = list(getattr(widget, '_kanban_mousewheel_bindings', []))
+    binding_entry = (orient, scroll_target)
+    if binding_entry not in bindings:
+        bindings.append(binding_entry)
+        widget._kanban_mousewheel_bindings = bindings
+
+    def on_mousewheel(event):
         units = mousewheel_units(event)
         if units == 0:
             return None
 
-        if not can_scroll_target(active_target, axis):
-            return None
+        for axis, active_target in iter_mousewheel_bindings(event.widget):
+            if not can_scroll_target(active_target, axis):
+                continue
+            if scroll_target_by_units(active_target, units, axis):
+                return 'break'
+        return None
 
-        try:
-            if axis == 'x':
-                active_target.xview_scroll(units, 'units')
-            else:
-                active_target.yview_scroll(units, 'units')
-        except tk.TclError:
-            return None
-        return 'break'
-
-    widget.bind('<MouseWheel>', on_mousewheel, add='+')
-    widget.bind('<Button-4>', on_mousewheel, add='+')
-    widget.bind('<Button-5>', on_mousewheel, add='+')
+    if not getattr(widget, '_kanban_mousewheel_handler_bound', False):
+        widget.bind('<MouseWheel>', on_mousewheel, add='+')
+        widget.bind('<Button-4>', on_mousewheel, add='+')
+        widget.bind('<Button-5>', on_mousewheel, add='+')
+        widget._kanban_mousewheel_handler_bound = True
 
 
 def bind_mousewheel_recursive(root, target=None, orient='y', exclude_classes=None):
@@ -167,6 +195,55 @@ def create_soft_button(parent, text, command, variant='primary', width=None):
     )
 
 
+def create_tooltip(widget, text):
+    """Attach a simple hover tooltip to a widget."""
+    if not text:
+        return
+
+    tooltip_state = {'window': None}
+
+    def show_tooltip(_event=None):
+        if tooltip_state['window'] is not None:
+            return
+
+        try:
+            x = widget.winfo_rootx() + 12
+            y = widget.winfo_rooty() + widget.winfo_height() + 6
+        except tk.TclError:
+            return
+
+        tooltip = tk.Toplevel(widget)
+        tooltip.wm_overrideredirect(True)
+        tooltip.wm_geometry(f'+{x}+{y}')
+        tooltip.configure(bg='#FFF9E8')
+
+        tk.Label(
+            tooltip,
+            text=text,
+            bg='#FFF9E8',
+            fg='#2F2923',
+            relief='solid',
+            bd=1,
+            padx=8,
+            pady=4,
+            font=('Arial', 9),
+        ).pack()
+        tooltip_state['window'] = tooltip
+
+    def hide_tooltip(_event=None):
+        tooltip = tooltip_state['window']
+        if tooltip is not None:
+            try:
+                tooltip.destroy()
+            except tk.TclError:
+                pass
+            tooltip_state['window'] = None
+
+    widget.bind('<Enter>', show_tooltip, add='+')
+    widget.bind('<Leave>', hide_tooltip, add='+')
+    widget.bind('<ButtonPress>', hide_tooltip, add='+')
+
+
 def style_text_input(widget):
     """Apply a softer input style to text-entry widgets."""
     widget.configure(
@@ -200,6 +277,7 @@ __all__ = [
     'bind_mousewheel_recursive',
     'center_modal',
     'create_soft_button',
+    'create_tooltip',
     'style_text_input',
 ]
 

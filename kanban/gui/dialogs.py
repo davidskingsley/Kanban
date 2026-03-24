@@ -15,6 +15,7 @@ from .common import (
     bind_mousewheel_recursive,
     center_modal,
     create_soft_button,
+    create_tooltip,
     format_optional_date,
     is_dark_color,
     parse_optional_date,
@@ -122,7 +123,7 @@ class ColumnDialog:
 
         self.dialog = tk.Toplevel(parent)
         self.dialog.title(title)
-        center_modal(self.dialog, parent, 420, 220)
+        center_modal(self.dialog, parent, 420, 280)
 
         self.setup_ui(initial_name, initial_color)
         self.name_entry.focus()
@@ -646,12 +647,14 @@ class CardTypesOverviewDialog:
 class NoteDialog:
     """Dialog for entering note text."""
 
-    def __init__(self, parent, title, initial_text=""):
+    def __init__(self, parent, title, initial_text="", read_only=False, helper_text=None):
         self.result = None
+        self.read_only = read_only
+        self.helper_text = helper_text
 
         self.dialog = tk.Toplevel(parent)
         self.dialog.title(title)
-        center_modal(self.dialog, parent, 520, 320)
+        center_modal(self.dialog, parent, 620, 420 if read_only else 320)
 
         self.setup_ui(initial_text or "")
         self.text_widget.focus()
@@ -669,22 +672,40 @@ class NoteDialog:
             bg=APP_BG,
         ).pack(anchor='w')
 
-        self.text_widget = tk.Text(main_frame, height=10, width=60, font=('Arial', 10), wrap='word')
-        self.text_widget.pack(fill='both', expand=True, pady=(0, 14))
+        text_frame = tk.Frame(main_frame, bg=APP_BG)
+        text_frame.pack(fill='both', expand=True, pady=(0, 14))
+
+        self.text_widget = tk.Text(text_frame, height=10, width=60, font=('Arial', 10), wrap='word')
+        self.text_widget.pack(side='left', fill='both', expand=True)
         self.text_widget.insert('1.0', initial_text)
         style_text_input(self.text_widget)
         bind_mousewheel(self.text_widget)
+        bind_mousewheel(text_frame, self.text_widget)
 
-        helper_text = "The note will be saved with the current date and time."
-        tk.Label(main_frame, text=helper_text, font=('Arial', 9), fg=TEXT_MUTED, bg=APP_BG).pack(anchor='w', pady=(0, 14))
+        scrollbar = ttk.Scrollbar(text_frame, orient='vertical', command=self.text_widget.yview)
+        scrollbar.pack(side='right', fill='y')
+        self.text_widget.configure(yscrollcommand=scrollbar.set)
+
+        if self.read_only:
+            self.text_widget.configure(state='disabled')
+
+        helper_text = self.helper_text
+        if helper_text is None and not self.read_only:
+            helper_text = "The note will be saved with the current date and time."
+        if helper_text:
+            tk.Label(main_frame, text=helper_text, font=('Arial', 9), fg=TEXT_MUTED, bg=APP_BG).pack(anchor='w', pady=(0, 14))
 
         button_frame = tk.Frame(main_frame, bg=APP_BG)
         button_frame.pack(fill='x')
-        create_soft_button(button_frame, "Cancel", self.cancel, variant='secondary').pack(side='right', padx=(10, 0))
-        create_soft_button(button_frame, "Save Note", self.confirm, variant='primary').pack(side='right')
+        if self.read_only:
+            create_soft_button(button_frame, "Close", self.cancel, variant='primary').pack(side='right')
+        else:
+            create_soft_button(button_frame, "Cancel", self.cancel, variant='secondary').pack(side='right', padx=(10, 0))
+            create_soft_button(button_frame, "Save Note", self.confirm, variant='primary').pack(side='right')
 
         self.dialog.bind('<Escape>', lambda _event: self.cancel())
-        self.dialog.bind('<Control-Return>', lambda _event: self.confirm())
+        if not self.read_only:
+            self.dialog.bind('<Control-Return>', lambda _event: self.confirm())
 
     def confirm(self):
         """Save the entered note text and close the dialog."""
@@ -1016,9 +1037,25 @@ class CardDialog:
         actions_frame = tk.Frame(notes_frame, bg=APP_BG)
         actions_frame.pack(fill='x', pady=(8, 0))
 
-        create_soft_button(actions_frame, "Add Note", self.add_note, variant='accent').pack(side='left')
-        create_soft_button(actions_frame, "View Selected", self.view_selected_note, variant='secondary').pack(side='left', padx=(8, 0))
-        create_soft_button(actions_frame, "Delete Selected", self.delete_selected_note, variant='secondary').pack(side='left', padx=(8, 0))
+        add_button = create_soft_button(actions_frame, "＋", self.add_note, variant='accent', width=2)
+        add_button.configure(font=('Segoe UI Symbol', 10, 'bold'), padx=10, pady=5)
+        add_button.pack(side='left')
+        create_tooltip(add_button, 'Add note')
+
+        view_button = create_soft_button(actions_frame, "👁", self.view_selected_note, variant='secondary', width=2)
+        view_button.configure(font=('Segoe UI Emoji', 10, 'bold'), padx=10, pady=5)
+        view_button.pack(side='left', padx=(6, 0))
+        create_tooltip(view_button, 'View selected note')
+
+        edit_button = create_soft_button(actions_frame, "✎", self.edit_selected_note, variant='secondary', width=2)
+        edit_button.configure(font=('Segoe UI Symbol', 10, 'bold'), padx=10, pady=5)
+        edit_button.pack(side='left', padx=(6, 0))
+        create_tooltip(edit_button, 'Edit selected note')
+
+        delete_button = create_soft_button(actions_frame, "🗑", self.delete_selected_note, variant='secondary', width=2)
+        delete_button.configure(font=('Segoe UI Emoji', 10, 'bold'), padx=10, pady=5)
+        delete_button.pack(side='left', padx=(6, 0))
+        create_tooltip(delete_button, 'Delete selected note')
 
         self.refresh_notes_list()
 
@@ -1055,6 +1092,42 @@ class CardDialog:
             self.on_change()
         self.dialog.after(0, lambda: messagebox.showinfo('Note Added', f"Created note at {note.created_at.strftime('%Y-%m-%d %H:%M:%S')}", parent=self.dialog))
 
+    def edit_selected_note(self):
+        """Edit the selected note for the current card."""
+        if self.card is None or not hasattr(self, 'notes_listbox'):
+            return
+
+        current = self.notes_listbox.curselection()
+        if not current or not self.card.notes:
+            messagebox.showinfo('Edit Note', 'Select a note to edit.', parent=self.dialog)
+            return
+
+        index = current[0]
+        if index >= len(self.card.notes):
+            return
+
+        note = self.card.notes[index]
+        note_dialog = NoteDialog(
+            self.dialog,
+            f"Edit Note - {note.created_at.strftime('%Y-%m-%d %H:%M:%S')}",
+            initial_text=note.text,
+            helper_text=f"Created: {note.created_at.strftime('%Y-%m-%d %H:%M:%S')}",
+        )
+        if note_dialog.result is None:
+            return
+
+        updated_note = self.board.edit_card_note(self.card.id, note.id, note_dialog.result)
+        if updated_note is None:
+            messagebox.showerror('Error', 'Note could not be updated.', parent=self.dialog)
+            return
+
+        self.card = self.board.find_card(self.card.id)
+        self.refresh_notes_list()
+        self.notes_listbox.selection_clear(0, tk.END)
+        self.notes_listbox.selection_set(index)
+        if self.on_change:
+            self.on_change()
+
     def view_selected_note(self, _event=None):
         """Show the selected note details."""
         if self.card is None or not hasattr(self, 'notes_listbox'):
@@ -1070,8 +1143,14 @@ class CardDialog:
             return
 
         note = self.card.notes[index]
-        details = f"Created: {note.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n\n{note.text or '(empty note)'}"
-        messagebox.showinfo('Card Note', details, parent=self.dialog)
+        details = note.text or '(empty note)'
+        NoteDialog(
+            self.dialog,
+            f"Card Note - {note.created_at.strftime('%Y-%m-%d %H:%M:%S')}",
+            initial_text=details,
+            read_only=True,
+            helper_text=f"Created: {note.created_at.strftime('%Y-%m-%d %H:%M:%S')}",
+        )
 
     def delete_selected_note(self):
         """Delete the selected note from the current card."""

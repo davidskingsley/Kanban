@@ -414,6 +414,19 @@ class KanbanBoard:
             self.save_board()
         return removed
 
+    def edit_card_note(self, card_id: str, note_id: str, text: str = ""):
+        """Edit an existing note on a card."""
+        self._ensure_writable()
+
+        card = self.find_card(card_id)
+        if not card:
+            return None
+
+        note = card.update_note(note_id, text)
+        if note is not None:
+            self.save_board()
+        return note
+
     def get_subcard_progress(self, parent_id: str) -> tuple[int, int]:
         """Return completed and total counts for a parent card's direct subcards."""
         subcards = self.get_subcards(parent_id)
