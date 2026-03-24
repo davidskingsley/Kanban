@@ -8,7 +8,31 @@ import os
 import shutil
 import socket
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional
+
+
+LockHandler = Callable[[str, Dict[str, Any]], str]
+
+
+class BoardLockCancelledError(Exception):
+    """Raised when the user cancels opening a locked board."""
+
+
+def get_lock_path(file_path: str) -> str:
+    """Return the lock-file path for a board file."""
+    return f"{os.path.abspath(file_path)}.lock"
+
+
+def read_board_lock_info(file_path: str) -> Dict[str, Any]:
+    """Return lock metadata for a board file if a lock file exists."""
+    return load_json_file(get_lock_path(file_path))
+
+
+def delete_board_lock(file_path: str) -> None:
+    """Delete the lock file for a board if it exists."""
+    lock_path = get_lock_path(file_path)
+    if os.path.exists(lock_path):
+        os.remove(lock_path)
 
 
 def get_default_storage_dir() -> str:
@@ -44,13 +68,14 @@ class DataStorage:
 
     _owned_locks: Dict[str, int] = {}
     
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str, lock_handler: Optional[LockHandler] = None):
         self.file_path = os.path.abspath(file_path)
-        self.lock_path = f"{self.file_path}.lock"
+        self.lock_path = get_lock_path(self.file_path)
         self.read_only = False
         self.lock_owned = False
         self.lock_info: Dict[str, Any] = {}
         self._lock_registered = False
+        self.lock_handler = lock_handler
         self._acquire_lock()
 
     def _build_lock_info(self) -> Dict[str, Any]:
@@ -66,8 +91,24 @@ class DataStorage:
         """Read lock metadata from disk, if available."""
         return load_json_file(self.lock_path)
 
+    def _handle_lock_conflict(self) -> str:
+        """Resolve a lock conflict using the configured handler, if any."""
+        if not self.lock_handler:
+            self.read_only = True
+            return 'read_only'
+
+        action = self.lock_handler(self.file_path, self.get_lock_details())
+        if action == 'delete_lock':
+            delete_board_lock(self.file_path)
+            self.lock_info = {}
+            return 'retry'
+        if action == 'open_read_only':
+            self.read_only = True
+            return 'read_only'
+        raise BoardLockCancelledError(self.file_path)
+
     def _acquire_lock(self):
-        """Acquire a write lock if possible; otherwise fall back to read-only mode."""
+        """Acquire a write lock if possible; otherwise resolve the lock conflict."""
         directory = os.path.dirname(self.file_path)
         if directory and not os.path.exists(directory):
             os.makedirs(directory, exist_ok=True)
@@ -78,22 +119,27 @@ class DataStorage:
             self.lock_info = self._build_lock_info()
             return
 
-        try:
-            lock_fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            self.lock_info = self._build_lock_info()
-            with os.fdopen(lock_fd, 'w', encoding='utf-8') as lock_file:
-                json.dump(self.lock_info, lock_file, indent=2, ensure_ascii=False)
+        while True:
+            try:
+                lock_fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                self.lock_info = self._build_lock_info()
+                with os.fdopen(lock_fd, 'w', encoding='utf-8') as lock_file:
+                    json.dump(self.lock_info, lock_file, indent=2, ensure_ascii=False)
 
-            DataStorage._owned_locks[self.file_path] = 1
-            self.lock_owned = True
-            if not self._lock_registered:
-                atexit.register(self.release_lock)
-                self._lock_registered = True
-        except FileExistsError:
-            self.read_only = True
-            self.lock_info = self._read_lock_info()
-        except OSError:
-            self.read_only = True
+                DataStorage._owned_locks[self.file_path] = 1
+                self.lock_owned = True
+                if not self._lock_registered:
+                    atexit.register(self.release_lock)
+                    self._lock_registered = True
+                return
+            except FileExistsError:
+                self.lock_info = self._read_lock_info()
+                if self._handle_lock_conflict() == 'retry':
+                    continue
+                return
+            except OSError:
+                self.read_only = True
+                return
 
     def release_lock(self):
         """Release the lock file owned by this process, if any."""

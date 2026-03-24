@@ -14,8 +14,27 @@ class MultiBoardCLI:
     
     def __init__(self, board_manager: BoardManager):
         self.board_manager = board_manager
+        self.board_manager.set_lock_handler(self.prompt_for_locked_board_action)
         self.running = True
         self.current_cli = None
+
+    def prompt_for_locked_board_action(self, file_path: str, lock_details: dict) -> str:
+        """Prompt for how to handle a locked board file."""
+        print("\n--- BOARD LOCKED ---")
+        print(f"Board file: {file_path}")
+        if lock_details:
+            print(f"Host: {lock_details.get('hostname', 'unknown')}")
+            print(f"Opened: {lock_details.get('opened_at', 'unknown')}")
+
+        while True:
+            choice = input("Open read only, delete the lock, or cancel? [r/d/c]: ").strip().lower()
+            if choice in ('r', 'ro', 'read', 'read-only', 'readonly'):
+                return 'open_read_only'
+            if choice in ('d', 'delete', 'del'):
+                return 'delete_lock'
+            if choice in ('c', 'cancel', ''):
+                return 'cancel'
+            print("Please enter 'r' to open read only, 'd' to delete the lock, or 'c' to cancel.")
     
     def run(self):
         """Main CLI loop."""
@@ -119,7 +138,10 @@ class MultiBoardCLI:
         """Open the current board in the board command interface."""
         current_board = self.board_manager.get_current_board()
         if not current_board:
-            print("No current board selected!")
+            if self.board_manager.current_board_id:
+                print("Board open cancelled.")
+            else:
+                print("No current board selected!")
             return
         
         print("Opening board interface...")
@@ -428,13 +450,16 @@ class MultiBoardCLI:
 
         board_choice = option_map[options[choice - 1]]
         try:
-            self.board_manager.add_external_board(
+            board_id = self.board_manager.add_external_board(
                 board_choice['data_file'],
                 name=board_choice['name'],
                 description=board_choice['description'],
                 use_custom_columns=board_choice['use_custom_columns'],
                 switch_to=True,
             )
+            if not board_id:
+                print("Board load cancelled.")
+                return
             board = self.board_manager.get_current_board()
             print(f"✅ Loaded board '{board_choice['name']}'")
             if board and board.is_read_only():

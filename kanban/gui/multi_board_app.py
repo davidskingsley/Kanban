@@ -78,6 +78,7 @@ class MultiBoardGUI:
     def __init__(self, board_manager: BoardManager):
         self.board_manager = board_manager
         self.root = create_app_root()
+        self.board_manager.set_lock_handler(self.prompt_for_locked_board_action)
         self.current_board_gui: Optional['EmbeddedKanbanGUI'] = None
         self.board_frame = None
         
@@ -88,6 +89,32 @@ class MultiBoardGUI:
         
         # Load initial board
         self.refresh_board_display()
+
+    def prompt_for_locked_board_action(self, file_path: str, lock_details: dict) -> str:
+        """Prompt for how to handle a locked board file."""
+        message_lines = [
+            "This board is locked.",
+            "",
+            f"File: {file_path}",
+        ]
+        if lock_details:
+            message_lines.extend([
+                f"Host: {lock_details.get('hostname', 'unknown')}",
+                f"Opened: {lock_details.get('opened_at', 'unknown')}",
+            ])
+
+        message_lines.extend([
+            "",
+            "Yes: open read only",
+            "No: delete the lock and open writable",
+            "Cancel: do not open this board",
+        ])
+        choice = messagebox.askyesnocancel("Board Locked", "\n".join(message_lines), icon='warning')
+        if choice is True:
+            return 'open_read_only'
+        if choice is False:
+            return 'delete_lock'
+        return 'cancel'
     
     def setup_window(self):
         """Set up the main window."""

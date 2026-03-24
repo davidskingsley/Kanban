@@ -90,13 +90,15 @@ def load_board_from_folder_dialog(app):
 
     board_choice = option_map[selected]
     try:
-        app.board_manager.add_external_board(
+        board_id = app.board_manager.add_external_board(
             board_choice['data_file'],
             name=board_choice['name'],
             description=board_choice['description'],
             use_custom_columns=board_choice['use_custom_columns'],
             switch_to=True,
         )
+        if not board_id:
+            return
         app.refresh_board_display()
         board = app.board_manager.get_current_board()
         if board and board.is_read_only():

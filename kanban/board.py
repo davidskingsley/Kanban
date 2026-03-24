@@ -6,7 +6,7 @@ from copy import deepcopy
 from datetime import date, datetime
 from typing import Dict, List, Optional, Set, Union
 from .models import Card, Column, CustomColumn, Status, Priority, CardType, CardAttachment, UNSET
-from .storage import DataStorage, get_default_single_board_file
+from .storage import DataStorage, LockHandler, get_default_single_board_file
 import os
 import uuid
 
@@ -17,11 +17,12 @@ class KanbanBoard:
     DEFAULT_CARD_TYPE_NAME = 'Default'
     MAX_UNDO_STEPS = 100
     
-    def __init__(self, data_file: str = None, use_custom_columns: bool = True):
+    def __init__(self, data_file: str = None, use_custom_columns: bool = True,
+                 lock_handler: Optional[LockHandler] = None):
         if data_file is None:
             data_file = get_default_single_board_file()
         
-        self.storage = DataStorage(data_file)
+        self.storage = DataStorage(data_file, lock_handler=lock_handler)
         self.use_custom_columns = use_custom_columns
         self.card_types: Dict[str, CardType] = {}
         self.last_used_card_type_id = None

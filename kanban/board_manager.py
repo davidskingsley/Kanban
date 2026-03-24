@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from .board import KanbanBoard
-from .storage import get_default_boards_dir, load_json_file
+from .storage import BoardLockCancelledError, LockHandler, get_default_boards_dir, load_json_file
 
 
 ## @brief Manage board metadata, loading, switching, import, and export flows.
@@ -25,6 +25,7 @@ class BoardManager:
         self.metadata_file = os.path.join(boards_directory, "boards_metadata.json")
         self.boards: Dict[str, KanbanBoard] = {}
         self.current_board_id: Optional[str] = None
+        self.lock_handler: Optional[LockHandler] = None
         self._undo_stack: List[Dict[str, object]] = []
         self._redo_stack: List[Dict[str, object]] = []
         
@@ -139,11 +140,15 @@ class BoardManager:
         self._restore_state(snapshot['state'])
         return snapshot['description']
 
+    def set_lock_handler(self, lock_handler: Optional[LockHandler]):
+        """Set the callback used when a board lock is encountered."""
+        self.lock_handler = lock_handler
+
     def _load_board_from_metadata(self, board_id: str, board_info: Dict) -> KanbanBoard:
         """Load a board instance from stored metadata."""
         data_file = board_info['data_file']
         use_custom_columns = board_info.get('use_custom_columns', True)
-        board = KanbanBoard(data_file, use_custom_columns)
+        board = KanbanBoard(data_file, use_custom_columns, lock_handler=self.lock_handler)
         self.boards[board_id] = board
         return board
 
@@ -164,7 +169,7 @@ class BoardManager:
         }
 
     def add_external_board(self, data_file: str, name: str = None, description: str = "",
-                           use_custom_columns: Optional[bool] = None, switch_to: bool = True) -> str:
+                           use_custom_columns: Optional[bool] = None, switch_to: bool = True) -> Optional[str]:
         """Register a board stored outside the managed boards directory."""
         inspected = self.inspect_board_file(data_file)
         absolute_path = inspected['data_file']
@@ -180,7 +185,15 @@ class BoardManager:
 
         board_name = name or inspected['name']
         board_id = self._generate_board_id(board_name)
-        board = KanbanBoard(absolute_path, use_custom_columns if use_custom_columns is not None else inspected['use_custom_columns'])
+        try:
+            board = KanbanBoard(
+                absolute_path,
+                use_custom_columns if use_custom_columns is not None else inspected['use_custom_columns'],
+                lock_handler=self.lock_handler,
+            )
+        except BoardLockCancelledError:
+            return None
+
         self.boards[board_id] = board
 
         metadata['boards'][board_id] = {
@@ -226,7 +239,7 @@ class BoardManager:
         data_file = os.path.join(target_directory, f"{board_id}.json")
         
         # Create the board with custom columns by default
-        board = KanbanBoard(data_file, use_custom_columns)
+        board = KanbanBoard(data_file, use_custom_columns, lock_handler=self.lock_handler)
         if use_custom_columns and not board.get_columns_ordered():
             board._init_default_custom_columns()
         self.boards[board_id] = board
@@ -309,14 +322,16 @@ class BoardManager:
         if metadata.get('current_board') == board_id:
             return False
 
+        if board_id not in self.boards:
+            try:
+                self._load_board_from_metadata(board_id, metadata['boards'][board_id])
+            except BoardLockCancelledError:
+                return False
+
         self._push_undo_state(f"Switch to board '{metadata['boards'][board_id]['name']}'")
         
         metadata['current_board'] = board_id
         self.current_board_id = board_id
-        
-        # Load board if not already loaded
-        if board_id not in self.boards:
-            self._load_board_from_metadata(board_id, metadata['boards'][board_id])
         
         self.save_metadata(metadata)
         return True
@@ -329,7 +344,10 @@ class BoardManager:
         if self.current_board_id not in self.boards:
             metadata = self.load_metadata()
             if self.current_board_id in metadata['boards']:
-                self._load_board_from_metadata(self.current_board_id, metadata['boards'][self.current_board_id])
+                try:
+                    self._load_board_from_metadata(self.current_board_id, metadata['boards'][self.current_board_id])
+                except BoardLockCancelledError:
+                    return None
         
         return self.boards.get(self.current_board_id)
     
@@ -361,10 +379,6 @@ class BoardManager:
         """Load boards metadata and set current board."""
         metadata = self.load_metadata()
         self.current_board_id = metadata.get('current_board')
-        
-        # Auto-load current board if it exists
-        if self.current_board_id and self.current_board_id in metadata['boards']:
-            self._load_board_from_metadata(self.current_board_id, metadata['boards'][self.current_board_id])
     
     def load_metadata(self) -> Dict:
         """Load boards metadata from file."""

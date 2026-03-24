@@ -41,27 +41,31 @@ def refresh_board_display(app):
             except Exception:
                 pass
 
+        current_board = app.board_manager.get_current_board()
         current_board_name = None
-        current_board_stats = None
-        for board in boards:
-            if board['is_current']:
-                current_board_name = board['name']
-                current_board_stats = board.get('stats')
-                break
 
-        if current_board_name is None and boards:
+        if current_board is None and app.board_manager.current_board_id is None and boards:
             fallback_board = boards[0]
             app.board_manager.switch_board(fallback_board['id'])
-            current_board_name = fallback_board['name']
-            current_board_stats = fallback_board.get('stats')
+            current_board = app.board_manager.get_current_board()
 
-        if current_board_name:
+        if current_board is not None:
+            for board in boards:
+                if board['id'] == app.board_manager.current_board_id:
+                    current_board_name = board['name']
+                    break
+
+        if current_board_name and current_board is not None:
             if hasattr(app, 'board_var'):
                 app.board_var.set(current_board_name)
             if hasattr(app, 'board_selector') and app.board_selector:
                 app.board_selector.set(current_board_name)
-            load_board_interface(app)
-            app.update_board_info(current_board_stats)
+            clear_board_interface(app)
+            app.board_frame = tk.Frame(app.main_frame, bg=APP_BG)
+            app.board_frame.pack(fill='both', expand=True)
+            app.current_board_gui = EmbeddedKanbanGUI(app.board_frame, current_board, app)
+            app.update_board_info(board=current_board)
+            app.root.after_idle(lambda: app.update_board_info(board=current_board))
         else:
             clear_board_interface(app)
             if hasattr(app, 'board_var'):
@@ -100,6 +104,7 @@ def load_board_interface(app):
     """Load the current board into the interface."""
     current_board = app.board_manager.get_current_board()
     if not current_board:
+        clear_board_interface(app)
         return
 
     clear_board_interface(app)
@@ -133,6 +138,8 @@ def on_board_selected(app, _event=None):
     for board in boards:
         if board['name'] == selected_board_name:
             if not board['is_current']:
-                app.board_manager.switch_board(board['id'])
-                app.refresh_board_display()
+                if app.board_manager.switch_board(board['id']):
+                    app.refresh_board_display()
+                else:
+                    app.refresh_board_display()
             break
