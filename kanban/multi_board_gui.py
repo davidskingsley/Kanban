@@ -1204,6 +1204,18 @@ class EmbeddedKanbanGUI:
             assignee_label = tk.Label(footer_frame, text=f"@{card.assignee}",
                                      font=('Arial', 8), bg='#EDF4FF', fg='#3461A5', padx=6, pady=2)
             assignee_label.pack(side='left')
+
+        parent_card = self.board.get_parent_card(card)
+        if parent_card:
+            parent_label = tk.Label(footer_frame, text=f"sub of {parent_card.title[:16]}",
+                                    font=('Arial', 8), bg='#F2F2F2', fg='#666', padx=6, pady=2)
+            parent_label.pack(side='left', padx=(4, 0))
+        else:
+            completed, total = self.board.get_subcard_progress(card.id)
+            if total:
+                subcards_label = tk.Label(footer_frame, text=f"{completed}/{total} done",
+                                          font=('Arial', 8), bg='#EEF7EA', fg='#3A7A36', padx=6, pady=2)
+                subcards_label.pack(side='left', padx=(4, 0))
         
         if card.tags:
             tags_text = " ".join(f"#{tag}" for tag in card.tags[:2])
@@ -1310,6 +1322,13 @@ class EmbeddedKanbanGUI:
             subtitle_parts.append(f"[{card.project}]")
         if card.assignee:
             subtitle_parts.append(f"@{card.assignee}")
+        parent_card = self.board.get_parent_card(card)
+        if parent_card:
+            subtitle_parts.append(f"sub of {parent_card.title[:16]}")
+        else:
+            completed, total = self.board.get_subcard_progress(card.id)
+            if total:
+                subtitle_parts.append(f"{completed}/{total} done")
         if card.tags:
             subtitle_parts.append(" ".join(f"#{tag}" for tag in card.tags[:2]))
         if subtitle_parts:
@@ -1581,7 +1600,10 @@ class EmbeddedKanbanGUI:
             messagebox.showinfo("No Cards", "No cards available!")
             return None
         
-        option_labels = [f"{card.title} ({location})" for card, location in all_cards]
+        option_labels = []
+        for card, location in all_cards:
+            suffix = " <subcard>" if card.parent_id else ""
+            option_labels.append(f"{card.title} ({location}){suffix}")
         selected = self.choose_option(title, "Select a card:", option_labels)
         if selected is None:
             return None
@@ -1770,6 +1792,8 @@ class EmbeddedKanbanGUI:
         """Show context menu for a card."""
         menu = tk.Menu(self.parent_frame, tearoff=0)
         menu.add_command(label="📝 Edit", command=lambda: self.edit_card_dialog(card))
+        if not card.parent_id:
+            menu.add_command(label="➕ Add Subcard", command=lambda: self.add_subcard_dialog(card))
         menu.add_command(label="🔄 Move", command=lambda: self.move_card_specific(card))
         menu.add_command(label="🏷️ Add Tag", command=lambda: self.add_tag_to_card(card))
         menu.add_command(label="ℹ️ Details", command=lambda: self.show_card_details(card))
@@ -1829,6 +1853,32 @@ class EmbeddedKanbanGUI:
             self.refresh_display()
             self.status_bar.config(text=f"🏷️ Added tag '{tag}' to {card.title}")
 
+    def add_subcard_dialog(self, parent_card):
+        """Create a real child card under the provided parent card."""
+        if not self.ensure_board_writable():
+            return
+
+        dialog = CardDialog(
+            self.parent_frame,
+            f"Add Subcard to '{parent_card.title}'",
+            initial_project=parent_card.project,
+        )
+
+        if dialog.result:
+            title, description, priority, assignee, project, tags = dialog.result
+            try:
+                subcard = self.board.create_subcard(parent_card.id, title, description, priority, project)
+                if assignee:
+                    self.board.edit_card(subcard.id, assignee=assignee)
+
+                for tag in tags:
+                    subcard.add_tag(tag)
+
+                self.refresh_display()
+                self.status_bar.config(text=f"✅ Created subcard: {title}")
+            except ValueError as error:
+                messagebox.showerror("Error", str(error))
+
     def show_card_details(self, card):
         """Show detailed information about a card."""
         details = f"📋 Card Details\n\n"
@@ -1838,8 +1888,17 @@ class EmbeddedKanbanGUI:
         details += f"Project: {card.project or 'None'}\n"
         details += f"Assignee: {card.assignee or 'None'}\n"
         details += f"Tags: {', '.join(card.tags) if card.tags else 'None'}\n"
+        parent_card = self.board.get_parent_card(card)
+        details += f"Parent: {parent_card.title if parent_card else 'None'}\n"
         details += f"Created: {card.created_at.strftime('%Y-%m-%d %H:%M') if card.created_at else 'Unknown'}\n"
         details += f"Updated: {card.updated_at.strftime('%Y-%m-%d %H:%M') if card.updated_at else 'Unknown'}\n"
+
+        completed, total = self.board.get_subcard_progress(card.id)
+        if total:
+            details += "\nSubcards:\n"
+            for subcard in self.board.get_subcards(card.id):
+                tick = "[x]" if self.board.is_card_done(subcard) else "[ ]"
+                details += f"{tick} {subcard.title} ({self.board.get_card_location_label(subcard)})\n"
         
         messagebox.showinfo("Card Details", details)
 
@@ -2185,7 +2244,7 @@ class CardDialog:
         center_modal(self.dialog, parent, 400, 500)
         
         self.setup_ui(initial_title, initial_description, initial_priority, 
-                     initial_assignee, initial_project, initial_tags)
+                 initial_assignee, initial_project, initial_tags)
         
         # Wait for dialog to close
         self.dialog.wait_window()

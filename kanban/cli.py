@@ -76,18 +76,19 @@ class KanbanCLI:
         print("8. Add tag to card")
         print("9. Card details")
         print("10. Clear done cards")
+        print("11. Add subcard")
         
         if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns:
             print("\nCOLUMN ACTIONS:")
-            print("11. Create new column")
-            print("12. Rename column")
-            print("13. Delete column")
-            print("14. Reorder columns")
-            print("15. Change column color")
-            print("16. View columns")
+            print("12. Create new column")
+            print("13. Rename column")
+            print("14. Delete column")
+            print("15. Reorder columns")
+            print("16. Change column color")
+            print("17. View columns")
         
         print("\nOTHER:")
-        print("17. Create backup")
+        print("18. Create backup")
         print("0. Exit")
         print()
     
@@ -104,13 +105,14 @@ class KanbanCLI:
             '8': self.add_tag_to_card,
             '9': self.show_card_details,
             '10': self.clear_done_cards,
-            '11': self.create_column if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else self.create_backup,
-            '12': self.rename_column if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
-            '13': self.delete_column if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
-            '14': self.reorder_columns if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
-            '15': self.change_column_color if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
-            '16': self.view_columns if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
-            '17': self.create_backup,
+            '11': self.add_subcard,
+            '12': self.create_column if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
+            '13': self.rename_column if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
+            '14': self.delete_column if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
+            '15': self.reorder_columns if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
+            '16': self.change_column_color if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
+            '17': self.view_columns if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
+            '18': self.create_backup,
             '0': self.exit_app
         }
         
@@ -135,7 +137,6 @@ class KanbanCLI:
         
         description = input("Description (optional): ").strip()
         project = input("Project (optional): ").strip() or None
-        
         print("\nPriority levels:")
         for i, priority in enumerate(Priority, 1):
             print(f"{i}. {priority.value}")
@@ -219,9 +220,59 @@ class KanbanCLI:
         new_project = input(f"Project [{card.project or 'none'}]: ").strip()
         if new_project == "":
             new_project = None
-        
+
         self.board.edit_card(card_id, new_title, new_description, new_priority, new_assignee, new_project)
         print("✅ Card updated successfully!")
+
+    def add_subcard(self):
+        """Create a real child card under an existing top-level card."""
+        if not self.ensure_board_writable():
+            return
+
+        print("\n--- ADD SUBCARD ---")
+        parent_id = self.select_card(top_level_only=True)
+        if not parent_id:
+            return
+
+        parent_card = self.board.find_card(parent_id)
+        if not parent_card:
+            print("Parent card not found!")
+            return
+
+        print(f"Creating subcard for: {parent_card.title}")
+        title = input("Subcard title: ").strip()
+        if not title:
+            print("Title is required!")
+            return
+
+        description = input("Description (optional): ").strip()
+        project = input(f"Project [{parent_card.project or 'none'}]: ").strip() or parent_card.project
+
+        print("\nPriority levels:")
+        for i, priority in enumerate(Priority, 1):
+            print(f"{i}. {priority.value}")
+
+        try:
+            priority_choice = int(input("Choose priority (1-4, default=2): ") or "2")
+            priorities = list(Priority)
+            priority = priorities[priority_choice - 1] if 1 <= priority_choice <= 4 else Priority.MEDIUM
+        except (ValueError, IndexError):
+            priority = Priority.MEDIUM
+
+        assignee = input("Assignee (optional): ").strip() or None
+        tags_text = input("Tags (comma-separated, optional): ").strip()
+        tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()] if tags_text else []
+
+        try:
+            subcard = self.board.create_subcard(parent_id, title, description, priority, project)
+            if assignee:
+                self.board.edit_card(subcard.id, assignee=assignee)
+            for tag in tags:
+                subcard.add_tag(tag)
+            self.board.save_board()
+            print(f"✅ Subcard '{title}' created successfully!")
+        except ValueError as error:
+            print(f"❌ Error creating subcard: {error}")
     
     def move_card(self):
         """Move a card to a different column."""
@@ -428,6 +479,18 @@ class KanbanCLI:
         print(f"Project: {card.project or '(none)'}")
         print(f"Assignee: {card.assignee or '(unassigned)'}")
         print(f"Tags: {', '.join(card.tags) if card.tags else '(no tags)'}")
+
+        parent_card = self.board.get_parent_card(card)
+        if parent_card:
+            print(f"Parent Card: {parent_card.title}")
+
+        completed, total = self.board.get_subcard_progress(card.id)
+        if total:
+            print(f"Subcards: {completed}/{total} done")
+            for subcard in self.board.get_subcards(card.id):
+                tick = "[x]" if self.board.is_card_done(subcard) else "[ ]"
+                print(f"  {tick} {subcard.title} ({self.board.get_card_location_label(subcard)})")
+
         print(f"Created: {card.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"Updated: {card.updated_at.strftime('%Y-%m-%d %H:%M:%S')}")
     
@@ -462,7 +525,7 @@ class KanbanCLI:
         else:
             print("❌ Failed to create backup!")
     
-    def select_card(self) -> Optional[str]:
+    def select_card(self, top_level_only: bool = False) -> Optional[str]:
         """Helper method to select a card from the board."""
         # Show all cards with indices
         all_cards = []
@@ -471,11 +534,15 @@ class KanbanCLI:
             # Custom columns mode
             for column in self.board.custom_columns.values():
                 for card in column:
+                    if top_level_only and card.parent_id:
+                        continue
                     all_cards.append((card, column.name))
         else:
             # Legacy mode
             for column in self.board.columns.values():
                 for card in column:
+                    if top_level_only and card.parent_id:
+                        continue
                     all_cards.append((card, card.status.value))
         
         if not all_cards:
@@ -484,7 +551,8 @@ class KanbanCLI:
         
         print("\nAvailable cards:")
         for i, (card, column_name) in enumerate(all_cards, 1):
-            print(f"{i}. [{column_name}] {card.title}")
+            parent_info = " <subcard>" if card.parent_id else ""
+            print(f"{i}. [{column_name}] {card.title}{parent_info}")
         
         try:
             choice = int(input(f"Select card (1-{len(all_cards)}): "))

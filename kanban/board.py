@@ -184,7 +184,7 @@ class KanbanBoard:
     
     # Card Management Methods
     def create_card(self, title: str, description: str = "", priority: Priority = Priority.MEDIUM,
-                   column_id: str = None, project: str = None) -> Card:
+                   column_id: str = None, project: str = None, parent_id: str = None) -> Card:
         """Create a new card and add it to the specified column (or first column if none specified)."""
         self._ensure_writable()
 
@@ -200,32 +200,92 @@ class KanbanBoard:
             card = Card(title, description, priority, column_id)
             if project is not None:
                 card.project = project
+            if parent_id is not None:
+                card.parent_id = parent_id
             self.custom_columns[column_id].add_card(card)
         else:
             # Legacy mode
             card = Card(title, description, priority)
             if project is not None:
                 card.project = project
+            if parent_id is not None:
+                card.parent_id = parent_id
             self.columns[Status.TODO].add_card(card)
         
         self.save_board()
         return card
     
     def edit_card(self, card_id: str, title: str = None, description: str = None, 
-                  priority: Priority = None, assignee: str = None, project: str = None) -> Optional[Card]:
+                  priority: Priority = None, assignee: str = None, project: str = None,
+                  parent_id: str = None) -> Optional[Card]:
         """Edit an existing card."""
         self._ensure_writable()
 
         card = self.find_card(card_id)
         if card:
-            card.update(title, description, priority, assignee, project)
+            card.update(title, description, priority, assignee, project, parent_id)
             self.save_board()
             return card
         return None
+
+    def get_all_cards(self) -> List[Card]:
+        """Return every card currently on the board."""
+        cards = []
+        columns = self.custom_columns.values() if self.use_custom_columns else self.columns.values()
+        for column in columns:
+            cards.extend(list(column))
+        return cards
+
+    def get_parent_card(self, card: Card) -> Optional[Card]:
+        """Return the direct parent card for the given card, if any."""
+        if not card.parent_id:
+            return None
+        return self.find_card(card.parent_id)
+
+    def get_subcards(self, parent_id: str) -> List[Card]:
+        """Return the direct child cards of the given parent card."""
+        return [card for card in self.get_all_cards() if card.parent_id == parent_id]
+
+    def get_subcard_progress(self, parent_id: str) -> tuple[int, int]:
+        """Return completed and total counts for a parent card's direct subcards."""
+        subcards = self.get_subcards(parent_id)
+        completed = sum(1 for card in subcards if self.is_card_done(card))
+        return completed, len(subcards)
+
+    def is_card_done(self, card: Card) -> bool:
+        """Return whether the given card is currently in the done column."""
+        if self.use_custom_columns:
+            ordered_columns = self.get_columns_ordered()
+            if not ordered_columns:
+                return False
+            return card.column_id == ordered_columns[-1].id
+        return card.status == Status.DONE
+
+    def get_card_location_label(self, card: Card) -> str:
+        """Return the display label for the card's current column or status."""
+        if self.use_custom_columns:
+            column = self.get_column_by_id(card.column_id)
+            return column.name if column else 'Unknown'
+        return card.status.value if card.status else 'Unknown'
+
+    def create_subcard(self, parent_id: str, title: str, description: str = "",
+                       priority: Priority = Priority.MEDIUM, project: str = None) -> Card:
+        """Create a child card under an existing parent card."""
+        parent_card = self.find_card(parent_id)
+        if not parent_card:
+            raise ValueError("Parent card does not exist")
+        if parent_card.parent_id:
+            raise ValueError("Nested subcards are not supported")
+
+        target = parent_card.column_id if self.use_custom_columns else parent_card.status
+        return self.create_card(title, description, priority, target, project or parent_card.project, parent_id)
     
     def delete_card(self, card_id: str) -> bool:
         """Delete a card from the board."""
         self._ensure_writable()
+
+        for subcard in list(self.get_subcards(card_id)):
+            self.delete_card(subcard.id)
 
         if self.use_custom_columns:
             for column in self.custom_columns.values():
@@ -289,7 +349,7 @@ class KanbanBoard:
         return None
     
     def search_cards(self, query: str) -> List[Card]:
-        """Search for cards by title, description, project, or tags."""
+        """Search for cards by title, description, project, tags, and child-card titles."""
         results = []
         query_lower = query.lower()
         
@@ -300,6 +360,7 @@ class KanbanBoard:
                 if (query_lower in card.title.lower() or 
                     query_lower in card.description.lower() or
                     (card.project and query_lower in card.project.lower()) or
+                    any(query_lower in subcard.title.lower() for subcard in self.get_subcards(card.id)) or
                     any(query_lower in tag.lower() for tag in card.tags)):
                     results.append(card)
         
@@ -523,6 +584,12 @@ class KanbanBoard:
                                 output.append(f"     Description: {card.description}")
                             if card.project:
                                 output.append(f"     Project: {card.project}")
+                            parent_card = self.get_parent_card(card)
+                            if parent_card:
+                                output.append(f"     Parent: {parent_card.title}")
+                            completed, total = self.get_subcard_progress(card.id)
+                            if total:
+                                output.append(f"     Subcards: [{completed}/{total} done]")
             else:
                 for status in Status:
                     column = self.columns[status]
@@ -538,6 +605,12 @@ class KanbanBoard:
                                 output.append(f"     Description: {card.description}")
                             if card.project:
                                 output.append(f"     Project: {card.project}")
+                            parent_card = self.get_parent_card(card)
+                            if parent_card:
+                                output.append(f"     Parent: {parent_card.title}")
+                            completed, total = self.get_subcard_progress(card.id)
+                            if total:
+                                output.append(f"     Subcards: [{completed}/{total} done]")
             
             return "\n".join(output)
         

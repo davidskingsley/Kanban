@@ -81,6 +81,18 @@ class CardWidget(tk.Frame):
                                      font=('Arial', 8),
                                      bg='#E3F2FD', fg='#1976D2')
             assignee_label.pack(side='left')
+
+        parent_card = self.gui_manager.board.get_parent_card(self.card)
+        if parent_card:
+            parent_label = tk.Label(footer_frame, text=f"sub of {parent_card.title[:16]}",
+                                   font=('Arial', 8), bg='#F2F2F2', fg='#666')
+            parent_label.pack(side='left', padx=(4, 0))
+        else:
+            completed, total = self.gui_manager.board.get_subcard_progress(self.card.id)
+            if total:
+                subcards_label = tk.Label(footer_frame, text=f"{completed}/{total} done",
+                                         font=('Arial', 8), bg='#EEF7EA', fg='#3A7A36')
+                subcards_label.pack(side='left', padx=(4, 0))
         
         if self.card.tags:
             tags_text = " ".join(f"#{tag}" for tag in self.card.tags[:2])
@@ -169,6 +181,8 @@ class CardWidget(tk.Frame):
         """Handle right-click to show context menu."""
         context_menu = tk.Menu(self, tearoff=0)
         context_menu.add_command(label="Edit Card", command=lambda: self.gui_manager.edit_card_dialog(self.card))
+        if not self.card.parent_id:
+            context_menu.add_command(label="Add Subcard", command=lambda: self.gui_manager.add_subcard_dialog(self.card))
         context_menu.add_command(label="Delete Card", command=lambda: self.gui_manager.delete_card_confirm(self.card))
         context_menu.add_separator()
         context_menu.add_command(label="View Details", command=lambda: self.gui_manager.show_card_details(self.card))
@@ -544,6 +558,31 @@ class KanbanGUI:
                 self.status_label.config(text=f"Deleted card '{card.title}'")
             else:
                 messagebox.showerror("Error", "Failed to delete card!")
+
+    def add_subcard_dialog(self, parent_card: Card):
+        """Create a real child card under the provided parent card."""
+        dialog = CardEditDialog(self.root, f"Add Subcard to '{parent_card.title}'")
+        if dialog.result:
+            card_data = dialog.result
+            try:
+                subcard = self.board.create_subcard(
+                    parent_card.id,
+                    card_data['title'],
+                    card_data['description'],
+                    card_data['priority'],
+                    card_data['project']
+                )
+                if card_data['assignee']:
+                    self.board.edit_card(subcard.id, assignee=card_data['assignee'])
+
+                for tag in card_data['tags']:
+                    subcard.add_tag(tag)
+                self.board.save_board()
+
+                self.refresh_board()
+                self.status_label.config(text=f"Created subcard '{subcard.title}'")
+            except ValueError as error:
+                messagebox.showerror("Error", str(error))
     
     def show_card_details(self, card: Card):
         """Show detailed information about a card."""
@@ -558,9 +597,17 @@ Project: {card.project or '(none)'}
 Assignee: {card.assignee or '(unassigned)'}
 Tags: {', '.join(card.tags) if card.tags else '(no tags)'}
 
+Parent: {self.board.get_parent_card(card).title if self.board.get_parent_card(card) else '(none)'}
+
 Created: {card.created_at.strftime('%Y-%m-%d %H:%M:%S')}
 Updated: {card.updated_at.strftime('%Y-%m-%d %H:%M:%S')}
 """
+        completed, total = self.board.get_subcard_progress(card.id)
+        if total:
+            details += "\n\nSubcards:\n"
+            for subcard in self.board.get_subcards(card.id):
+                tick = "[x]" if self.board.is_card_done(subcard) else "[ ]"
+                details += f"{tick} {subcard.title} ({self.board.get_card_location_label(subcard)})\n"
         messagebox.showinfo("Card Details", details.strip())
     
     def search_dialog(self):
