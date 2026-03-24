@@ -2,12 +2,13 @@
 #  @brief JSON storage helpers and file-lock handling for board persistence.
 """Data storage and persistence layer for the Kanban board."""
 
+import atexit
 import json
 import os
+import shutil
 import socket
-import atexit
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any, Dict, List
 
 
 def get_default_storage_dir() -> str:
@@ -172,6 +173,88 @@ class DataStorage:
                 print(f"Error creating backup: {e}")
                 return None
         return None
+
+    def get_board_directory(self) -> str:
+        """Return the directory containing the board data file."""
+        return os.path.dirname(self.file_path) or os.getcwd()
+
+    def get_attachments_directory(self) -> str:
+        """Return the board-specific attachments directory path."""
+        board_name = os.path.splitext(os.path.basename(self.file_path))[0] or 'board'
+        return os.path.join(self.get_board_directory(), f"{board_name}_attachments")
+
+    def resolve_attachment_path(self, relative_path: str) -> str:
+        """Return an absolute path for a stored attachment path."""
+        if os.path.isabs(relative_path):
+            return relative_path
+        return os.path.abspath(os.path.join(self.get_board_directory(), relative_path))
+
+    def copy_attachment(self, source_path: str, card_id: str) -> str:
+        """Copy a source file into the board attachment store and return a relative path."""
+        if self.read_only:
+            raise PermissionError(self.get_read_only_message())
+
+        absolute_source = os.path.abspath(source_path)
+        if not os.path.isfile(absolute_source):
+            raise FileNotFoundError(absolute_source)
+
+        card_directory = os.path.join(self.get_attachments_directory(), card_id)
+        os.makedirs(card_directory, exist_ok=True)
+
+        base_name = os.path.basename(absolute_source)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        destination_name = f"{timestamp}_{base_name}"
+        destination_path = os.path.join(card_directory, destination_name)
+        if os.path.exists(destination_path):
+            stem, extension = os.path.splitext(base_name)
+            destination_name = f"{timestamp}_{stem}_{os.getpid()}{extension}"
+            destination_path = os.path.join(card_directory, destination_name)
+
+        shutil.copy2(absolute_source, destination_path)
+        return os.path.relpath(destination_path, self.get_board_directory())
+
+    def list_attachment_files(self) -> List[str]:
+        """Return all stored attachment file paths for this board."""
+        attachments_directory = self.get_attachments_directory()
+        if not os.path.isdir(attachments_directory):
+            return []
+
+        attachment_files = []
+        for root, _, files in os.walk(attachments_directory):
+            for filename in files:
+                attachment_files.append(os.path.abspath(os.path.join(root, filename)))
+        return sorted(attachment_files)
+
+    def delete_attachment_file(self, file_path: str) -> bool:
+        """Delete a stored attachment file if it belongs to this board's attachment store."""
+        if self.read_only:
+            raise PermissionError(self.get_read_only_message())
+
+        absolute_path = os.path.abspath(file_path)
+        attachments_directory = os.path.abspath(self.get_attachments_directory())
+        try:
+            common_path = os.path.commonpath([absolute_path, attachments_directory])
+        except ValueError:
+            return False
+
+        if common_path != attachments_directory or not os.path.isfile(absolute_path):
+            return False
+
+        os.remove(absolute_path)
+        return True
+
+    def remove_empty_attachment_directories(self) -> int:
+        """Remove empty directories from the board attachment store, including the root if empty."""
+        attachments_directory = self.get_attachments_directory()
+        if not os.path.isdir(attachments_directory):
+            return 0
+
+        removed_count = 0
+        for root, _, _ in os.walk(attachments_directory, topdown=False):
+            if os.path.isdir(root) and not os.listdir(root):
+                os.rmdir(root)
+                removed_count += 1
+        return removed_count
     
     def restore(self, backup_path: str):
         """Restore data from a backup file."""

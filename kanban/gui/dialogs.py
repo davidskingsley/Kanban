@@ -2,6 +2,7 @@
 #  @brief Dialog classes used by the multi-board GUI.
 """Dialog windows for the multi-board GUI."""
 
+import os
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, colorchooser
 
@@ -13,11 +14,13 @@ from .common import (
     TEXT_MUTED,
     bind_mousewheel,
     bind_mousewheel_recursive,
+    bind_file_drop,
     center_modal,
     create_soft_button,
     create_tooltip,
     format_optional_date,
     is_dark_color,
+    open_path_with_default_app,
     parse_optional_date,
     style_text_input,
 )
@@ -731,6 +734,7 @@ class CardDialog:
         self.card = card
         self.on_change = on_change
         self.subcards = []
+        self.attachments = []
 
         initial_title = initial_title or ""
         initial_description = initial_description or ""
@@ -747,7 +751,7 @@ class CardDialog:
         # Create dialog window
         self.dialog = tk.Toplevel(parent)
         self.dialog.title(title)
-        dialog_height = 780 if self._supports_subcard_management() else 620
+        dialog_height = 880 if self._supports_subcard_management() else 720 if self.card is not None else 620
         center_modal(self.dialog, parent, 440, dialog_height)
         
         self.setup_ui(initial_title, initial_description, initial_priority, 
@@ -898,6 +902,7 @@ class CardDialog:
 
         if self.card is not None:
             self._build_notes_section(fields_frame)
+            self._build_attachments_section(fields_frame)
 
         if self._supports_subcard_management():
             self._build_subcards_section(fields_frame)
@@ -1058,6 +1063,182 @@ class CardDialog:
         create_tooltip(delete_button, 'Delete selected note')
 
         self.refresh_notes_list()
+
+    def _build_attachments_section(self, parent):
+        """Render attachment management controls for an existing card."""
+        tk.Label(parent, text="Attachments:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+
+        attachments_frame = tk.Frame(parent, bg=APP_BG)
+        attachments_frame.pack(fill='both', expand=True, pady=(0, 20))
+
+        hint_text = "Drop files here or use Add Files"
+        self.attachments_drop_hint = tk.Label(
+            attachments_frame,
+            text=hint_text,
+            font=('Arial', 9, 'bold'),
+            bg=SURFACE_BG,
+            fg=TEXT_MUTED,
+            relief='solid',
+            bd=1,
+            padx=10,
+            pady=10,
+            anchor='w',
+        )
+        self.attachments_drop_hint.pack(fill='x', pady=(0, 8))
+
+        list_frame = tk.Frame(attachments_frame, bg=APP_BG)
+        list_frame.pack(fill='both', expand=True)
+
+        self.attachments_listbox = tk.Listbox(list_frame, height=5, font=('Arial', 10), activestyle='dotbox')
+        self.attachments_listbox.pack(side='left', fill='both', expand=True)
+        style_text_input(self.attachments_listbox)
+        self.attachments_listbox.bind('<Double-Button-1>', self.open_selected_attachment)
+
+        scrollbar = ttk.Scrollbar(list_frame, orient='vertical', command=self.attachments_listbox.yview)
+        scrollbar.pack(side='right', fill='y')
+        self.attachments_listbox.configure(yscrollcommand=scrollbar.set)
+        bind_mousewheel(self.attachments_listbox)
+        bind_mousewheel(list_frame, self.attachments_listbox)
+
+        actions_frame = tk.Frame(attachments_frame, bg=APP_BG)
+        actions_frame.pack(fill='x', pady=(8, 0))
+
+        add_button = create_soft_button(actions_frame, "Add Files", self.add_attachments_via_picker, variant='accent')
+        add_button.pack(side='left')
+        create_tooltip(add_button, 'Choose files to attach')
+
+        open_button = create_soft_button(actions_frame, "Open", self.open_selected_attachment, variant='secondary')
+        open_button.pack(side='left', padx=(8, 0))
+        create_tooltip(open_button, 'Open selected attachment')
+
+        remove_button = create_soft_button(actions_frame, "Remove Link", self.delete_selected_attachment, variant='secondary')
+        remove_button.pack(side='left', padx=(8, 0))
+        create_tooltip(remove_button, 'Remove the selected attachment link from the card')
+
+        self._bind_attachment_drop_targets(attachments_frame)
+        self.refresh_attachments_list()
+
+    def _bind_attachment_drop_targets(self, root_widget):
+        """Bind file-drop targets used by the attachment section."""
+        def on_enter():
+            self.attachments_drop_hint.config(bg='#EDF5FF', fg='#2F5D95')
+
+        def on_leave():
+            self.attachments_drop_hint.config(bg=SURFACE_BG, fg=TEXT_MUTED)
+
+        bound_any = False
+        for widget in (self.dialog, root_widget, self.attachments_drop_hint, getattr(self, 'attachments_listbox', None)):
+            if bind_file_drop(widget, self.add_attachments_from_drop, on_enter, on_leave):
+                bound_any = True
+
+        if not bound_any:
+            self.attachments_drop_hint.config(text='Use Add Files to attach files to this card')
+
+    def refresh_attachments_list(self):
+        """Refresh the list of attachments for the current card."""
+        if not hasattr(self, 'attachments_listbox') or self.card is None:
+            return
+
+        self.card = self.board.find_card(self.card.id)
+        self.attachments = list(self.card.attachments) if self.card is not None else []
+        self.attachments_listbox.delete(0, tk.END)
+        for attachment in self.attachments:
+            self.attachments_listbox.insert(
+                tk.END,
+                f"{attachment.created_at.strftime('%Y-%m-%d %H:%M')} | {attachment.name}",
+            )
+
+        if not self.attachments:
+            self.attachments_listbox.insert(tk.END, 'No attachments yet')
+
+    def add_attachments_via_picker(self):
+        """Choose one or more files and attach them to the current card."""
+        if self.card is None:
+            return
+
+        paths = filedialog.askopenfilenames(parent=self.dialog, title=f"Add Attachments to '{self.card.title}'")
+        self.add_attachments_from_drop(list(paths))
+
+    def add_attachments_from_drop(self, paths):
+        """Attach dropped or selected files to the current card."""
+        if self.card is None:
+            return
+
+        files = [path for path in paths if os.path.isfile(path)]
+        if not files:
+            return
+
+        try:
+            attachments = self.board.add_card_attachments(self.card.id, files)
+        except (PermissionError, FileNotFoundError, OSError) as error:
+            messagebox.showerror('Attachment Error', str(error), parent=self.dialog)
+            self.attachments_drop_hint.config(bg=SURFACE_BG, fg=TEXT_MUTED)
+            return
+
+        self.attachments_drop_hint.config(bg=SURFACE_BG, fg=TEXT_MUTED)
+        if not attachments:
+            return
+
+        self.refresh_attachments_list()
+        if self.on_change:
+            self.on_change()
+
+    def open_selected_attachment(self, _event=None):
+        """Open the selected attachment with the default system application."""
+        if self.card is None or not hasattr(self, 'attachments_listbox'):
+            return
+
+        current = self.attachments_listbox.curselection()
+        if not current or not self.attachments:
+            messagebox.showinfo('Open Attachment', 'Select an attachment to open.', parent=self.dialog)
+            return
+
+        index = current[0]
+        if index >= len(self.attachments):
+            return
+
+        attachment = self.attachments[index]
+        attachment_path = self.board.get_card_attachment_path(self.card.id, attachment.id)
+        if not attachment_path or not os.path.exists(attachment_path):
+            messagebox.showerror('Attachment Missing', f"The stored file for '{attachment.name}' could not be found.", parent=self.dialog)
+            return
+
+        try:
+            open_path_with_default_app(attachment_path)
+        except Exception as error:
+            messagebox.showerror('Open Attachment', f"Could not open file:\n{error}", parent=self.dialog)
+
+    def delete_selected_attachment(self):
+        """Remove the selected attachment link from the current card."""
+        if self.card is None or not hasattr(self, 'attachments_listbox'):
+            return
+
+        current = self.attachments_listbox.curselection()
+        if not current or not self.attachments:
+            messagebox.showinfo('Remove Attachment', 'Select an attachment to remove.', parent=self.dialog)
+            return
+
+        index = current[0]
+        if index >= len(self.attachments):
+            return
+
+        attachment = self.attachments[index]
+        confirm = messagebox.askyesno(
+            'Remove Attachment',
+            f"Remove the link to '{attachment.name}' from this card?",
+            parent=self.dialog,
+        )
+        if not confirm:
+            return
+
+        removed = self.board.delete_card_attachment(self.card.id, attachment.id)
+        if not removed:
+            messagebox.showerror('Error', 'Attachment link could not be removed.', parent=self.dialog)
+            return
+
+        self.refresh_attachments_list()
+        if self.on_change:
+            self.on_change()
 
     def refresh_notes_list(self):
         """Refresh the list of notes for the current card."""

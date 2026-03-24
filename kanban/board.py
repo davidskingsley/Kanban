@@ -4,8 +4,8 @@
 
 from copy import deepcopy
 from datetime import date, datetime
-from typing import List, Optional, Dict, Union
-from .models import Card, Column, CustomColumn, Status, Priority, CardType, UNSET
+from typing import Dict, List, Optional, Set, Union
+from .models import Card, Column, CustomColumn, Status, Priority, CardType, CardAttachment, UNSET
 from .storage import DataStorage, get_default_single_board_file
 import os
 import uuid
@@ -558,6 +558,136 @@ class KanbanBoard:
     def get_subcards(self, parent_id: str) -> List[Card]:
         """Return the direct child cards of the given parent card."""
         return [card for card in self.get_all_cards() if card.parent_id == parent_id]
+
+    def get_card_attachment(self, card_id: str, attachment_id: str) -> Optional[CardAttachment]:
+        """Return a specific attachment linked to a card."""
+        card = self.find_card(card_id)
+        if not card:
+            return None
+        return card.get_attachment(attachment_id)
+
+    def get_card_attachment_path(self, card_id: str, attachment_id: str) -> Optional[str]:
+        """Return the absolute path for a card attachment."""
+        attachment = self.get_card_attachment(card_id, attachment_id)
+        if attachment is None:
+            return None
+        return self.storage.resolve_attachment_path(attachment.relative_path)
+
+    def add_card_attachment(self, card_id: str, source_path: str) -> Optional[CardAttachment]:
+        """Copy a file into board storage and link it to a card."""
+        attachments = self.add_card_attachments(card_id, [source_path])
+        return attachments[0] if attachments else None
+
+    def add_card_attachments(self, card_id: str, source_paths: List[str]) -> List[CardAttachment]:
+        """Copy one or more files into board storage and link them to a card."""
+        self._ensure_writable()
+
+        card = self.find_card(card_id)
+        if not card:
+            return []
+
+        normalized_paths = []
+        for path in source_paths:
+            absolute_path = os.path.abspath(path)
+            if os.path.isfile(absolute_path) and absolute_path not in normalized_paths:
+                normalized_paths.append(absolute_path)
+
+        if not normalized_paths:
+            return []
+
+        count = len(normalized_paths)
+        label = 'attachment' if count == 1 else 'attachments'
+        self._push_undo_state(f"Add {count} {label} to '{card.title}'")
+
+        attachments: List[CardAttachment] = []
+        try:
+            for source_path in normalized_paths:
+                relative_path = self.storage.copy_attachment(source_path, card.id)
+                attachments.append(card.add_attachment(os.path.basename(source_path), relative_path))
+        except Exception:
+            self._undo_stack.pop()
+            raise
+
+        self.save_board()
+        return attachments
+
+    def delete_card_attachment(self, card_id: str, attachment_id: str) -> bool:
+        """Remove an attachment link from a card while keeping the copied file available for history."""
+        self._ensure_writable()
+
+        card = self.find_card(card_id)
+        if not card:
+            return False
+
+        attachment = card.get_attachment(attachment_id)
+        if attachment is None:
+            return False
+
+        self._push_undo_state(f"Remove attachment from '{card.title}'")
+        removed = card.remove_attachment(attachment_id)
+        if removed is None:
+            self._undo_stack.pop()
+            return False
+
+        self.save_board()
+        return True
+
+    def _collect_attachment_paths_from_data(self, data: Dict) -> Set[str]:
+        """Return the normalized absolute attachment paths referenced by serialized board data."""
+        attachment_paths: Set[str] = set()
+        for card_data in data.get('cards', []):
+            for attachment_data in card_data.get('attachments', []):
+                relative_path = attachment_data.get('relative_path')
+                if not relative_path:
+                    continue
+                attachment_paths.add(
+                    os.path.normcase(os.path.abspath(self.storage.resolve_attachment_path(relative_path)))
+                )
+        return attachment_paths
+
+    def get_referenced_attachment_paths(self, include_history: bool = True) -> Set[str]:
+        """Return attachment paths referenced by the current board state and optional history snapshots."""
+        referenced_paths = self._collect_attachment_paths_from_data(self.export_data())
+        if not include_history:
+            return referenced_paths
+
+        for snapshot in self._undo_stack:
+            referenced_paths.update(self._collect_attachment_paths_from_data(snapshot['data']))
+        for snapshot in self._redo_stack:
+            referenced_paths.update(self._collect_attachment_paths_from_data(snapshot['data']))
+        return referenced_paths
+
+    def cleanup_orphaned_attachment_files(self) -> Dict[str, object]:
+        """Delete stored attachment files that are no longer referenced by the board or its history."""
+        self._ensure_writable()
+
+        stored_files = self.storage.list_attachment_files()
+        if not stored_files:
+            return {
+                'removed_files': 0,
+                'removed_directories': 0,
+                'scanned_files': 0,
+                'retained_files': 0,
+                'removed_paths': [],
+            }
+
+        referenced_paths = self.get_referenced_attachment_paths(include_history=True)
+        removed_paths = []
+        for file_path in stored_files:
+            normalized_path = os.path.normcase(os.path.abspath(file_path))
+            if normalized_path in referenced_paths:
+                continue
+            if self.storage.delete_attachment_file(file_path):
+                removed_paths.append(file_path)
+
+        removed_directories = self.storage.remove_empty_attachment_directories()
+        return {
+            'removed_files': len(removed_paths),
+            'removed_directories': removed_directories,
+            'scanned_files': len(stored_files),
+            'retained_files': len(stored_files) - len(removed_paths),
+            'removed_paths': removed_paths,
+        }
 
     def add_card_note(self, card_id: str, text: str = ""):
         """Add a timestamped note to an existing card."""

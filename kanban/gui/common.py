@@ -3,8 +3,18 @@
 """Shared helpers for the multi-board Tkinter GUI."""
 
 from datetime import date
+import os
 import tkinter as tk
 from typing import Optional
+
+try:
+    from tkinterdnd2 import COPY, DND_FILES, TkinterDnD
+    FILE_DROP_AVAILABLE = True
+except ImportError:
+    COPY = None
+    DND_FILES = None
+    TkinterDnD = None
+    FILE_DROP_AVAILABLE = False
 
 
 APP_BG = '#F6F2EB'
@@ -256,6 +266,77 @@ def style_text_input(widget):
     )
 
 
+def create_app_root():
+    """Create the main Tk root with file-drop support when available."""
+    if FILE_DROP_AVAILABLE:
+        return TkinterDnD.Tk()
+    return tk.Tk()
+
+
+def parse_dropped_files(widget, raw_data):
+    """Parse a TkDND file payload into absolute file paths."""
+    if not raw_data:
+        return []
+
+    try:
+        items = widget.tk.splitlist(raw_data)
+    except tk.TclError:
+        items = [raw_data]
+
+    paths = []
+    for item in items:
+        cleaned = item.strip()
+        if cleaned.startswith('{') and cleaned.endswith('}'):
+            cleaned = cleaned[1:-1]
+        if cleaned:
+            paths.append(os.path.abspath(cleaned))
+    return paths
+
+
+def bind_file_drop(widget, callback, enter_callback=None, leave_callback=None):
+    """Bind an OS file-drop handler to a widget when TkDND is available."""
+    if not FILE_DROP_AVAILABLE or widget is None or not hasattr(widget, 'drop_target_register'):
+        return False
+
+    widget.drop_target_register(DND_FILES)
+
+    drop_action = COPY or 'copy'
+
+    def on_enter(event):
+        if enter_callback is not None:
+            enter_callback()
+        return event.action if getattr(event, 'action', None) else drop_action
+
+    def on_position(event):
+        return event.action if getattr(event, 'action', None) else drop_action
+
+    def on_drop(event):
+        callback(parse_dropped_files(widget, getattr(event, 'data', '')))
+        return event.action if getattr(event, 'action', None) else drop_action
+
+    widget.dnd_bind('<<Drop>>', on_drop)
+    widget.dnd_bind('<<DropPosition>>', on_position)
+    if enter_callback is not None:
+        widget.dnd_bind('<<DropEnter>>', on_enter)
+    if leave_callback is not None:
+        widget.dnd_bind('<<DropLeave>>', lambda event: leave_callback())
+    return True
+
+
+def open_path_with_default_app(path):
+    """Open a file path with the operating system's default application."""
+    absolute_path = os.path.abspath(path)
+    if os.name == 'nt':
+        os.startfile(absolute_path)
+        return
+
+    import subprocess
+    import sys
+
+    command = ['open', absolute_path] if sys.platform == 'darwin' else ['xdg-open', absolute_path]
+    subprocess.Popen(command)
+
+
 __all__ = [
     'APP_BG',
     'PANEL_BG',
@@ -275,6 +356,11 @@ __all__ = [
     'can_scroll_target',
     'bind_mousewheel',
     'bind_mousewheel_recursive',
+    'FILE_DROP_AVAILABLE',
+    'create_app_root',
+    'bind_file_drop',
+    'parse_dropped_files',
+    'open_path_with_default_app',
     'center_modal',
     'create_soft_button',
     'create_tooltip',

@@ -30,6 +30,7 @@ from .board_statistics import (
     update_board_info as update_board_summary,
 )
 from .common import APP_BG
+from .common import create_app_root
 from .shell_ui import (
     bind_menu_shortcuts as bind_shell_shortcuts,
     setup_menu as setup_shell_menu,
@@ -57,6 +58,7 @@ class MultiBoardGUI:
         'delete_card_dialog': ('Ctrl+D', '<Control-d>'),
         'clear_done_cards': ('Ctrl+Shift+K', '<Control-Shift-K>'),
         'create_backup': ('Ctrl+B', '<Control-b>'),
+        'cleanup_orphaned_attachment_files': ('Ctrl+Alt+K', '<Control-Alt-k>'),
         'search_dialog': ('Ctrl+F', '<Control-f>'),
         'filter_priority_dialog': ('Ctrl+Shift+P', '<Control-Shift-P>'),
         'filter_assignee_dialog': ('Ctrl+Shift+A', '<Control-Shift-A>'),
@@ -74,7 +76,7 @@ class MultiBoardGUI:
     
     def __init__(self, board_manager: BoardManager):
         self.board_manager = board_manager
-        self.root = tk.Tk()
+        self.root = create_app_root()
         self.current_board_gui: Optional['EmbeddedKanbanGUI'] = None
         self.board_frame = None
         

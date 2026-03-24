@@ -1,6 +1,6 @@
 # Multi-Board Kanban Manager
 
-A Python Kanban application focused on multi-board management with a Tkinter GUI and CLI workflows. It supports custom columns, drag-and-drop card movement, external board loading, read-only fallback when a board is already open elsewhere, and a legacy single-board CLI mode.
+A Python Kanban application focused on multi-board management with a Tkinter GUI and CLI workflows. It supports custom columns, drag-and-drop card movement, file attachments on cards, external board loading, read-only fallback when a board is already open elsewhere, and a legacy single-board CLI mode.
 
 ## Features
 
@@ -8,8 +8,10 @@ A Python Kanban application focused on multi-board management with a Tkinter GUI
 - Multi-board CLI for terminal-based board management
 - Legacy single-board CLI for working with a standalone board data file
 - Custom columns with rename, reorder, recolor, and delete support
-- Card priorities, assignees, tags, projects, custom colors, reusable card types, and real subcards
+- Card priorities, assignees, tags, projects, custom colors, reusable card types, real subcards, and copied file attachments
 - Drag-and-drop movement in the multi-board GUI
+- Drag-and-drop file attachments onto cards and the edit-card dialog
+- Cleanup of orphaned copied attachment files that are no longer referenced by the board or its undo/redo history
 - External board loading by reference
 - Lock files with automatic read-only fallback when another process owns the board
 
@@ -17,9 +19,11 @@ A Python Kanban application focused on multi-board management with a Tkinter GUI
 
 1. Install Python 3.8 or newer.
 2. Change into the project directory.
+3. Install the Python dependencies.
 
 ```bash
 cd Kanban
+pip install -r requirements.txt
 ```
 
 ## Usage
@@ -94,6 +98,7 @@ External board loading:
 - Summary area showing card counts, completed counts, and read-only status
 - Board canvas with draggable cards and per-column add-card actions
 - Card type management with reusable project and color presets
+- Card attachments that can be opened from cards and managed in the edit-card dialog
 
 ### Common Actions
 
@@ -105,12 +110,16 @@ External board loading:
 5. Right-click cards or columns for context actions.
 6. Choose a custom card color in the create or edit card dialog, or leave it on the default board style.
 7. Manage reusable card types from the Cards menu to prefill project and color when creating cards.
+8. Drop files onto a card to copy them into the board attachments folder and create dated links on the card.
+9. Use the edit-card dialog to add files, drop files into the dialog, open attached files, or remove attachment links.
+10. Run `Tools -> Clean Up Orphaned Attachments` when you want to prune copied files that are no longer referenced anywhere in the board or its undo/redo history.
 
 ### Visual Indicators
 
 - Priority bars show urgency from low to critical
 - Assignees display as `@name`
 - Tags display as `#tag`
+- Attachments display as dated `📎` links on cards
 - Card backgrounds can use a custom color while preserving readable text contrast
 - Parent cards show subcard progress
 - Read-only mode is shown when another process holds the lock
@@ -136,6 +145,7 @@ External board loading:
 | Double-click card | Edit card |
 | Right-click card | Open card context menu |
 | Drag and drop | Move card between columns |
+| Drop files on card | Attach copied files to that card |
 
 ## Project Structure
 
@@ -170,6 +180,8 @@ Kanban/
    Another process currently owns the lock. Close that instance or reopen the board after the lock is released.
 4. Backup or import problems:
    Verify the target path exists and that the JSON files are not corrupted.
+5. Attachment storage keeps growing:
+   Use `Tools -> Clean Up Orphaned Attachments` in the GUI or the matching CLI maintenance action to remove copied files that are no longer referenced.
 
 ## License
 

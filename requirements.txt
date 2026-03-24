@@ -1,6 +1,7 @@
 # Kanban Board Application Dependencies
-# No external dependencies required - uses only Python standard library
 # Ensure you're using Python 3.8 or higher
+
+tkinterdnd2>=0.4.2
 
 # Optional development dependencies (uncomment if needed):
 # pytest>=7.0.0          # For testing

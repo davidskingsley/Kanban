@@ -56,6 +56,36 @@ class CardNote:
         )
 
 
+## @brief Represents a copied file linked to a card.
+class CardAttachment:
+    """Represents a file attachment recorded against a card."""
+
+    def __init__(self, name: str, relative_path: str, created_at: datetime = None, attachment_id: str = None):
+        self.id = attachment_id if attachment_id else str(uuid.uuid4())
+        self.name = name or "attachment"
+        self.relative_path = relative_path
+        self.created_at = created_at or datetime.now()
+
+    def to_dict(self):
+        """Convert attachment to dictionary for serialization."""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'relative_path': self.relative_path,
+            'created_at': self.created_at.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        """Create attachment from dictionary."""
+        return cls(
+            data.get('name', 'attachment'),
+            data.get('relative_path', ''),
+            datetime.fromisoformat(data.get('created_at', datetime.now().isoformat())),
+            data.get('id'),
+        )
+
+
 ## @brief Represents a reusable board-level card type with optional presets.
 class CardType:
     """Represents a configurable card type with optional project and color presets."""
@@ -210,6 +240,7 @@ class Card:
         self.parent_id = None
         self.tags = []
         self.notes: List[CardNote] = []
+        self.attachments: List[CardAttachment] = []
         self.start_date: Optional[date] = None
         self.end_date: Optional[date] = None
 
@@ -296,6 +327,29 @@ class Card:
                 self.updated_at = datetime.now()
                 return note
         return None
+
+    def add_attachment(self, name: str, relative_path: str, created_at: datetime = None) -> CardAttachment:
+        """Add a copied file attachment to the card."""
+        attachment = CardAttachment(name, relative_path, created_at)
+        self.attachments.append(attachment)
+        self.updated_at = datetime.now()
+        return attachment
+
+    def get_attachment(self, attachment_id: str) -> Optional[CardAttachment]:
+        """Return a card attachment by ID."""
+        for attachment in self.attachments:
+            if attachment.id == attachment_id:
+                return attachment
+        return None
+
+    def remove_attachment(self, attachment_id: str) -> Optional[CardAttachment]:
+        """Remove an attachment link from the card by ID."""
+        for index, attachment in enumerate(self.attachments):
+            if attachment.id == attachment_id:
+                removed = self.attachments.pop(index)
+                self.updated_at = datetime.now()
+                return removed
+        return None
     
     def to_dict(self):
         """Convert card to dictionary for serialization."""
@@ -317,6 +371,7 @@ class Card:
             'end_date': self.end_date.isoformat() if self.end_date else None,
             'tags': self.tags,
             'notes': [note.to_dict() for note in self.notes],
+            'attachments': [attachment.to_dict() for attachment in self.attachments],
         }
     
     @classmethod
@@ -346,6 +401,7 @@ class Card:
         card.end_date = date.fromisoformat(data['end_date']) if data.get('end_date') else None
         card.tags = data.get('tags', [])
         card.notes = [CardNote.from_dict(note_data) for note_data in data.get('notes', [])]
+        card.attachments = [CardAttachment.from_dict(item) for item in data.get('attachments', [])]
         return card
     
     def __str__(self):

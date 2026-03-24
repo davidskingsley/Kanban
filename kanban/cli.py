@@ -106,8 +106,9 @@ class KanbanCLI:
         
         print("\nOTHER:")
         print("22. Create backup")
-        print("23. Undo last change")
-        print("24. Redo last undone change")
+        print("23. Clean up orphaned attachment files")
+        print("24. Undo last change")
+        print("25. Redo last undone change")
         print("0. Exit")
         print()
     
@@ -136,8 +137,9 @@ class KanbanCLI:
             '20': self.edit_card_type,
             '21': self.delete_card_type,
             '22': self.create_backup,
-            '23': self.undo_last_change,
-            '24': self.redo_last_change,
+            '23': self.cleanup_orphaned_attachment_files,
+            '24': self.undo_last_change,
+            '25': self.redo_last_change,
             '0': self.exit_app
         }
         
@@ -680,6 +682,27 @@ class KanbanCLI:
             print(f"✅ Backup created: {backup_path}")
         else:
             print("❌ Failed to create backup!")
+
+    def cleanup_orphaned_attachment_files(self):
+        """Delete copied attachment files that are no longer referenced by the board or history."""
+        if not self.ensure_board_writable():
+            return
+
+        print("\n--- CLEAN UP ORPHANED ATTACHMENTS ---")
+        result = self.board.cleanup_orphaned_attachment_files()
+        removed_files = result['removed_files']
+        removed_directories = result['removed_directories']
+
+        if removed_files == 0:
+            print("No orphaned attachment files were found.")
+            if removed_directories:
+                print(f"Removed {removed_directories} empty attachment director{'y' if removed_directories == 1 else 'ies'}.")
+            return
+
+        print(
+            f"✅ Removed {removed_files} orphaned attachment file(s) "
+            f"and {removed_directories} empty director{'y' if removed_directories == 1 else 'ies'}."
+        )
 
     def view_card_types(self):
         """Display all configured card types."""

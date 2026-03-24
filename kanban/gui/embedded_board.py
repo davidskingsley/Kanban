@@ -2,6 +2,7 @@
 #  @brief Embedded single-board GUI surface used inside the multi-board shell.
 """Embedded board view for the multi-board GUI."""
 
+import os
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 
@@ -14,9 +15,11 @@ from .common import (
     SURFACE_ALT_BG,
     SURFACE_BG,
     TEXT_MUTED,
+    bind_file_drop,
     bind_mousewheel,
     get_card_palette,
     mousewheel_units,
+    open_path_with_default_app,
 )
 from .dialogs import (
     CardDialog,
@@ -420,14 +423,57 @@ class EmbeddedKanbanGUI:
                                  bg=card_bg, fg=muted_fg)
             tags_label.pack(side='right')
 
+        if card.attachments:
+            attachments_frame = tk.Frame(content_frame, bg=card_bg)
+            attachments_frame.pack(fill='x', pady=(6, 0))
+
+            for attachment in card.attachments[:2]:
+                attachment_label = tk.Label(
+                    attachments_frame,
+                    text=f"📎 {attachment.name} | {attachment.created_at.strftime('%Y-%m-%d %H:%M')}",
+                    font=('Arial', 8, 'underline'),
+                    bg=card_bg,
+                    fg='#2F5D95',
+                    cursor='hand2',
+                    anchor='w',
+                    justify='left',
+                    wraplength=220,
+                )
+                attachment_label.pack(fill='x')
+                attachment_label.skip_card_bindings = True
+                attachment_label.bind(
+                    '<Button-1>',
+                    lambda event, current_card=card, current_attachment=attachment: self.open_card_attachment(current_card, current_attachment),
+                )
+
+            if len(card.attachments) > 2:
+                more_label = tk.Label(
+                    attachments_frame,
+                    text=f"+{len(card.attachments) - 2} more attachment(s)",
+                    font=('Arial', 8),
+                    bg=card_bg,
+                    fg=muted_fg,
+                    anchor='w',
+                )
+                more_label.pack(fill='x')
+                more_label.skip_card_bindings = True
+
         card_frame.scroll_canvas = getattr(parent, 'scroll_canvas', None)
 
         self.bind_card_events(card_frame, card)
+        self.bind_card_file_drop(card_frame, card)
         return card_frame
 
     def bind_card_events(self, card_frame, card):
         """Bind click, drag, and context menu events to a card and its children."""
         def bind_recursive(widget):
+            if getattr(widget, 'skip_card_bindings', False):
+                if getattr(card_frame, 'scroll_canvas', None) is not None:
+                    bind_mousewheel(widget, card_frame.scroll_canvas)
+                for child in widget.winfo_children():
+                    bind_recursive(child)
+                return
+
             widget.bind("<Button-1>", lambda e, frame=card_frame: self.start_card_drag(e, frame))
             widget.bind("<B1-Motion>", lambda e, current_card=card, frame=card_frame: self.drag_card(e, current_card, frame))
             widget.bind("<ButtonRelease-1>", lambda e, current_card=card, frame=card_frame: self.end_card_drag(e, current_card, frame))
@@ -440,6 +486,49 @@ class EmbeddedKanbanGUI:
                 bind_recursive(child)
 
         bind_recursive(card_frame)
+
+    def bind_card_file_drop(self, card_frame, card):
+        """Allow files to be dropped onto a card to create attachments."""
+        def register_recursive(widget):
+            bind_file_drop(widget, lambda paths, current_card=card: self.handle_card_file_drop(current_card, paths))
+            for child in widget.winfo_children():
+                register_recursive(child)
+
+        register_recursive(card_frame)
+
+    def handle_card_file_drop(self, card, paths):
+        """Copy dropped files into board storage and link them to a card."""
+        if not self.ensure_board_writable():
+            return
+
+        files = [path for path in paths if os.path.isfile(path)]
+        if not files:
+            return
+
+        try:
+            attachments = self.board.add_card_attachments(card.id, files)
+        except (PermissionError, FileNotFoundError, OSError) as error:
+            messagebox.showerror("Attachment Error", str(error))
+            return
+
+        if not attachments:
+            return
+
+        self.refresh_display()
+        self.status_bar.config(text=f"📎 Added {len(attachments)} attachment(s) to {card.title}")
+
+    def open_card_attachment(self, card, attachment):
+        """Open an attachment linked from a board card."""
+        attachment_path = self.board.get_card_attachment_path(card.id, attachment.id)
+        if not attachment_path or not os.path.exists(attachment_path):
+            messagebox.showerror("Attachment Missing", f"The stored file for '{attachment.name}' could not be found.")
+            return 'break'
+
+        try:
+            open_path_with_default_app(attachment_path)
+        except Exception as error:
+            messagebox.showerror("Open Attachment", f"Could not open file:\n{error}")
+        return 'break'
 
     def start_card_drag(self, event, card_frame):
         """Initialize drag state for a card."""
@@ -1031,6 +1120,7 @@ class EmbeddedKanbanGUI:
         menu.add_command(label="📝 Edit", command=lambda: self.edit_card_dialog(card))
         if not card.parent_id:
             menu.add_command(label="➕ Add Subcard", command=lambda: self.add_subcard_dialog(card))
+        menu.add_command(label="📎 Add Attachment", command=lambda: self.edit_card_dialog(card))
         menu.add_command(label="🔄 Move", command=lambda: self.move_card_specific(card))
         menu.add_command(label="🏷️ Add Tag", command=lambda: self.add_tag_to_card(card))
         menu.add_command(label="ℹ️ Details", command=lambda: self.show_card_details(card))
@@ -1141,6 +1231,7 @@ class EmbeddedKanbanGUI:
         details += f"Color: {card.color or 'Default'}\n"
         details += f"Tags: {', '.join(card.tags) if card.tags else 'None'}\n"
         details += f"Notes: {len(card.notes)}\n"
+        details += f"Attachments: {len(card.attachments)}\n"
         parent_card = self.board.get_parent_card(card)
         details += f"Parent: {parent_card.title if parent_card else 'None'}\n"
         details += f"Created: {card.created_at.strftime('%Y-%m-%d %H:%M') if card.created_at else 'Unknown'}\n"
@@ -1150,6 +1241,11 @@ class EmbeddedKanbanGUI:
             details += "\nNotes:\n"
             for note in card.notes:
                 details += f"- {note.created_at.strftime('%Y-%m-%d %H:%M')}\n"
+
+        if card.attachments:
+            details += "\nAttachments:\n"
+            for attachment in card.attachments:
+                details += f"- {attachment.created_at.strftime('%Y-%m-%d %H:%M')} | {attachment.name}\n"
 
         completed, total = self.board.get_subcard_progress(card.id)
         if total:
@@ -1385,6 +1481,34 @@ class EmbeddedKanbanGUI:
             self.status_bar.config(text="💾 Backup created")
         except Exception as e:
             messagebox.showerror("Backup Failed", f"Failed to create backup:\n{str(e)}")
+
+    def cleanup_orphaned_attachment_files(self):
+        """Delete copied attachment files that are no longer referenced by the board or history."""
+        if not self.ensure_board_writable():
+            return
+
+        try:
+            result = self.board.cleanup_orphaned_attachment_files()
+        except Exception as error:
+            messagebox.showerror("Cleanup Failed", f"Failed to clean orphaned attachments:\n{error}")
+            return
+
+        removed_files = result['removed_files']
+        removed_directories = result['removed_directories']
+        if removed_files == 0:
+            messagebox.showinfo("No Orphaned Attachments", "No orphaned attachment files were found.")
+            if removed_directories:
+                self.status_bar.config(
+                    text=f"🧹 Removed {removed_directories} empty attachment director{'y' if removed_directories == 1 else 'ies'}"
+                )
+            return
+
+        self.status_bar.config(text=f"🧹 Removed {removed_files} orphaned attachment file(s)")
+        messagebox.showinfo(
+            "Cleanup Complete",
+            f"Removed {removed_files} orphaned attachment file(s)\n"
+            f"Removed {removed_directories} empty attachment director{'y' if removed_directories == 1 else 'ies'}",
+        )
     
     def cleanup(self):
         """Clean up resources when switching boards."""

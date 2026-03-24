@@ -180,6 +180,12 @@ def setup_menu(app):
     tools_menu = tk.Menu(menubar, tearoff=0)
     menubar.add_cascade(label="Tools", menu=tools_menu)
     tools_menu.add_command(
+        label="Clean Up Orphaned Attachments",
+        command=lambda: app.invoke_current_board_action('cleanup_orphaned_attachment_files'),
+        accelerator=app.get_shortcut_label('cleanup_orphaned_attachment_files'),
+    )
+    tools_menu.add_separator()
+    tools_menu.add_command(
         label="Export All Boards",
         command=app.export_all_boards,
         accelerator=app.get_shortcut_label('export_all_boards'),
@@ -238,6 +244,10 @@ def bind_menu_shortcuts(app):
     app.bind_shortcut(
         app.MENU_SHORTCUTS['create_backup'][1],
         lambda: app.invoke_current_board_action('create_backup'),
+    )
+    app.bind_shortcut(
+        app.MENU_SHORTCUTS['cleanup_orphaned_attachment_files'][1],
+        lambda: app.invoke_current_board_action('cleanup_orphaned_attachment_files'),
     )
     app.bind_shortcut(
         app.MENU_SHORTCUTS['search_dialog'][1],
@@ -352,6 +362,7 @@ def build_shortcuts_text(app):
         f"{app.get_shortcut_label('delete_card_dialog')} - Delete card\n"
         f"{app.get_shortcut_label('clear_done_cards')} - Clear done cards\n"
         f"{app.get_shortcut_label('create_backup')} - Create backup\n"
+        f"{app.get_shortcut_label('cleanup_orphaned_attachment_files')} - Clean up orphaned attachments\n"
         f"{app.get_shortcut_label('search_dialog')} - Search cards\n"
         f"{app.get_shortcut_label('filter_priority_dialog')} - Filter by priority\n"
         f"{app.get_shortcut_label('filter_assignee_dialog')} - Filter by assignee\n"
