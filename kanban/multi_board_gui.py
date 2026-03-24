@@ -56,6 +56,82 @@ def parse_optional_date(value: str, field_name: str) -> Optional[date]:
         raise ValueError(f"{field_name} must use YYYY-MM-DD format.") from error
 
 
+def mousewheel_units(event) -> int:
+    """Normalize wheel input across platforms into Tk scroll units."""
+    delta = getattr(event, 'delta', 0)
+    if delta:
+        units = int(-delta / 120)
+        if units == 0:
+            return -1 if delta > 0 else 1
+        return units
+
+    button_number = getattr(event, 'num', None)
+    if button_number == 4:
+        return -1
+    if button_number == 5:
+        return 1
+    return 0
+
+
+def can_scroll_target(widget, orient='y') -> bool:
+    """Return whether a scroll target currently has overflow in the requested direction."""
+    if widget is None:
+        return False
+
+    try:
+        view = widget.xview() if orient == 'x' else widget.yview()
+    except (AttributeError, tk.TclError):
+        return False
+
+    if not view or len(view) != 2:
+        return False
+
+    first, last = view
+    return not (first <= 0.0 and last >= 1.0)
+
+
+def bind_mousewheel(widget, target=None, orient='y'):
+    """Bind the mouse wheel to a scrollable Tk widget target."""
+    if widget is None:
+        return
+
+    scroll_target = target or widget
+
+    def on_mousewheel(event, active_target=scroll_target, axis=orient):
+        units = mousewheel_units(event)
+        if units == 0:
+            return None
+
+        if not can_scroll_target(active_target, axis):
+            return None
+
+        try:
+            if axis == 'x':
+                active_target.xview_scroll(units, 'units')
+            else:
+                active_target.yview_scroll(units, 'units')
+        except tk.TclError:
+            return None
+        return 'break'
+
+    widget.bind('<MouseWheel>', on_mousewheel, add='+')
+    widget.bind('<Button-4>', on_mousewheel, add='+')
+    widget.bind('<Button-5>', on_mousewheel, add='+')
+
+
+def bind_mousewheel_recursive(root, target=None, orient='y', exclude_classes=None):
+    """Bind the mouse wheel to a widget subtree while excluding dedicated scrollers."""
+    excluded = set(exclude_classes or [])
+
+    def bind_widget(widget):
+        if widget.winfo_class() not in excluded:
+            bind_mousewheel(widget, target, orient)
+        for child in widget.winfo_children():
+            bind_widget(child)
+
+    bind_widget(root)
+
+
 def center_modal(dialog, parent, width, height):
     """Configure a modal dialog with consistent positioning and styling."""
     dialog.configure(bg=APP_BG)
@@ -755,6 +831,8 @@ class MultiBoardGUI:
         text_widget = tk.Text(text_frame, font=('Courier', 10), bg='white')
         scrollbar = ttk.Scrollbar(text_frame, orient="vertical", command=text_widget.yview)
         text_widget.configure(yscrollcommand=scrollbar.set)
+        bind_mousewheel(text_widget)
+        bind_mousewheel(text_frame, text_widget)
         
         # Generate statistics
         stats_text = "📊 BOARD STATISTICS\n" + "=" * 50 + "\n\n"
@@ -986,6 +1064,9 @@ class EmbeddedKanbanGUI:
         self.canvas.bind("<Configure>", sync_board_area_height)
         self.board_window_id = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
         self.canvas.configure(xscrollcommand=scrollbar.set)
+        bind_mousewheel(self.canvas, self.canvas, orient='x')
+        bind_mousewheel(self.scrollable_frame, self.canvas, orient='x')
+        bind_mousewheel(canvas_frame, self.canvas, orient='x')
         
         self.canvas.pack(side="top", fill="both", expand=True)
         scrollbar.pack(side="bottom", fill="x")
@@ -1174,13 +1255,9 @@ class EmbeddedKanbanGUI:
 
         window_id = canvas.create_window((0, 0), window=scrollable_frame, anchor='nw')
         canvas.configure(yscrollcommand=scrollbar.set)
-
-        def on_mousewheel(event):
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), 'units')
-
-        canvas.bind("<MouseWheel>", on_mousewheel)
-        scrollable_frame.bind("<MouseWheel>", on_mousewheel)
-        container.bind("<MouseWheel>", on_mousewheel)
+        bind_mousewheel(canvas)
+        bind_mousewheel(scrollable_frame, canvas)
+        bind_mousewheel(container, canvas)
 
         canvas.pack(side='left', fill='both', expand=True)
         scrollbar.pack(side='right', fill='y')
@@ -1191,11 +1268,15 @@ class EmbeddedKanbanGUI:
 
     def bind_column_mousewheel(self, widget, canvas):
         """Bind mouse-wheel scrolling for any widget within a column."""
-        widget.bind("<MouseWheel>", lambda event, target_canvas=canvas: self.scroll_column_canvas(event, target_canvas))
+        bind_mousewheel(widget, canvas)
 
     def scroll_column_canvas(self, event, canvas):
         """Scroll a specific column canvas using the mouse wheel."""
-        canvas.yview_scroll(int(-1 * (event.delta / 120)), 'units')
+        units = mousewheel_units(event)
+        if units == 0:
+            return None
+        canvas.yview_scroll(units, 'units')
+        return 'break'
     
     def create_card_widget(self, parent, card):
         """Create a card widget."""
@@ -1339,7 +1420,7 @@ class EmbeddedKanbanGUI:
             widget.bind("<Double-Button-1>", lambda e, current_card=card: self.edit_card_dialog(current_card))
             widget.bind("<Button-3>", lambda e, current_card=card: self.show_card_context_menu(e, current_card))
             if getattr(card_frame, 'scroll_canvas', None) is not None:
-                widget.bind("<MouseWheel>", lambda e, canvas=card_frame.scroll_canvas: self.scroll_column_canvas(e, canvas))
+                bind_mousewheel(widget, card_frame.scroll_canvas)
 
             for child in widget.winfo_children():
                 bind_recursive(child)
@@ -2302,6 +2383,7 @@ class BoardDialog:
         self.desc_text = tk.Text(main_frame, height=4, font=('Arial', 10))
         self.desc_text.pack(fill='both', expand=True, pady=(5, 15))
         style_text_input(self.desc_text)
+        bind_mousewheel(self.desc_text)
 
         tk.Label(main_frame, text="Storage Folder:", font=('Arial', 11, 'bold'),
             bg=APP_BG).pack(anchor='w')
@@ -2549,6 +2631,8 @@ class ReorderColumnsDialog:
         scrollbar = ttk.Scrollbar(list_frame, orient='vertical', command=self.listbox.yview)
         scrollbar.pack(side='right', fill='y')
         self.listbox.configure(yscrollcommand=scrollbar.set)
+        bind_mousewheel(self.listbox)
+        bind_mousewheel(list_frame, self.listbox)
 
         controls_frame = tk.Frame(content_frame, bg=APP_BG)
         controls_frame.pack(side='right', fill='y', padx=(12, 0))
@@ -2654,6 +2738,7 @@ class CardTypeDialog:
         self.desc_text.pack(fill='x', pady=(0, 10))
         self.desc_text.insert('1.0', initial_description)
         style_text_input(self.desc_text)
+        bind_mousewheel(self.desc_text)
 
         tk.Label(main_frame, text="Project Preset:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
         self.project_entry = tk.Entry(main_frame, width=50)
@@ -2773,6 +2858,8 @@ class CardTypesOverviewDialog:
         list_scrollbar = ttk.Scrollbar(list_container, orient='vertical', command=self.listbox.yview)
         list_scrollbar.pack(side='right', fill='y')
         self.listbox.configure(yscrollcommand=list_scrollbar.set)
+        bind_mousewheel(self.listbox)
+        bind_mousewheel(list_container, self.listbox)
 
         details_frame = tk.Frame(content_frame, bg=SURFACE_BG, highlightthickness=1, highlightbackground='#E0D7CA')
         details_frame.pack(side='left', fill='both', expand=True, padx=(18, 0))
@@ -2911,6 +2998,7 @@ class NoteDialog:
         self.text_widget.pack(fill='both', expand=True, pady=(0, 14))
         self.text_widget.insert('1.0', initial_text)
         style_text_input(self.text_widget)
+        bind_mousewheel(self.text_widget)
 
         helper_text = "The note will be saved with the current date and time."
         tk.Label(main_frame, text=helper_text, font=('Arial', 9), fg=TEXT_MUTED, bg=APP_BG).pack(anchor='w', pady=(0, 14))
@@ -2992,6 +3080,8 @@ class CardDialog:
         self.form_window = self.form_canvas.create_window((0, 0), window=fields_frame, anchor='nw')
         fields_frame.bind('<Configure>', self._update_scroll_region)
         self.form_canvas.bind('<Configure>', self._resize_form_width)
+        bind_mousewheel(self.form_canvas)
+        bind_mousewheel(content_frame, self.form_canvas)
         
         # Title
         tk.Label(fields_frame, text="Title:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
@@ -3006,6 +3096,7 @@ class CardDialog:
         self.description_text.pack(fill='x', pady=(0, 10))
         self.description_text.insert("1.0", initial_description)
         style_text_input(self.description_text)
+        bind_mousewheel(self.description_text)
         
         # Priority
         tk.Label(fields_frame, text="Priority:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
@@ -3114,6 +3205,8 @@ class CardDialog:
 
         if self._supports_subcard_management():
             self._build_subcards_section(fields_frame)
+
+        bind_mousewheel_recursive(fields_frame, self.form_canvas, exclude_classes={'Listbox', 'Text'})
         
         # Buttons
         button_frame = tk.Frame(main_frame, bg=APP_BG)
@@ -3213,6 +3306,8 @@ class CardDialog:
         scrollbar = ttk.Scrollbar(list_frame, orient='vertical', command=self.subcards_listbox.yview)
         scrollbar.pack(side='right', fill='y')
         self.subcards_listbox.configure(yscrollcommand=scrollbar.set)
+        bind_mousewheel(self.subcards_listbox)
+        bind_mousewheel(list_frame, self.subcards_listbox)
 
         actions_frame = tk.Frame(subcards_frame, bg=APP_BG)
         actions_frame.pack(fill='x', pady=(8, 0))
@@ -3240,6 +3335,8 @@ class CardDialog:
         scrollbar = ttk.Scrollbar(list_frame, orient='vertical', command=self.notes_listbox.yview)
         scrollbar.pack(side='right', fill='y')
         self.notes_listbox.configure(yscrollcommand=scrollbar.set)
+        bind_mousewheel(self.notes_listbox)
+        bind_mousewheel(list_frame, self.notes_listbox)
 
         actions_frame = tk.Frame(notes_frame, bg=APP_BG)
         actions_frame.pack(fill='x', pady=(8, 0))
