@@ -3,7 +3,7 @@
 """Multi-board graphical user interface for the Kanban board application."""
 
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import ttk, messagebox, simpledialog, filedialog
 from typing import Dict, Optional, List
 
 from .board_manager import BoardManager
@@ -503,10 +503,10 @@ class MultiBoardGUI:
     
     def create_board_dialog(self):
         """Show dialog to create a new board."""
-        dialog = BoardDialog(self.root, "Create New Board")
+        dialog = BoardDialog(self.root, self.board_manager.boards_directory, "Create New Board")
         if dialog.result:
-            name, description = dialog.result
-            board_id = self.board_manager.create_board(name, description)
+            name, description, storage_dir = dialog.result
+            board_id = self.board_manager.create_board(name, description, target_directory=storage_dir)
             if board_id:
                 self.board_manager.switch_board(board_id)
                 self.welcome_frame.pack_forget()
@@ -2004,12 +2004,13 @@ class EmbeddedKanbanGUI:
 class BoardDialog:
     """Dialog for creating/editing board information."""
     
-    def __init__(self, parent, title="Board Information"):
+    def __init__(self, parent, default_storage_dir, title="Board Information"):
         self.result = None
+        self.default_storage_dir = default_storage_dir
         
         self.dialog = tk.Toplevel(parent)
         self.dialog.title(title)
-        center_modal(self.dialog, parent, 400, 250)
+        center_modal(self.dialog, parent, 520, 320)
         
         self.setup_ui()
         
@@ -2035,8 +2036,21 @@ class BoardDialog:
         tk.Label(main_frame, text="Description (optional):", font=('Arial', 11, 'bold'),
             bg=APP_BG).pack(anchor='w')
         self.desc_text = tk.Text(main_frame, height=4, font=('Arial', 10))
-        self.desc_text.pack(fill='both', expand=True, pady=(5, 20))
+        self.desc_text.pack(fill='both', expand=True, pady=(5, 15))
         style_text_input(self.desc_text)
+
+        tk.Label(main_frame, text="Storage Folder:", font=('Arial', 11, 'bold'),
+            bg=APP_BG).pack(anchor='w')
+
+        storage_frame = tk.Frame(main_frame, bg=APP_BG)
+        storage_frame.pack(fill='x', pady=(5, 20))
+
+        self.storage_var = tk.StringVar(value=self.default_storage_dir)
+        self.storage_entry = tk.Entry(storage_frame, textvariable=self.storage_var, font=('Arial', 10))
+        self.storage_entry.pack(side='left', fill='x', expand=True)
+        style_text_input(self.storage_entry)
+
+        create_soft_button(storage_frame, "Browse", self.browse_storage_folder, variant='accent').pack(side='left', padx=(8, 0))
         
         # Buttons
         button_frame = tk.Frame(main_frame, bg=APP_BG)
@@ -2048,6 +2062,16 @@ class BoardDialog:
         # Bind Enter key
         self.dialog.bind('<Return>', lambda e: self.confirm())
         self.dialog.bind('<Escape>', lambda e: self.cancel())
+
+    def browse_storage_folder(self):
+        """Select a folder where the new board file will be stored."""
+        selected = filedialog.askdirectory(
+            title="Select Board Storage Folder",
+            initialdir=self.storage_var.get() or self.default_storage_dir,
+            parent=self.dialog,
+        )
+        if selected:
+            self.storage_var.set(selected)
     
     def confirm(self):
         """Confirm the dialog."""
@@ -2057,7 +2081,8 @@ class BoardDialog:
             return
         
         description = self.desc_text.get(1.0, tk.END).strip()
-        self.result = (name, description)
+        storage_dir = self.storage_var.get().strip() or self.default_storage_dir
+        self.result = (name, description, storage_dir)
         self.dialog.destroy()
     
     def cancel(self):

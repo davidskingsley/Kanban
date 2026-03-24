@@ -87,14 +87,30 @@ class BoardManager:
 
         self.save_metadata(metadata)
         return board_id
+
+    def _is_managed_board_path(self, data_file: str) -> bool:
+        """Return whether the given board file lives in the managed boards directory."""
+        managed_root = os.path.abspath(self.boards_directory)
+        candidate = os.path.abspath(data_file)
+        try:
+            common_path = os.path.commonpath([managed_root, candidate])
+        except ValueError:
+            return False
+        return common_path == managed_root
     
-    def create_board(self, name: str, description: str = "", use_custom_columns: bool = True) -> str:
+    def create_board(self, name: str, description: str = "", use_custom_columns: bool = True,
+                     target_directory: str = None) -> str:
         """Create a new Kanban board."""
         # Generate unique board ID
         board_id = self._generate_board_id(name)
+
+        if target_directory is None:
+            target_directory = self.boards_directory
+        target_directory = os.path.abspath(target_directory)
+        os.makedirs(target_directory, exist_ok=True)
         
         # Create board data file path
-        data_file = os.path.join(self.boards_directory, f"{board_id}.json")
+        data_file = os.path.join(target_directory, f"{board_id}.json")
         
         # Create the board with custom columns by default
         board = KanbanBoard(data_file, use_custom_columns)
@@ -109,7 +125,8 @@ class BoardManager:
             'description': description,
             'created_at': datetime.now().isoformat(),
             'data_file': data_file,
-            'use_custom_columns': use_custom_columns
+            'use_custom_columns': use_custom_columns,
+            'external': not self._is_managed_board_path(data_file),
         }
         
         # Set as current board if it's the first one

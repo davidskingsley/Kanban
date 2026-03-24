@@ -97,6 +97,7 @@ External board loading:
 ### Common Actions
 
 1. Create a board from the Boards menu.
+   The create-board dialog defaults to the standard boards folder, but you can browse to a different storage folder and the board will still be remembered in the board list.
 2. Load an external board with `Boards -> Load Board From Folder`.
 3. Switch boards from the dropdown or with `Ctrl+O`.
 4. Double-click a card to edit it.

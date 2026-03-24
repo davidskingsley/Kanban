@@ -2,6 +2,8 @@
 #  @brief Interactive command-line interface for managing multiple Kanban boards.
 """Multi-board command-line interface for the Kanban board application."""
 
+import os
+
 from .board_manager import BoardManager
 from .cli import KanbanCLI
 
@@ -156,10 +158,15 @@ class MultiBoardCLI:
             return
         
         description = input("Description (optional): ").strip()
-        
-        board_id = self.board_manager.create_board(name, description)
+
+        default_dir = self.board_manager.boards_directory
+        storage_dir = input(f"Storage folder [{default_dir}]: ").strip() or default_dir
+
+        board_id = self.board_manager.create_board(name, description, target_directory=storage_dir)
         if board_id:
             print(f"✅ Board '{name}' created successfully!")
+            if os.path.abspath(storage_dir) != os.path.abspath(default_dir):
+                print(f"📁 Stored at: {storage_dir}")
             
             # Ask if user wants to switch to the new board
             if len(self.board_manager.get_board_list()) > 1:
