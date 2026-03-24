@@ -94,6 +94,11 @@ def setup_menu(app):
         command=lambda: app.invoke_current_board_action('delete_card_dialog'),
         accelerator=app.get_shortcut_label('delete_card_dialog'),
     )
+    cards_menu.add_command(
+        label="Due Dates",
+        command=lambda: app.invoke_current_board_action('show_due_dates_view'),
+        accelerator=app.get_shortcut_label('show_due_dates_view'),
+    )
     cards_menu.add_separator()
     card_types_menu = tk.Menu(cards_menu, tearoff=0)
     cards_menu.add_cascade(label="Card Types", menu=card_types_menu)
@@ -238,6 +243,10 @@ def bind_menu_shortcuts(app):
         lambda: app.invoke_current_board_action('delete_card_dialog'),
     )
     app.bind_shortcut(
+        app.MENU_SHORTCUTS['show_due_dates_view'][1],
+        lambda: app.invoke_current_board_action('show_due_dates_view'),
+    )
+    app.bind_shortcut(
         app.MENU_SHORTCUTS['clear_done_cards'][1],
         lambda: app.invoke_current_board_action('clear_done_cards'),
     )
@@ -360,6 +369,7 @@ def build_shortcuts_text(app):
         f"{app.get_shortcut_label('edit_card_dialog')} - Edit card\n"
         f"{app.get_shortcut_label('move_card_dialog')} - Move card\n"
         f"{app.get_shortcut_label('delete_card_dialog')} - Delete card\n"
+        f"{app.get_shortcut_label('show_due_dates_view')} - Due dates view\n"
         f"{app.get_shortcut_label('clear_done_cards')} - Clear done cards\n"
         f"{app.get_shortcut_label('create_backup')} - Create backup\n"
         f"{app.get_shortcut_label('cleanup_orphaned_attachment_files')} - Clean up orphaned attachments\n"

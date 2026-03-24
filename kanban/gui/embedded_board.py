@@ -26,6 +26,7 @@ from .dialogs import (
     CardTypeDialog,
     CardTypesOverviewDialog,
     ColumnDialog,
+    DueDateOverviewDialog,
     ReorderColumnsDialog,
     SelectionDialog,
 )
@@ -1217,6 +1218,7 @@ class EmbeddedKanbanGUI:
 
     def show_card_details(self, card):
         """Show detailed information about a card."""
+        card = self.board.find_card(card.id) or card
         details = f"📋 Card Details\n\n"
         details += f"Title: {card.title}\n"
         details += f"Description: {card.description or 'None'}\n"
@@ -1255,6 +1257,14 @@ class EmbeddedKanbanGUI:
                 details += f"{tick} {subcard.title} ({self.board.get_card_location_label(subcard)})\n"
         
         messagebox.showinfo("Card Details", details)
+
+    def show_due_dates_view(self):
+        """Show a graphical due-date timeline and open card details on click."""
+        DueDateOverviewDialog(
+            self.parent_frame,
+            self.board,
+            on_card_selected=lambda selected_card: self.show_card_details(selected_card),
+        )
 
     def modify_specific_column(self, column):
         """Modify a specific column's name and color."""

@@ -2,6 +2,7 @@
 #  @brief Dialog classes used by the multi-board GUI.
 """Dialog windows for the multi-board GUI."""
 
+from datetime import date, timedelta
 import os
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, colorchooser
@@ -377,6 +378,236 @@ class ReorderColumnsDialog:
     def cancel(self):
         """Cancel reordering."""
         self.dialog.destroy()
+
+
+class DueDateOverviewDialog:
+    """Scrollable graphical overview of scheduled cards on a date timeline."""
+
+    DAY_WIDTH = 42
+    ROW_HEIGHT = 40
+    LEFT_GUTTER = 360
+    HEADER_HEIGHT = 92
+
+    def __init__(self, parent, board, on_card_selected=None):
+        self.board = board
+        self.on_card_selected = on_card_selected
+        self.today = date.today()
+        self.cards = self._get_scheduled_cards()
+
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title("Due Dates")
+        center_modal(self.dialog, parent, 1360, 760)
+        self.dialog.resizable(True, True)
+
+        self.setup_ui()
+        self.dialog.wait_window()
+
+    def _get_scheduled_cards(self):
+        """Return cards with scheduling information sorted by due date."""
+        cards = [card for card in self.board.get_all_cards() if card.start_date or card.end_date]
+
+        def sort_key(card):
+            due = card.end_date or card.start_date or self.today
+            start = card.start_date or due
+            return (due, start, card.title.lower())
+
+        return sorted(cards, key=sort_key)
+
+    def setup_ui(self):
+        """Build the due-date timeline UI."""
+        main_frame = tk.Frame(self.dialog, bg=APP_BG)
+        main_frame.pack(fill='both', expand=True, padx=16, pady=16)
+
+        tk.Label(
+            main_frame,
+            text="Scheduled cards are shown on a timeline. Click a row or bar to open card details.",
+            font=('Arial', 10, 'bold'),
+            bg=APP_BG,
+        ).pack(anchor='w')
+
+        tk.Label(
+            main_frame,
+            text=self._build_summary_text(),
+            font=('Arial', 9),
+            bg=APP_BG,
+            fg=TEXT_MUTED,
+            justify='left',
+        ).pack(anchor='w', pady=(4, 10))
+
+        if not self.cards:
+            empty_frame = tk.Frame(main_frame, bg=SURFACE_BG, highlightthickness=1, highlightbackground='#DED5C8')
+            empty_frame.pack(fill='both', expand=True)
+            tk.Label(
+                empty_frame,
+                text="No cards have start or due dates yet.",
+                font=('Arial', 11, 'bold'),
+                bg=SURFACE_BG,
+                fg=TEXT_MUTED,
+                pady=20,
+            ).pack()
+            button_frame = tk.Frame(main_frame, bg=APP_BG)
+            button_frame.pack(fill='x', pady=(12, 0))
+            create_soft_button(button_frame, "Close", self.dialog.destroy, variant='primary').pack(side='right')
+            return
+
+        timeline_start, timeline_end = self._get_date_range()
+        total_days = max((timeline_end - timeline_start).days, 1)
+
+        canvas_frame = tk.Frame(main_frame, bg=APP_BG)
+        canvas_frame.pack(fill='both', expand=True)
+
+        self.canvas = tk.Canvas(canvas_frame, bg=SURFACE_BG, highlightthickness=1, highlightbackground='#DED5C8', bd=0)
+        v_scrollbar = ttk.Scrollbar(canvas_frame, orient='vertical', command=self.canvas.yview)
+        h_scrollbar = ttk.Scrollbar(main_frame, orient='horizontal', command=self.canvas.xview)
+        self.canvas.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+
+        self.canvas.pack(side='left', fill='both', expand=True)
+        v_scrollbar.pack(side='right', fill='y')
+        h_scrollbar.pack(fill='x', pady=(8, 0))
+        bind_mousewheel(self.canvas)
+        bind_mousewheel(canvas_frame, self.canvas)
+
+        self._draw_timeline(timeline_start, total_days)
+
+        button_frame = tk.Frame(main_frame, bg=APP_BG)
+        button_frame.pack(fill='x', pady=(12, 0))
+        create_soft_button(button_frame, "Close", self.dialog.destroy, variant='primary').pack(side='right')
+
+        self.dialog.bind('<Escape>', lambda event: self.dialog.destroy())
+
+    def _build_summary_text(self):
+        """Return the summary text shown above the timeline."""
+        total = len(self.cards)
+        overdue = sum(1 for card in self.cards if card.has_past_end_date() and not self.board.is_card_done(card))
+        due_today = sum(1 for card in self.cards if card.end_date == self.today)
+        done = sum(1 for card in self.cards if self.board.is_card_done(card))
+        return f"{total} scheduled cards   Overdue: {overdue}   Due today: {due_today}   Completed: {done}"
+
+    def _get_date_range(self):
+        """Return the visible start and end dates for the timeline."""
+        relevant_dates = [self.today]
+        for card in self.cards:
+            if card.start_date:
+                relevant_dates.append(card.start_date)
+            if card.end_date:
+                relevant_dates.append(card.end_date)
+
+        start = min(relevant_dates) - timedelta(days=1)
+        end = max(relevant_dates) + timedelta(days=1)
+        if (end - start).days < 6:
+            end = start + timedelta(days=6)
+        return start, end
+
+    def _draw_timeline(self, timeline_start, total_days):
+        """Draw the date axis and one row per card."""
+        timeline_width = (total_days + 1) * self.DAY_WIDTH
+        canvas_width = self.LEFT_GUTTER + timeline_width + 40
+        canvas_height = self.HEADER_HEIGHT + (len(self.cards) * self.ROW_HEIGHT) + 24
+        bottom = canvas_height - 16
+        if total_days <= 21:
+            label_step = 1
+        elif total_days <= 60:
+            label_step = 2
+        elif total_days <= 120:
+            label_step = 5
+        else:
+            label_step = 7
+
+        self.canvas.create_rectangle(0, 0, canvas_width, self.HEADER_HEIGHT, fill='#F8F3EB', outline='')
+
+        for day_index in range(total_days + 1):
+            current_date = timeline_start + timedelta(days=day_index)
+            x = self.LEFT_GUTTER + (day_index * self.DAY_WIDTH)
+            is_today = current_date == self.today
+            line_color = '#D6453D' if is_today else '#E0D7CA'
+            line_width = 2 if is_today else 1
+            self.canvas.create_line(x, 0, x, bottom, fill=line_color, width=line_width)
+
+            if current_date.day == 1 or day_index == 0:
+                self.canvas.create_text(
+                    x + 4,
+                    12,
+                    text=current_date.strftime('%b %Y'),
+                    anchor='nw',
+                    font=('Arial', 9, 'bold'),
+                    fill='#2F2923',
+                )
+
+            should_label = is_today or day_index == 0 or (day_index % label_step == 0)
+            if should_label:
+                self.canvas.create_text(
+                    x + 4,
+                    34,
+                    text=current_date.strftime('%d %b'),
+                    anchor='nw',
+                    font=('Arial', 8, 'bold' if is_today else 'normal'),
+                    fill='#2F2923',
+                )
+                self.canvas.create_text(
+                    x + 4,
+                    54,
+                    text=current_date.strftime('%a'),
+                    anchor='nw',
+                    font=('Arial', 8),
+                    fill=TEXT_MUTED,
+                )
+
+        self.canvas.create_text(16, 18, text='Card', anchor='nw', font=('Arial', 9, 'bold'), fill='#2F2923')
+        self.canvas.create_text(16, 40, text='Column / assignee / due', anchor='nw', font=('Arial', 8), fill=TEXT_MUTED)
+
+        for index, card in enumerate(self.cards):
+            top = self.HEADER_HEIGHT + (index * self.ROW_HEIGHT)
+            bottom_row = top + self.ROW_HEIGHT
+            row_tag = f'card_{card.id}'
+            row_fill = '#FFF4EF' if card.has_past_end_date() and not self.board.is_card_done(card) else ('#FAF7F2' if index % 2 == 0 else SURFACE_BG)
+            self.canvas.create_rectangle(0, top, canvas_width, bottom_row, fill=row_fill, outline='', tags=(row_tag,))
+
+            due_text = card.end_date.isoformat() if card.end_date else 'No due date'
+            location = self.board.get_card_location_label(card)
+            subtitle_parts = [location]
+            if card.assignee:
+                subtitle_parts.append(f'@{card.assignee}')
+            subtitle_parts.append(f'Due: {due_text}')
+
+            self.canvas.create_text(16, top + 9, text=card.title, anchor='nw', font=('Arial', 9, 'bold'), fill='#2F2923', tags=(row_tag,))
+            self.canvas.create_text(16, top + 24, text=' | '.join(subtitle_parts), anchor='nw', font=('Arial', 8), fill=TEXT_MUTED, tags=(row_tag,))
+
+            bar_start = card.start_date or card.end_date or self.today
+            bar_end = card.end_date or bar_start
+            if bar_end < bar_start:
+                bar_start, bar_end = bar_end, bar_start
+
+            start_offset = (bar_start - timeline_start).days
+            end_offset = (bar_end - timeline_start).days
+            x1 = self.LEFT_GUTTER + (start_offset * self.DAY_WIDTH) + 4
+            x2 = self.LEFT_GUTTER + (end_offset * self.DAY_WIDTH) + self.DAY_WIDTH - 4
+            y1 = top + 10
+            y2 = bottom_row - 10
+
+            if card.end_date is None or bar_start == bar_end:
+                marker_x = self.LEFT_GUTTER + (end_offset * self.DAY_WIDTH) + (self.DAY_WIDTH / 2)
+                marker_color = '#D6453D' if card.has_past_end_date() and not self.board.is_card_done(card) else '#5D8AC8'
+                self.canvas.create_oval(marker_x - 8, y1, marker_x + 8, y2, fill=marker_color, outline='', tags=(row_tag,))
+            else:
+                if self.board.is_card_done(card):
+                    bar_color = '#7AAE86'
+                elif card.has_past_end_date() and not self.board.is_card_done(card):
+                    bar_color = '#D96C5F'
+                elif card.end_date == self.today:
+                    bar_color = '#E3A83C'
+                else:
+                    bar_color = '#5D8AC8'
+
+                self.canvas.create_rectangle(x1, y1, max(x2, x1 + 14), y2, fill=bar_color, outline='', tags=(row_tag,))
+
+            self.canvas.tag_bind(row_tag, '<Button-1>', lambda event, current_card=card: self._open_card(current_card))
+
+        self.canvas.configure(scrollregion=(0, 0, canvas_width, canvas_height))
+
+    def _open_card(self, card):
+        """Open details for the selected card."""
+        if self.on_card_selected is not None:
+            self.on_card_selected(card)
 
 
 ## @brief Modal dialog for creating or editing reusable card types.

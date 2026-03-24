@@ -56,6 +56,7 @@ class MultiBoardGUI:
         'edit_card_dialog': ('Ctrl+E', '<Control-e>'),
         'move_card_dialog': ('Ctrl+M', '<Control-m>'),
         'delete_card_dialog': ('Ctrl+D', '<Control-d>'),
+        'show_due_dates_view': ('Ctrl+Shift+T', '<Control-Shift-T>'),
         'clear_done_cards': ('Ctrl+Shift+K', '<Control-Shift-K>'),
         'create_backup': ('Ctrl+B', '<Control-b>'),
         'cleanup_orphaned_attachment_files': ('Ctrl+Alt+K', '<Control-Alt-k>'),
