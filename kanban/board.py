@@ -184,7 +184,7 @@ class KanbanBoard:
     
     # Card Management Methods
     def create_card(self, title: str, description: str = "", priority: Priority = Priority.MEDIUM,
-                   column_id: str = None) -> Card:
+                   column_id: str = None, project: str = None) -> Card:
         """Create a new card and add it to the specified column (or first column if none specified)."""
         self._ensure_writable()
 
@@ -198,23 +198,27 @@ class KanbanBoard:
                 raise ValueError(f"Column {column_id} does not exist")
             
             card = Card(title, description, priority, column_id)
+            if project is not None:
+                card.project = project
             self.custom_columns[column_id].add_card(card)
         else:
             # Legacy mode
             card = Card(title, description, priority)
+            if project is not None:
+                card.project = project
             self.columns[Status.TODO].add_card(card)
         
         self.save_board()
         return card
     
     def edit_card(self, card_id: str, title: str = None, description: str = None, 
-                  priority: Priority = None, assignee: str = None) -> Optional[Card]:
+                  priority: Priority = None, assignee: str = None, project: str = None) -> Optional[Card]:
         """Edit an existing card."""
         self._ensure_writable()
 
         card = self.find_card(card_id)
         if card:
-            card.update(title, description, priority, assignee)
+            card.update(title, description, priority, assignee, project)
             self.save_board()
             return card
         return None
@@ -285,7 +289,7 @@ class KanbanBoard:
         return None
     
     def search_cards(self, query: str) -> List[Card]:
-        """Search for cards by title, description, or tags."""
+        """Search for cards by title, description, project, or tags."""
         results = []
         query_lower = query.lower()
         
@@ -295,6 +299,7 @@ class KanbanBoard:
             for card in column:
                 if (query_lower in card.title.lower() or 
                     query_lower in card.description.lower() or
+                    (card.project and query_lower in card.project.lower()) or
                     any(query_lower in tag.lower() for tag in card.tags)):
                     results.append(card)
         
@@ -516,6 +521,8 @@ class KanbanBoard:
                             output.append(f"  {i}. {card}")
                             if card.description:
                                 output.append(f"     Description: {card.description}")
+                            if card.project:
+                                output.append(f"     Project: {card.project}")
             else:
                 for status in Status:
                     column = self.columns[status]
@@ -529,6 +536,8 @@ class KanbanBoard:
                             output.append(f"  {i}. {card}")
                             if card.description:
                                 output.append(f"     Description: {card.description}")
+                            if card.project:
+                                output.append(f"     Project: {card.project}")
             
             return "\n".join(output)
         

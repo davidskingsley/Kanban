@@ -134,6 +134,7 @@ class KanbanCLI:
             return
         
         description = input("Description (optional): ").strip()
+        project = input("Project (optional): ").strip() or None
         
         print("\nPriority levels:")
         for i, priority in enumerate(Priority, 1):
@@ -166,7 +167,7 @@ class KanbanCLI:
                     column_id = columns[0].id  # Default to first column
         
         try:
-            card = self.board.create_card(title, description, priority, column_id)
+            card = self.board.create_card(title, description, priority, column_id, project)
             if assignee:
                 self.board.edit_card(card.id, assignee=assignee)
             
@@ -214,8 +215,12 @@ class KanbanCLI:
         new_assignee = input(f"Assignee [{card.assignee or 'none'}]: ").strip()
         if new_assignee == "":
             new_assignee = None
+
+        new_project = input(f"Project [{card.project or 'none'}]: ").strip()
+        if new_project == "":
+            new_project = None
         
-        self.board.edit_card(card_id, new_title, new_description, new_priority, new_assignee)
+        self.board.edit_card(card_id, new_title, new_description, new_priority, new_assignee, new_project)
         print("✅ Card updated successfully!")
     
     def move_card(self):
@@ -420,6 +425,7 @@ class KanbanCLI:
         print(f"Description: {card.description or '(no description)'}")
         print(f"Status: {card.status.value}")
         print(f"Priority: {card.priority.value}")
+        print(f"Project: {card.project or '(none)'}")
         print(f"Assignee: {card.assignee or '(unassigned)'}")
         print(f"Tags: {', '.join(card.tags) if card.tags else '(no tags)'}")
         print(f"Created: {card.created_at.strftime('%Y-%m-%d %H:%M:%S')}")

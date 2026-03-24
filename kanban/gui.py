@@ -66,9 +66,15 @@ class CardWidget(tk.Frame):
                                  wraplength=180, justify='left')
             desc_label.pack(anchor='w')
         
-        # Footer with assignee and tags
+        # Footer with project, assignee, and tags
         footer_frame = tk.Frame(content_frame, bg='white')
         footer_frame.pack(side='bottom', fill='x')
+
+        if self.card.project:
+            project_label = tk.Label(footer_frame, text=f"[{self.card.project}]",
+                                    font=('Arial', 8),
+                                    bg='#F4E8FF', fg='#6B3FA0')
+            project_label.pack(side='left', padx=(0, 4))
         
         if self.card.assignee:
             assignee_label = tk.Label(footer_frame, text=f"@{self.card.assignee}",
@@ -489,7 +495,8 @@ class KanbanGUI:
             card = self.board.create_card(
                 card_data['title'],
                 card_data['description'],
-                card_data['priority']
+                card_data['priority'],
+                project=card_data['project']
             )
             if card_data['assignee']:
                 self.board.edit_card(card.id, assignee=card_data['assignee'])
@@ -511,7 +518,8 @@ class KanbanGUI:
                 card_data['title'],
                 card_data['description'],
                 card_data['priority'],
-                card_data['assignee']
+                card_data['assignee'],
+                card_data['project']
             )
             
             # Update tags
@@ -546,6 +554,7 @@ Title: {card.title}
 Description: {card.description or '(no description)'}
 Status: {card.status.value}
 Priority: {card.priority.value}
+Project: {card.project or '(none)'}
 Assignee: {card.assignee or '(unassigned)'}
 Tags: {', '.join(card.tags) if card.tags else '(no tags)'}
 
@@ -761,6 +770,11 @@ class CardEditDialog:
         tk.Label(main_frame, text="Assignee", font=('Arial', 10, 'bold'), bg='white').pack(anchor='w')
         self.assignee_entry = tk.Entry(main_frame, font=('Arial', 10), width=50)
         self.assignee_entry.pack(fill='x', pady=(0, 10))
+
+        # Project
+        tk.Label(main_frame, text="Project", font=('Arial', 10, 'bold'), bg='white').pack(anchor='w')
+        self.project_entry = tk.Entry(main_frame, font=('Arial', 10), width=50)
+        self.project_entry.pack(fill='x', pady=(0, 10))
         
         # Tags
         tk.Label(main_frame, text="Tags (comma-separated)", font=('Arial', 10, 'bold'), bg='white').pack(anchor='w')
@@ -786,6 +800,8 @@ class CardEditDialog:
             self.priority_var.set(card.priority.value)
             if card.assignee:
                 self.assignee_entry.insert(0, card.assignee)
+            if card.project:
+                self.project_entry.insert(0, card.project)
             if card.tags:
                 self.tags_entry.insert(0, ', '.join(card.tags))
         else:
@@ -804,6 +820,7 @@ class CardEditDialog:
         description = self.desc_text.get('1.0', tk.END).strip()
         priority = Priority(self.priority_var.get())
         assignee = self.assignee_entry.get().strip() or None
+        project = self.project_entry.get().strip() or None
         
         tags_text = self.tags_entry.get().strip()
         tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()] if tags_text else []
@@ -813,6 +830,7 @@ class CardEditDialog:
             'description': description,
             'priority': priority,
             'assignee': assignee,
+            'project': project,
             'tags': tags
         }
         

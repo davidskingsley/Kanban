@@ -1194,6 +1194,11 @@ class EmbeddedKanbanGUI:
         # Footer
         footer_frame = tk.Frame(content_frame, bg=SURFACE_ALT_BG)
         footer_frame.pack(fill='x', pady=(5, 0))
+
+        if card.project:
+            project_label = tk.Label(footer_frame, text=f"[{card.project}]",
+                                     font=('Arial', 8), bg='#F4E8FF', fg='#6B3FA0', padx=6, pady=2)
+            project_label.pack(side='left', padx=(0, 4))
         
         if card.assignee:
             assignee_label = tk.Label(footer_frame, text=f"@{card.assignee}",
@@ -1301,6 +1306,8 @@ class EmbeddedKanbanGUI:
                  justify='left', wraplength=190).pack(fill='x')
 
         subtitle_parts = []
+        if card.project:
+            subtitle_parts.append(f"[{card.project}]")
         if card.assignee:
             subtitle_parts.append(f"@{card.assignee}")
         if card.tags:
@@ -1453,19 +1460,19 @@ class EmbeddedKanbanGUI:
 
         dialog = CardDialog(self.parent_frame, "Create New Card")
         if dialog.result:
-            title, description, priority, assignee, tags = dialog.result
+            title, description, priority, assignee, project, tags = dialog.result
             
             # Get target column
             if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns:
                 columns = self.board.get_columns_ordered()
                 if columns:
                     target_column = columns[0].id  # Add to first column
-                    card = self.board.create_card(title, description, priority, target_column)
+                    card = self.board.create_card(title, description, priority, target_column, project)
                 else:
                     messagebox.showerror("Error", "No columns available!")
                     return
             else:
-                card = self.board.create_card(title, description, priority, Status.TODO)
+                card = self.board.create_card(title, description, priority, Status.TODO, project)
             
             if assignee:
                 self.board.edit_card(card.id, assignee=assignee)
@@ -1493,12 +1500,13 @@ class EmbeddedKanbanGUI:
                           initial_description=card.description,
                           initial_priority=card.priority,
                           initial_assignee=card.assignee,
+                          initial_project=card.project,
                           initial_tags=list(card.tags))
         
         if dialog.result:
-            title, description, priority, assignee, tags = dialog.result
+            title, description, priority, assignee, project, tags = dialog.result
             self.board.edit_card(card.id, title=title, description=description, 
-                               priority=priority, assignee=assignee)
+                               priority=priority, assignee=assignee, project=project)
             
             # Update tags
             card.tags.clear()
@@ -1827,6 +1835,7 @@ class EmbeddedKanbanGUI:
         details += f"Title: {card.title}\n"
         details += f"Description: {card.description or 'None'}\n"
         details += f"Priority: {card.priority.value.title()}\n"
+        details += f"Project: {card.project or 'None'}\n"
         details += f"Assignee: {card.assignee or 'None'}\n"
         details += f"Tags: {', '.join(card.tags) if card.tags else 'None'}\n"
         details += f"Created: {card.created_at.strftime('%Y-%m-%d %H:%M') if card.created_at else 'Unknown'}\n"
@@ -2161,12 +2170,13 @@ class CardDialog:
     """Dialog for creating/editing cards."""
     
     def __init__(self, parent, title, initial_title="", initial_description="", 
-                 initial_priority=None, initial_assignee="", initial_tags=None):
+                 initial_priority=None, initial_assignee="", initial_project="", initial_tags=None):
         self.result = None
 
         initial_title = initial_title or ""
         initial_description = initial_description or ""
         initial_assignee = initial_assignee or ""
+        initial_project = initial_project or ""
         initial_tags = list(initial_tags or [])
         
         # Create dialog window
@@ -2175,13 +2185,13 @@ class CardDialog:
         center_modal(self.dialog, parent, 400, 500)
         
         self.setup_ui(initial_title, initial_description, initial_priority, 
-                 initial_assignee, initial_tags)
+                     initial_assignee, initial_project, initial_tags)
         
         # Wait for dialog to close
         self.dialog.wait_window()
     
     def setup_ui(self, initial_title, initial_description, initial_priority, 
-                 initial_assignee, initial_tags):
+                 initial_assignee, initial_project, initial_tags):
         """Set up the dialog UI."""
         main_frame = tk.Frame(self.dialog, padx=20, pady=20, bg=APP_BG)
         main_frame.pack(fill='both', expand=True)
@@ -2224,6 +2234,13 @@ class CardDialog:
         self.assignee_entry.pack(fill='x', pady=(0, 10))
         self.assignee_entry.insert(0, initial_assignee)
         style_text_input(self.assignee_entry)
+
+        # Project
+        tk.Label(main_frame, text="Project:", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
+        self.project_entry = tk.Entry(main_frame, width=50)
+        self.project_entry.pack(fill='x', pady=(0, 10))
+        self.project_entry.insert(0, initial_project)
+        style_text_input(self.project_entry)
         
         # Tags
         tk.Label(main_frame, text="Tags (comma-separated):", font=('Arial', 10, 'bold'), bg=APP_BG).pack(anchor='w')
@@ -2263,12 +2280,13 @@ class CardDialog:
         priority = priority_map[self.priority_var.get()]
         
         assignee = self.assignee_entry.get().strip()
+        project = self.project_entry.get().strip()
         
         # Parse tags
         tags_text = self.tags_entry.get().strip()
         tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()] if tags_text else []
         
-        self.result = (title, description, priority, assignee, tags)
+        self.result = (title, description, priority, assignee or None, project or None, tags)
         self.dialog.destroy()
     
     def cancel(self):

@@ -119,11 +119,12 @@ class Card:
         self.status = None  # Keep for backward compatibility
         self.created_at = datetime.now()
         self.updated_at = datetime.now()
+        self.project = None
         self.assignee = None
         self.tags = []
     
     def update(self, title: str = None, description: str = None, 
-               priority: Priority = None, assignee: str = None):
+               priority: Priority = None, assignee: str = None, project: str = None):
         """Update card properties."""
         if title is not None:
             self.title = title
@@ -133,6 +134,8 @@ class Card:
             self.priority = priority
         if assignee is not None:
             self.assignee = assignee
+        if project is not None:
+            self.project = project
         self.updated_at = datetime.now()
     
     def move_to_status(self, status: Union[Status, str]):
@@ -171,6 +174,7 @@ class Card:
             'status': self.status.value if self.status else None,  # Backward compatibility
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
+            'project': self.project,
             'assignee': self.assignee,
             'tags': self.tags
         }
@@ -193,6 +197,7 @@ class Card:
         
         card.created_at = datetime.fromisoformat(data['created_at'])
         card.updated_at = datetime.fromisoformat(data['updated_at'])
+        card.project = data.get('project')
         card.assignee = data.get('assignee')
         card.tags = data.get('tags', [])
         return card
@@ -205,10 +210,11 @@ class Card:
             Priority.CRITICAL: "🔴"
         }
         
+        project_info = f" [{self.project}]" if self.project else ""
         assignee_info = f" (@{self.assignee})" if self.assignee else ""
         tags_info = f" #{', #'.join(self.tags)}" if self.tags else ""
         
-        return f"{priority_icon[self.priority]} {self.title}{assignee_info}{tags_info}"
+        return f"{priority_icon[self.priority]} {self.title}{project_info}{assignee_info}{tags_info}"
 
 
 ## @brief Represents a legacy fixed-status column kept for backward compatibility.
