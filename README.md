@@ -45,6 +45,14 @@ python demo_multiboard.py
 python example_usage.py
 ```
 
+## Testing
+
+Run the regression suite with the workspace virtual environment:
+
+```bash
+python -m unittest discover -s tests
+```
+
 ## Command Options
 
 ```bash

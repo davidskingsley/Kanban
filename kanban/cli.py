@@ -6,7 +6,7 @@ from datetime import date
 from typing import Optional
 
 from .board import KanbanBoard
-from .models import Priority, Status
+from .models import Priority
 
 
 ## @brief Provide menu-driven access to a selected board from the multi-board CLI.
@@ -89,15 +89,14 @@ class BoardCLI:
         print("10. Clear done cards")
         print("11. Add subcard")
         
-        if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns:
-            print("\nCOLUMN ACTIONS:")
-            print("12. Create new column")
-            print("13. Rename column")
-            print("14. Delete column")
-            print("15. Reorder columns")
-            print("16. Change column color")
-            print("17. Edit column flags")
-            print("18. View columns")
+        print("\nCOLUMN ACTIONS:")
+        print("12. Create new column")
+        print("13. Rename column")
+        print("14. Delete column")
+        print("15. Reorder columns")
+        print("16. Change column color")
+        print("17. Edit column flags")
+        print("18. View columns")
 
         print("\nCARD TYPE ACTIONS:")
         print("19. View card types")
@@ -127,13 +126,13 @@ class BoardCLI:
             '9': self.show_card_details,
             '10': self.clear_done_cards,
             '11': self.add_subcard,
-            '12': self.create_column if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
-            '13': self.rename_column if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
-            '14': self.delete_column if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
-            '15': self.reorder_columns if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
-            '16': self.change_column_color if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
-            '17': self.edit_column_flags if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
-            '18': self.view_columns if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns else None,
+            '12': self.create_column,
+            '13': self.rename_column,
+            '14': self.delete_column,
+            '15': self.reorder_columns,
+            '16': self.change_column_color,
+            '17': self.edit_column_flags,
+            '18': self.view_columns,
             '19': self.view_card_types,
             '20': self.create_card_type,
             '21': self.edit_card_type,
@@ -200,31 +199,29 @@ class BoardCLI:
         
         assignee = input("Assignee (optional): ").strip() or None
         
-        # Handle column selection for custom columns
         column_id = None
-        if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns:
-            columns = self.board.get_columns_ordered()
-            if columns:
-                default_column_id = self.board.get_default_add_card_column_id()
-                default_index = next((index for index, column in enumerate(columns) if column.id == default_column_id), 0)
-                print("\nAvailable columns:")
-                for i, column in enumerate(columns, 1):
-                    markers = []
-                    if getattr(column, 'can_add_card', False):
-                        markers.append('add')
-                    if getattr(column, 'is_completed', False):
-                        markers.append('done')
-                    suffix = f" [{' | '.join(markers)}]" if markers else ""
-                    print(f"{i}. {column.name}{suffix}")
-                
-                try:
-                    prompt_default = default_index + 1
-                    col_choice = input(f"Choose column (1-{len(columns)}, default={prompt_default}): ").strip()
-                    col_choice = int(col_choice) if col_choice else prompt_default
-                    if 1 <= col_choice <= len(columns):
-                        column_id = columns[col_choice - 1].id
-                except (ValueError, IndexError):
-                    column_id = columns[default_index].id
+        columns = self.board.get_columns_ordered()
+        if columns:
+            default_column_id = self.board.get_default_add_card_column_id()
+            default_index = next((index for index, column in enumerate(columns) if column.id == default_column_id), 0)
+            print("\nAvailable columns:")
+            for i, column in enumerate(columns, 1):
+                markers = []
+                if getattr(column, 'can_add_card', False):
+                    markers.append('add')
+                if getattr(column, 'is_completed', False):
+                    markers.append('done')
+                suffix = f" [{' | '.join(markers)}]" if markers else ""
+                print(f"{i}. {column.name}{suffix}")
+
+            try:
+                prompt_default = default_index + 1
+                col_choice = input(f"Choose column (1-{len(columns)}, default={prompt_default}): ").strip()
+                col_choice = int(col_choice) if col_choice else prompt_default
+                if 1 <= col_choice <= len(columns):
+                    column_id = columns[col_choice - 1].id
+            except (ValueError, IndexError):
+                column_id = columns[default_index].id
         
         try:
             self.board.create_card(
@@ -429,59 +426,29 @@ class BoardCLI:
         
         print(f"\nMoving card: {card.title}")
         
-        if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns:
-            # Custom columns mode
-            ordered_columns = self.board.get_columns_ordered()
-            current_column = None
-            
-            for column in ordered_columns:
-                if column.id == card.column_id:
-                    current_column = column
-                    break
-            
-            print(f"Current column: {current_column.name if current_column else 'Unknown'}")
-            
-            print("\nAvailable columns:")
-            for i, column in enumerate(ordered_columns, 1):
-                current = " (current)" if column.id == card.column_id else ""
-                print(f"{i}. {column.name}{current}")
-            
-            try:
-                choice = int(input(f"Choose new column (1-{len(ordered_columns)}): "))
-                if 1 <= choice <= len(ordered_columns):
-                    new_column = ordered_columns[choice - 1]
-                    if new_column.id != card.column_id:
-                        self.board.move_card(card_id, new_column.id)
-                        print(f"✅ Card moved to {new_column.name}!")
-                    else:
-                        print("Card is already in that column.")
+        ordered_columns = self.board.get_columns_ordered()
+        current_column = next((column for column in ordered_columns if column.id == card.column_id), None)
+
+        print(f"Current column: {current_column.name if current_column else 'Unknown'}")
+
+        print("\nAvailable columns:")
+        for i, column in enumerate(ordered_columns, 1):
+            current = " (current)" if column.id == card.column_id else ""
+            print(f"{i}. {column.name}{current}")
+
+        try:
+            choice = int(input(f"Choose new column (1-{len(ordered_columns)}): "))
+            if 1 <= choice <= len(ordered_columns):
+                new_column = ordered_columns[choice - 1]
+                if new_column.id != card.column_id:
+                    self.board.move_card(card_id, new_column.id)
+                    print(f"✅ Card moved to {new_column.name}!")
                 else:
-                    print("Invalid choice!")
-            except (ValueError, IndexError):
-                print("Invalid input!")
-        else:
-            # Legacy mode
-            print(f"Current status: {card.status.value}")
-            
-            print("\nAvailable statuses:")
-            statuses = list(Status)
-            for i, status in enumerate(statuses, 1):
-                current = " (current)" if status == card.status else ""
-                print(f"{i}. {status.value}{current}")
-            
-            try:
-                choice = int(input("Choose new status (1-4): "))
-                if 1 <= choice <= 4:
-                    new_status = statuses[choice - 1]
-                    if new_status != card.status:
-                        self.board.move_card(card_id, new_status)
-                        print(f"✅ Card moved to {new_status.value}!")
-                    else:
-                        print("Card is already in that status.")
-                else:
-                    print("Invalid choice!")
-            except (ValueError, IndexError):
-                print("Invalid input!")
+                    print("Card is already in that column.")
+            else:
+                print("Invalid choice!")
+        except (ValueError, IndexError):
+            print("Invalid input!")
     
     def delete_card(self):
         """Delete a card."""
@@ -524,7 +491,7 @@ class BoardCLI:
         
         print(f"\nFound {len(results)} card(s):")
         for i, card in enumerate(results, 1):
-            print(f"{i}. [{card.status.value}] {card}")
+            print(f"{i}. [{self.board.get_card_location_label(card)}] {card}")
     
     def filter_by_priority(self):
         """Filter cards by priority."""
@@ -546,7 +513,7 @@ class BoardCLI:
                 
                 print(f"\nCards with {priority.value} priority:")
                 for i, card in enumerate(results, 1):
-                    print(f"{i}. [{card.status.value}] {card}")
+                    print(f"{i}. [{self.board.get_card_location_label(card)}] {card}")
             else:
                 print("Invalid choice!")
         except (ValueError, IndexError):
@@ -567,7 +534,7 @@ class BoardCLI:
         
         print(f"\nCards assigned to '{assignee}':")
         for i, card in enumerate(results, 1):
-            print(f"{i}. [{card.status.value}] {card}")
+            print(f"{i}. [{self.board.get_card_location_label(card)}] {card}")
     
     def add_tag_to_card(self):
         """Add a tag to a card."""
@@ -637,7 +604,7 @@ class BoardCLI:
         print(f"ID: {card.id}")
         print(f"Title: {card.title}")
         print(f"Description: {card.description or '(no description)'}")
-        print(f"Status: {card.status.value}")
+        print(f"Column: {self.board.get_card_location_label(card)}")
         print(f"Priority: {card.priority.value}")
         card_type = self.board.get_card_type(card.card_type_id)
         print(f"Type: {card_type.name if card_type else self.board.get_default_card_type().name}")
@@ -877,20 +844,11 @@ class BoardCLI:
         # Show all cards with indices
         all_cards = []
         
-        if hasattr(self.board, 'use_custom_columns') and self.board.use_custom_columns:
-            # Custom columns mode
-            for column in self.board.custom_columns.values():
-                for card in column:
-                    if top_level_only and card.parent_id:
-                        continue
-                    all_cards.append((card, column.name))
-        else:
-            # Legacy mode
-            for column in self.board.columns.values():
-                for card in column:
-                    if top_level_only and card.parent_id:
-                        continue
-                    all_cards.append((card, card.status.value))
+        for column in self.board.get_columns_ordered():
+            for card in column:
+                if top_level_only and card.parent_id:
+                    continue
+                all_cards.append((card, column.name))
         
         if not all_cards:
             print("No cards available!")

@@ -147,8 +147,9 @@ class BoardManager:
     def _load_board_from_metadata(self, board_id: str, board_info: Dict) -> KanbanBoard:
         """Load a board instance from stored metadata."""
         data_file = board_info['data_file']
-        use_custom_columns = board_info.get('use_custom_columns', True)
-        board = KanbanBoard(data_file, use_custom_columns, lock_handler=self.lock_handler)
+        if board_info.get('use_custom_columns') is False:
+            raise ValueError('Legacy boards are no longer supported.')
+        board = KanbanBoard(data_file, lock_handler=self.lock_handler)
         self.boards[board_id] = board
         return board
 
@@ -160,11 +161,12 @@ class BoardManager:
 
         data = load_json_file(absolute_path)
         has_custom_columns = 'columns' in data
-        use_custom_columns = True if has_custom_columns or not data.get('cards') else False
+        if not has_custom_columns and data.get('cards'):
+            raise ValueError('Legacy boards are no longer supported. Boards must use custom columns.')
         default_name = os.path.splitext(os.path.basename(absolute_path))[0]
         return {
             'data_file': absolute_path,
-            'use_custom_columns': use_custom_columns,
+            'use_custom_columns': True,
             'name': default_name.replace('_', ' ').strip() or default_name,
         }
 
@@ -188,7 +190,6 @@ class BoardManager:
         try:
             board = KanbanBoard(
                 absolute_path,
-                use_custom_columns if use_custom_columns is not None else inspected['use_custom_columns'],
                 lock_handler=self.lock_handler,
             )
         except BoardLockCancelledError:
@@ -201,7 +202,7 @@ class BoardManager:
             'description': description,
             'created_at': datetime.now().isoformat(),
             'data_file': absolute_path,
-            'use_custom_columns': board.use_custom_columns,
+            'use_custom_columns': True,
             'external': True,
         }
 
@@ -239,8 +240,8 @@ class BoardManager:
         data_file = os.path.join(target_directory, f"{board_id}.json")
         
         # Create the board with custom columns by default
-        board = KanbanBoard(data_file, use_custom_columns, lock_handler=self.lock_handler)
-        if use_custom_columns and not board.get_columns_ordered():
+        board = KanbanBoard(data_file, lock_handler=self.lock_handler)
+        if not board.get_columns_ordered():
             board._init_default_custom_columns()
         self.boards[board_id] = board
         
@@ -251,7 +252,7 @@ class BoardManager:
             'description': description,
             'created_at': datetime.now().isoformat(),
             'data_file': data_file,
-            'use_custom_columns': use_custom_columns,
+            'use_custom_columns': True,
             'external': not self._is_managed_board_path(data_file),
         }
         
@@ -327,6 +328,8 @@ class BoardManager:
                 self._load_board_from_metadata(board_id, metadata['boards'][board_id])
             except BoardLockCancelledError:
                 return False
+            except ValueError:
+                return False
 
         self._push_undo_state(f"Switch to board '{metadata['boards'][board_id]['name']}'")
         
@@ -347,6 +350,8 @@ class BoardManager:
                 try:
                     self._load_board_from_metadata(self.current_board_id, metadata['boards'][self.current_board_id])
                 except BoardLockCancelledError:
+                    return None
+                except ValueError:
                     return None
         
         return self.boards.get(self.current_board_id)

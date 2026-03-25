@@ -5,84 +5,150 @@
       "title": "Deploy to production",
       "description": "Set up CI/CD pipeline and deploy",
       "priority": "critical",
+      "column_id": null,
       "status": "To Do",
       "created_at": "2026-03-24T13:42:41.374274",
       "updated_at": "2026-03-24T13:42:41.378233",
+      "project": null,
       "assignee": "charlie",
+      "color": null,
+      "card_type_id": "05411ca7-94cb-426e-8ec7-e493a1baf585",
+      "parent_id": null,
+      "start_date": null,
+      "end_date": null,
       "tags": [
         "deployment",
         "urgent"
-      ]
+      ],
+      "notes": [],
+      "attachments": []
     },
     {
       "id": "903aa1cf-960f-43ca-bb48-4b6877ea2ecb",
       "title": "Deploy to production",
       "description": "Set up CI/CD pipeline and deploy",
       "priority": "critical",
+      "column_id": null,
       "status": "To Do",
       "created_at": "2026-03-24T13:44:33.085870",
       "updated_at": "2026-03-24T13:44:33.091383",
+      "project": null,
       "assignee": "charlie",
+      "color": null,
+      "card_type_id": "05411ca7-94cb-426e-8ec7-e493a1baf585",
+      "parent_id": null,
+      "start_date": null,
+      "end_date": null,
       "tags": [
         "deployment",
         "urgent"
-      ]
-    },
-    {
-      "id": "5055c4d0-e947-46c4-b5cb-2b21c35a7ec2",
-      "title": "Write unit tests",
-      "description": "Create comprehensive test suite",
-      "priority": "medium",
-      "status": "In Progress",
-      "created_at": "2026-03-24T13:42:41.372030",
-      "updated_at": "2026-03-24T13:42:41.380356",
-      "assignee": "bob",
-      "tags": [
-        "testing",
-        "quality"
-      ]
+      ],
+      "notes": [],
+      "attachments": []
     },
     {
       "id": "fb5b2da6-85b1-4afc-a3e6-9ab07ba2f383",
       "title": "Write unit tests",
       "description": "Create comprehensive test suite",
       "priority": "medium",
+      "column_id": null,
       "status": "In Progress",
       "created_at": "2026-03-24T13:44:33.084605",
       "updated_at": "2026-03-24T13:44:33.094524",
+      "project": null,
       "assignee": "bob",
+      "color": null,
+      "card_type_id": "05411ca7-94cb-426e-8ec7-e493a1baf585",
+      "parent_id": null,
+      "start_date": null,
+      "end_date": null,
       "tags": [
         "testing",
         "quality"
-      ]
+      ],
+      "notes": [],
+      "attachments": []
+    },
+    {
+      "id": "5055c4d0-e947-46c4-b5cb-2b21c35a7ec2",
+      "title": "Write unit tests",
+      "description": "Create comprehensive test suite",
+      "priority": "medium",
+      "column_id": null,
+      "status": "In Progress",
+      "created_at": "2026-03-24T13:42:41.372030",
+      "updated_at": "2026-03-25T10:49:35.597060",
+      "project": null,
+      "assignee": "bob",
+      "color": null,
+      "card_type_id": "05411ca7-94cb-426e-8ec7-e493a1baf585",
+      "parent_id": null,
+      "start_date": null,
+      "end_date": null,
+      "tags": [
+        "testing",
+        "quality"
+      ],
+      "notes": [],
+      "attachments": []
     },
     {
       "id": "73f68d9e-ac67-40f7-920a-72285ef80d24",
       "title": "Set up development environment",
       "description": "Install Python, IDE, and dependencies",
       "priority": "high",
-      "status": "Done",
+      "column_id": null,
+      "status": "Review",
       "created_at": "2026-03-24T13:42:41.370583",
-      "updated_at": "2026-03-24T13:42:41.381205",
+      "updated_at": "2026-03-25T10:49:50.800788",
+      "project": null,
       "assignee": "alice",
+      "color": null,
+      "card_type_id": "05411ca7-94cb-426e-8ec7-e493a1baf585",
+      "parent_id": null,
+      "start_date": null,
+      "end_date": null,
       "tags": [
         "setup",
         "environment"
-      ]
+      ],
+      "notes": [],
+      "attachments": []
     },
     {
       "id": "53fee29b-f876-45e9-82a5-40404f06ca37",
       "title": "Set up development environment",
       "description": "Install Python, IDE, and dependencies",
       "priority": "high",
+      "column_id": null,
       "status": "Done",
       "created_at": "2026-03-24T13:44:33.083078",
       "updated_at": "2026-03-24T13:44:33.096546",
+      "project": null,
       "assignee": "alice",
+      "color": null,
+      "card_type_id": "05411ca7-94cb-426e-8ec7-e493a1baf585",
+      "parent_id": null,
+      "start_date": null,
+      "end_date": null,
       "tags": [
         "setup",
         "environment"
-      ]
+      ],
+      "notes": [],
+      "attachments": []
     }
-  ]
+  ],
+  "card_types": [
+    {
+      "id": "05411ca7-94cb-426e-8ec7-e493a1baf585",
+      "name": "Default",
+      "description": "Standard card type",
+      "default_project": null,
+      "default_color": null,
+      "created_at": "2026-03-25T10:49:24.555825",
+      "updated_at": "2026-03-25T10:49:24.555827"
+    }
+  ],
+  "last_used_card_type_id": "05411ca7-94cb-426e-8ec7-e493a1baf585"
 }

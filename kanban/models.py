@@ -140,6 +140,48 @@ class CardType:
         return card_type
 
 
+## @brief Represents a reusable board-level project with optional description.
+class Project:
+    """Represents a configurable project that cards and card-type presets can reference."""
+
+    def __init__(self, name: str, description: str = "", project_id: str = None):
+        self.id = project_id if project_id else str(uuid.uuid4())
+        self.name = name
+        self.description = description or ""
+        self.created_at = datetime.now()
+        self.updated_at = datetime.now()
+
+    def update(self, name: str = None, description: str = None):
+        """Update project properties."""
+        if name is not None:
+            self.name = name
+        if description is not None:
+            self.description = description
+        self.updated_at = datetime.now()
+
+    def to_dict(self):
+        """Convert project to dictionary for serialization."""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        """Create project from dictionary."""
+        project = cls(
+            data['name'],
+            data.get('description', ''),
+            data.get('id'),
+        )
+        project.created_at = datetime.fromisoformat(data.get('created_at', datetime.now().isoformat()))
+        project.updated_at = datetime.fromisoformat(data.get('updated_at', datetime.now().isoformat()))
+        return project
+
+
 ## @brief Represents a configurable board column with custom ordering and color.
 class CustomColumn:
     """Represents a custom column on the Kanban board."""

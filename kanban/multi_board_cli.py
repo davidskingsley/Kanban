@@ -393,6 +393,8 @@ class MultiBoardCLI:
                     metadata = json.load(metadata_file)
 
                 for board_id, board_info in metadata.get('boards', {}).items():
+                    if board_info.get('use_custom_columns') is False:
+                        continue
                     data_file = board_info.get('data_file')
                     if not data_file:
                         continue
@@ -404,7 +406,6 @@ class MultiBoardCLI:
                         'data_file': data_file,
                         'name': board_info.get('name', label),
                         'description': board_info.get('description', ''),
-                        'use_custom_columns': board_info.get('use_custom_columns'),
                     }
                     options.append(label)
             except Exception as error:
@@ -417,7 +418,7 @@ class MultiBoardCLI:
 
                 try:
                     inspected = self.board_manager.inspect_board_file(os.path.join(folder, entry))
-                except FileNotFoundError:
+                except (FileNotFoundError, ValueError):
                     continue
 
                 label = inspected['name']
@@ -427,7 +428,6 @@ class MultiBoardCLI:
                     'data_file': inspected['data_file'],
                     'name': inspected['name'],
                     'description': '',
-                    'use_custom_columns': inspected['use_custom_columns'],
                 }
                 options.append(label)
 
@@ -454,7 +454,6 @@ class MultiBoardCLI:
                 board_choice['data_file'],
                 name=board_choice['name'],
                 description=board_choice['description'],
-                use_custom_columns=board_choice['use_custom_columns'],
                 switch_to=True,
             )
             if not board_id:

@@ -6,14 +6,16 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from datetime import date
 from typing import Dict, List, Optional
 
-from PySide6.QtCore import QDate, QSize, Qt, QTimer
-from PySide6.QtGui import QAction, QColor, QKeySequence
+from PySide6.QtCore import QDate, QMimeData, QPoint, QPointF, QSize, Qt, QTimer
+from PySide6.QtGui import QAction, QColor, QCursor, QDrag, QKeySequence, QPainter, QPen, QPixmap, QWheelEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QAbstractScrollArea,
     QApplication,
     QCheckBox,
     QColorDialog,
@@ -24,6 +26,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGraphicsDropShadowEffect,
     QGridLayout,
     QGroupBox,
     QHeaderView,
@@ -34,6 +37,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPushButton,
     QScrollArea,
@@ -45,10 +49,11 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from ..board import KanbanBoard
 from ..board_manager import BoardManager
-from ..models import CardType, CustomColumn, Priority
+from ..models import CardType, CustomColumn, Priority, Project, Status
 
 
 WINDOW_STYLE = """
@@ -58,6 +63,9 @@ QMainWindow {
 QDialog, QMessageBox, QInputDialog {
     background: #fbf5ea;
 }
+QDialog#StandardDialog {
+    background: #f6efe2;
+}
 QWidget {
     font-size: 10pt;
     color: #2d241c;
@@ -65,6 +73,37 @@ QWidget {
 QDialog QLabel, QMessageBox QLabel, QInputDialog QLabel {
     color: #2d241c;
     background: transparent;
+}
+QDialog QLabel#DialogTitle {
+    color: #2d241c;
+    font-size: 16pt;
+    font-weight: 700;
+}
+QDialog QLabel#DialogSubtitle {
+    color: #6d5d4e;
+    font-size: 10pt;
+}
+QDialog QLabel#DialogSectionLabel {
+    color: #4f4134;
+    font-size: 9pt;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+QDialog QLabel#DialogHint {
+    color: #6d5d4e;
+    font-size: 9pt;
+}
+QDialog QFrame#DialogHero,
+QDialog QFrame#DialogCard {
+    background: #fffaf2;
+    border: 1px solid #d8c6ab;
+    border-radius: 16px;
+}
+QDialog QFrame#DialogHero {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #f9efe1, stop:1 #efe3d1);
+    border: 1px solid #d2ba97;
 }
 QDialog QGroupBox, QMessageBox QGroupBox, QInputDialog QGroupBox {
     background: #fbf5ea;
@@ -80,21 +119,17 @@ QToolBar#FilterToolbar {
     background: #efe4d3;
     border: 1px solid #d2be9d;
     border-radius: 12px;
-    spacing: 8px;
-    padding: 6px 10px;
-}
-QToolBar#FilterToolbar QLabel {
-    color: #4c3f33;
-    font-weight: 600;
-    background: transparent;
+    spacing: 6px;
+    padding: 5px 8px;
 }
 QToolBar#FilterToolbar QLineEdit,
 QToolBar#FilterToolbar QComboBox,
 QToolBar#FilterToolbar QCheckBox {
-    margin: 0 2px;
+    margin: 0 1px;
 }
 QLineEdit#CardSearchEntry {
-    min-width: 220px;
+    min-width: 180px;
+    max-width: 220px;
     background: #fffdf9;
 }
 QComboBox#CardPriorityFilter,
@@ -103,11 +138,20 @@ QComboBox#CardTypeFilter,
 QComboBox#CardTagFilter,
 QComboBox#CardDueStateFilter,
 QComboBox#DueFilterCombo {
-    min-width: 150px;
+    min-width: 108px;
+    max-width: 126px;
     background: #fffdf9;
+}
+QCheckBox#ToolbarLateOnlyCheckbox {
+    background: rgba(125, 59, 20, 0.08);
+    border: 1px solid rgba(125, 59, 20, 0.12);
+    border-radius: 10px;
+    padding: 6px 8px;
+    font-weight: 600;
 }
 QPushButton#ClearCardFiltersButton {
     padding: 6px 10px;
+    min-width: 58px;
 }
 QMenuBar {
     background: #eadfcf;
@@ -193,6 +237,10 @@ QMessageBox QPushButton,
 QInputDialog QPushButton {
     min-width: 90px;
 }
+QDialog QDialogButtonBox {
+    border-top: 1px solid #eadcc6;
+    padding-top: 10px;
+}
 QPushButton:disabled {
     background: #d9cfbf;
     color: #62574b;
@@ -208,7 +256,19 @@ QLineEdit, QTextEdit, QComboBox, QDateEdit {
 QComboBox {
     min-height: 18px;
 }
+QDateEdit {
+    min-height: 18px;
+}
 QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 24px;
+    border-left: 1px solid #d8c6ab;
+    background: #f1e4d0;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+QDateEdit::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: top right;
     width: 24px;
@@ -226,12 +286,92 @@ QComboBox::down-arrow {
     border-top: 7px solid #7d3b14;
     margin-right: 7px;
 }
-QComboBox QAbstractItemView,
-QInputDialog QComboBox QAbstractItemView {
+QDateEdit::down-arrow {
+    image: none;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 7px solid #7d3b14;
+    margin-right: 7px;
+}
+QDateEdit:disabled {
+    background: #efe4d3;
+    color: #7a6c5f;
+    border: 1px solid #cbb79a;
+}
+QDateEdit::drop-down:disabled {
+    background: #e7d9c4;
+    border-left: 1px solid #cfbea4;
+}
+QCalendarWidget QWidget {
     background: #fffaf2;
     color: #2d241c;
+}
+QCalendarWidget QToolButton {
+    background: #efe4d3;
+    color: #3f2f21;
+    border: 1px solid #d5c3a6;
+    border-radius: 8px;
+    padding: 4px 8px;
+}
+QCalendarWidget QToolButton:hover {
+    background: #e5d3bc;
+}
+QCalendarWidget QMenu {
+    background: #fffaf2;
+    color: #2d241c;
+    border: 1px solid #d5c3a6;
+}
+QCalendarWidget QSpinBox {
+    background: white;
+    color: #2d241c;
+    border: 1px solid #ac9571;
+    border-radius: 6px;
+    padding: 4px 6px;
+}
+QCalendarWidget QAbstractItemView:enabled {
+    background: #fffdfa;
+    color: #2d241c;
+    selection-background-color: #9c4d1f;
+    selection-color: white;
+}
+QCalendarWidget QTableView {
+    alternate-background-color: #f8efe1;
+    background: #fffdfa;
+    color: #2d241c;
+    outline: 0;
+}
+QCalendarWidget QHeaderView {
+    background: #ead9c0;
+}
+QCalendarWidget QHeaderView::section {
+    background: #ead9c0;
+    color: #5a3417;
+    border: none;
+    border-bottom: 1px solid #d2ba97;
+    padding: 6px 4px;
+    font-weight: 700;
+}
+QCalendarWidget QWidget#qt_calendar_navigationbar {
+    background: #f1e4d0;
+    border-bottom: 1px solid #d5c3a6;
+}
+QComboBox QFrame,
+QInputDialog QComboBox QFrame,
+QComboBoxPrivateContainer,
+QInputDialog QComboBoxPrivateContainer {
+    background: #fffaf2;
     border: 1px solid #ac9571;
     border-radius: 10px;
+    padding: 0;
+}
+QComboBox QAbstractItemView,
+QInputDialog QComboBox QAbstractItemView {
+    background: transparent;
+    color: #2d241c;
+    border: none;
+    border-radius: 0;
     padding: 4px;
     selection-background-color: #7d3b14;
     selection-color: #ffffff;
@@ -244,6 +384,25 @@ QInputDialog QComboBox QAbstractItemView::item {
 }
 QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QDateEdit:focus {
     border: 1px solid #8f4a1d;
+}
+QDialog QTableWidget,
+QDialog QListWidget {
+    background: #fffdfa;
+    border: 1px solid #d5c3a6;
+    border-radius: 12px;
+    alternate-background-color: #fbf3e8;
+}
+QDialog QTableWidget::item,
+QDialog QListWidget::item {
+    padding: 8px 10px;
+}
+QDialog QHeaderView::section {
+    background: #eadfcf;
+    color: #3a2d22;
+    border: none;
+    border-bottom: 1px solid #d2b99a;
+    padding: 10px 8px;
+    font-weight: 700;
 }
 QCheckBox {
     color: #2d241c;
@@ -279,6 +438,25 @@ def parse_tags(text: str) -> List[str]:
         if tag and tag not in tags:
             tags.append(tag)
     return tags
+
+
+def create_project_name_combo(board: Optional[KanbanBoard], current_text: Optional[str] = None) -> QComboBox:
+    """Return an editable project picker populated from the board registry."""
+    combo = QComboBox()
+    combo.setEditable(True)
+    combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+    combo.addItem('')
+    if board is not None:
+        seen_names = set()
+        for project in board.get_projects_ordered():
+            key = project.name.strip().lower()
+            if key in seen_names:
+                continue
+            seen_names.add(key)
+            combo.addItem(project.name, project.id)
+    combo.setCurrentIndex(0)
+    combo.setEditText((current_text or '').strip())
+    return combo
 
 
 def color_to_rgb(color: str) -> tuple[float, float, float]:
@@ -328,6 +506,13 @@ def resolve_hex_color(color: Optional[str], fallback: str) -> str:
 def secondary_text_color(background: str) -> str:
     """Return a softer text color that still fits the card background."""
     return '#efe4d4' if contrasting_text_color(background) == '#ffffff' else '#66584b'
+
+
+def rgba_color(color: str, alpha: float) -> str:
+    """Return a CSS rgba string for the provided color and alpha value."""
+    qcolor = QColor(resolve_hex_color(color, '#000000'))
+    clamped_alpha = max(0.0, min(alpha, 1.0))
+    return f'rgba({qcolor.red()}, {qcolor.green()}, {qcolor.blue()}, {clamped_alpha:.3f})'
 
 
 def priority_accent(priority: Priority) -> str:
@@ -391,7 +576,335 @@ def clipped_description(text: str, limit: int = 180) -> str:
     compact = ' '.join((text or '').split())
     if len(compact) <= limit:
         return compact
-    return compact[: limit - 1].rstrip() + '…'
+    return compact[: limit - 3].rstrip() + '...'
+
+
+def clipped_title(text: str, limit: int = 97) -> str:
+    """Return a clipped card-title preview with trailing full stops when truncated."""
+    compact = ' '.join((text or '').split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 3].rstrip() + '...'
+
+
+def wheel_delta(event: QWheelEvent) -> QPoint:
+    """Return the effective wheel delta for the event."""
+    return event.pixelDelta() if not event.pixelDelta().isNull() else event.angleDelta()
+
+
+def scrollbar_can_consume_wheel(scroll_bar, delta: int) -> bool:
+    """Return whether the given scroll bar can move in response to the wheel delta."""
+    if scroll_bar is None:
+        return False
+    if scroll_bar.maximum() <= scroll_bar.minimum():
+        return False
+    if delta > 0:
+        return scroll_bar.value() > scroll_bar.minimum()
+    if delta < 0:
+        return scroll_bar.value() < scroll_bar.maximum()
+    return False
+
+
+def scrollable_widget_can_consume_wheel(widget: QAbstractItemView, event: QWheelEvent) -> bool:
+    """Return whether a scrollable widget can use the incoming wheel event."""
+    delta = wheel_delta(event)
+    primary_vertical = abs(delta.y()) >= abs(delta.x())
+    if primary_vertical:
+        return scrollbar_can_consume_wheel(widget.verticalScrollBar(), delta.y())
+    return scrollbar_can_consume_wheel(widget.horizontalScrollBar(), delta.x())
+
+
+def forward_wheel_event_to_ancestor_scroll_area(widget: QWidget, event: QWheelEvent) -> bool:
+    """Forward a wheel event to the nearest ancestor scroll area."""
+    ancestor = widget.parentWidget()
+    while ancestor is not None:
+        if isinstance(ancestor, QAbstractScrollArea):
+            target = ancestor.viewport() or ancestor
+            local_position = QPointF(target.mapFromGlobal(event.globalPosition().toPoint()))
+            forwarded_event = QWheelEvent(
+                local_position,
+                event.globalPosition(),
+                event.pixelDelta(),
+                event.angleDelta(),
+                event.buttons(),
+                event.modifiers(),
+                event.phase(),
+                event.inverted(),
+                event.source(),
+            )
+            QApplication.sendEvent(target, forwarded_event)
+            if forwarded_event.isAccepted():
+                event.accept()
+            else:
+                event.ignore()
+            return True
+        ancestor = ancestor.parentWidget()
+    return False
+
+
+def handle_scrollable_wheel_event(widget: QWidget, event: QWheelEvent, default_handler) -> None:
+    """Handle wheel events locally when possible, otherwise bubble them to an ancestor scroll area."""
+    if scrollable_widget_can_consume_wheel(widget, event):
+        default_handler()
+        return
+    if forward_wheel_event_to_ancestor_scroll_area(widget, event):
+        return
+    default_handler()
+
+
+class PropagatingScrollArea(QScrollArea):
+    """Scroll area that bubbles unused wheel input to ancestor scroll areas."""
+
+    def wheelEvent(self, event):
+        handle_scrollable_wheel_event(self, event, lambda: super(PropagatingScrollArea, self).wheelEvent(event))
+
+
+class PropagatingListWidget(QListWidget):
+    """List widget that bubbles unused wheel input to ancestor scroll areas."""
+
+    def wheelEvent(self, event):
+        handle_scrollable_wheel_event(self, event, lambda: super(PropagatingListWidget, self).wheelEvent(event))
+
+
+class PropagatingTableWidget(QTableWidget):
+    """Table widget that bubbles unused wheel input to ancestor scroll areas."""
+
+    def wheelEvent(self, event):
+        handle_scrollable_wheel_event(self, event, lambda: super(PropagatingTableWidget, self).wheelEvent(event))
+
+
+class PropagatingTextEdit(QTextEdit):
+    """Text edit that bubbles unused wheel input to ancestor scroll areas."""
+
+    def wheelEvent(self, event):
+        handle_scrollable_wheel_event(self, event, lambda: super(PropagatingTextEdit, self).wheelEvent(event))
+
+
+def build_dialog_shell(dialog: QDialog, title: str, subtitle: str) -> QVBoxLayout:
+    """Create a consistent dialog shell and return the content-card layout."""
+    dialog.setObjectName('StandardDialog')
+    outer_layout = QVBoxLayout(dialog)
+    outer_layout.setContentsMargins(18, 18, 18, 18)
+    outer_layout.setSpacing(14)
+
+    hero = QFrame()
+    hero.setObjectName('DialogHero')
+    hero_layout = QVBoxLayout(hero)
+    hero_layout.setContentsMargins(18, 16, 18, 16)
+    hero_layout.setSpacing(6)
+
+    title_label = QLabel(title)
+    title_label.setObjectName('DialogTitle')
+    hero_layout.addWidget(title_label)
+
+    subtitle_label = QLabel(subtitle)
+    subtitle_label.setObjectName('DialogSubtitle')
+    subtitle_label.setWordWrap(True)
+    hero_layout.addWidget(subtitle_label)
+    outer_layout.addWidget(hero)
+
+    scroll_area = PropagatingScrollArea()
+    scroll_area.setObjectName('DialogScrollArea')
+    scroll_area.setWidgetResizable(True)
+    scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+    scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    outer_layout.addWidget(scroll_area, 1)
+
+    scroll_contents = QWidget()
+    scroll_area.setWidget(scroll_contents)
+    scroll_layout = QVBoxLayout(scroll_contents)
+    scroll_layout.setContentsMargins(0, 0, 0, 0)
+    scroll_layout.setSpacing(0)
+
+    card = QFrame()
+    card.setObjectName('DialogCard')
+    card_layout = QVBoxLayout(card)
+    card_layout.setContentsMargins(18, 18, 18, 18)
+    card_layout.setSpacing(14)
+    scroll_layout.addWidget(card)
+    scroll_layout.addStretch(1)
+    return card_layout
+
+
+def configure_form_layout(layout: QFormLayout):
+    """Apply consistent spacing and growth settings to a form layout."""
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(12)
+    layout.setHorizontalSpacing(14)
+    layout.setVerticalSpacing(12)
+    layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+
+
+def create_dialog_section_label(text: str) -> QLabel:
+    """Create a section label for dialog content."""
+    label = QLabel(text)
+    label.setObjectName('DialogSectionLabel')
+    return label
+
+
+def create_dialog_hint_label(text: str) -> QLabel:
+    """Create a hint label for dialog content."""
+    label = QLabel(text)
+    label.setObjectName('DialogHint')
+    label.setWordWrap(True)
+    return label
+
+
+class ColorSelectionField(QWidget):
+    """Compact swatch-first color selection control."""
+
+    def __init__(self, initial_color: Optional[str] = None, allow_clear: bool = False,
+                 default_label: str = 'Default', selected_label: str = 'Color selected',
+                 parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self.allow_clear = allow_clear
+        self.default_label = default_label
+        self.selected_label = selected_label
+        self._color_value = (initial_color or '').strip() or None
+
+        self.swatch = QFrame()
+        self.swatch.setFixedSize(22, 22)
+
+        self.label = QLabel()
+        self.label.setObjectName('DialogHint')
+
+        self.pick_button = QPushButton('Pick Color')
+        self.pick_button.clicked.connect(self.pick_color)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        layout.addWidget(self.swatch)
+        layout.addWidget(self.label, 1)
+        layout.addWidget(self.pick_button)
+
+        self.clear_button: Optional[QPushButton] = None
+        if self.allow_clear:
+            self.clear_button = QPushButton('Clear')
+            self.clear_button.clicked.connect(self.clear_color)
+            layout.addWidget(self.clear_button)
+
+        self._refresh_display()
+
+    def _refresh_display(self):
+        """Refresh the swatch and descriptive label."""
+        if self._color_value:
+            resolved = resolve_hex_color(self._color_value, '#ddd4c6')
+            self.swatch.setStyleSheet(
+                f'background: {resolved}; border: 1px solid #b8a17f; border-radius: 6px;'
+            )
+            self.label.setText(self.selected_label)
+        else:
+            self.swatch.setStyleSheet(
+                'background: #efe6d8; border: 1px dashed #b8a17f; border-radius: 6px;'
+            )
+            self.label.setText(self.default_label)
+        if self.clear_button is not None:
+            self.clear_button.setEnabled(self._color_value is not None)
+
+    def pick_color(self):
+        """Open the themed color picker and store the result."""
+        initial = self._color_value or '#ffffff'
+        color = choose_color_dialog(self, 'Choose Color', initial)
+        if color is not None:
+            self._color_value = color.name()
+            self._refresh_display()
+
+    def clear_color(self):
+        """Reset to the default color state."""
+        self._color_value = None
+        self._refresh_display()
+
+    def color(self) -> Optional[str]:
+        """Return the selected color value."""
+        return self._color_value
+
+
+def choose_color_dialog(parent: QWidget, title: str, initial_color: str) -> Optional[QColor]:
+    """Show a themed non-native color dialog and return the selected color."""
+    dialog = QColorDialog(QColor(initial_color or '#ffffff'), parent)
+    dialog.setWindowTitle(title)
+    dialog.setOption(QColorDialog.ColorDialogOption.DontUseNativeDialog, True)
+    if dialog.exec() != QDialog.DialogCode.Accepted:
+        return None
+    color = dialog.currentColor()
+    return color if color.isValid() else None
+
+
+def choose_existing_directory_dialog(parent: QWidget, title: str, directory: str = '') -> str:
+    """Show a themed non-native directory picker."""
+    dialog = QFileDialog(parent, title, directory or '')
+    dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+    dialog.setFileMode(QFileDialog.FileMode.Directory)
+    dialog.setOption(QFileDialog.Option.ShowDirsOnly, True)
+    if dialog.exec() != QDialog.DialogCode.Accepted:
+        return ''
+    selected_files = dialog.selectedFiles()
+    return selected_files[0] if selected_files else ''
+
+
+def choose_open_file_dialog(parent: QWidget, title: str, directory: str = '', filter_text: str = '') -> str:
+    """Show a themed non-native open-file dialog."""
+    dialog = QFileDialog(parent, title, directory or '')
+    dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+    dialog.setFileMode(QFileDialog.FileMode.ExistingFile)
+    if filter_text:
+        dialog.setNameFilter(filter_text)
+    if dialog.exec() != QDialog.DialogCode.Accepted:
+        return ''
+    selected_files = dialog.selectedFiles()
+    return selected_files[0] if selected_files else ''
+
+
+def choose_open_files_dialog(parent: QWidget, title: str, directory: str = '', filter_text: str = '') -> List[str]:
+    """Show a themed non-native multi-file open dialog."""
+    dialog = QFileDialog(parent, title, directory or '')
+    dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+    dialog.setFileMode(QFileDialog.FileMode.ExistingFiles)
+    if filter_text:
+        dialog.setNameFilter(filter_text)
+    if dialog.exec() != QDialog.DialogCode.Accepted:
+        return []
+    return dialog.selectedFiles()
+
+
+def choose_save_file_dialog(parent: QWidget, title: str, directory: str = '', filter_text: str = '') -> str:
+    """Show a themed non-native save-file dialog."""
+    dialog = QFileDialog(parent, title, directory or '')
+    dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+    dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+    dialog.setFileMode(QFileDialog.FileMode.AnyFile)
+    if filter_text:
+        dialog.setNameFilter(filter_text)
+    if dialog.exec() != QDialog.DialogCode.Accepted:
+        return ''
+    selected_files = dialog.selectedFiles()
+    return selected_files[0] if selected_files else ''
+
+
+def open_path_with_default_app(path: str):
+    """Open a file path with the operating system default application."""
+    absolute_path = os.path.abspath(path)
+    if os.name == 'nt':
+        os.startfile(absolute_path)
+        return
+    command = ['open', absolute_path] if sys.platform == 'darwin' else ['xdg-open', absolute_path]
+    subprocess.Popen(command)
+
+
+def file_paths_from_mime_data(mime_data: QMimeData) -> List[str]:
+    """Return local file paths from dropped mime data."""
+    if mime_data is None or not mime_data.hasUrls():
+        return []
+    paths: List[str] = []
+    for url in mime_data.urls():
+        if not url.isLocalFile():
+            continue
+        local_path = os.path.abspath(url.toLocalFile())
+        if os.path.exists(local_path) and local_path not in paths:
+            paths.append(local_path)
+    return paths
 
 
 def format_card_text(board: KanbanBoard, card) -> str:
@@ -409,6 +922,80 @@ def format_card_text(board: KanbanBoard, card) -> str:
     return ' '.join(parts)
 
 
+def column_identifier(column) -> str:
+    """Return a stable string identifier for custom or legacy columns."""
+    if hasattr(column, 'id'):
+        return column.id
+    status = getattr(column, 'status', None)
+    return status.value if status is not None else ''
+
+
+def column_label(column) -> str:
+    """Return the user-facing label for a custom or legacy column."""
+    if hasattr(column, 'name'):
+        return column.name
+    status = getattr(column, 'status', None)
+    return status.value if status is not None else 'Column'
+
+
+def column_color(column) -> Optional[str]:
+    """Return the configured color for a custom column, if any."""
+    return getattr(column, 'color', None)
+
+
+def column_is_completed(column) -> bool:
+    """Return whether the column represents completed work."""
+    if hasattr(column, 'is_completed'):
+        return bool(column.is_completed)
+    return getattr(column, 'status', None) == Status.DONE
+
+
+def column_can_add_card(column) -> bool:
+    """Return whether the column should offer card creation from the UI."""
+    if hasattr(column, 'can_add_card'):
+        return bool(column.can_add_card)
+    return getattr(column, 'status', None) == Status.TODO
+
+
+def column_target_value(column):
+    """Return the board move/create target for the column."""
+    if hasattr(column, 'id'):
+        return column.id
+    return getattr(column, 'status', None)
+
+
+def resolve_column_target(board: KanbanBoard, column_token: Optional[str]):
+    """Resolve a drag-drop column token to the value expected by the board API."""
+    if not column_token:
+        return None
+    return column_token
+
+
+def clamp_drag_hotspot(point: QPoint, size: QSize) -> QPoint:
+    """Clamp a drag hotspot so it always stays within the preview pixmap."""
+    max_x = max(0, size.width() - 1)
+    max_y = max(0, size.height() - 1)
+    return QPoint(
+        min(max(point.x(), 0), max_x),
+        min(max(point.y(), 0), max_y),
+    )
+
+
+def create_drag_preview(source: QPixmap, opacity: float = 0.88) -> QPixmap:
+    """Return a softened drag preview that remains easy to align under the cursor."""
+    if source.isNull():
+        return source
+    preview = QPixmap(source.size())
+    preview.fill(Qt.GlobalColor.transparent)
+    preview.setDevicePixelRatio(source.devicePixelRatio())
+
+    painter = QPainter(preview)
+    painter.setOpacity(opacity)
+    painter.drawPixmap(0, 0, source)
+    painter.end()
+    return preview
+
+
 class OptionalDateField(QWidget):
     """A checkbox-controlled date input."""
 
@@ -416,9 +1003,14 @@ class OptionalDateField(QWidget):
         super().__init__(parent)
         self.checkbox = QCheckBox(label)
         self.editor = QDateEdit()
+        self.clear_button = QPushButton('Clear')
         self.editor.setCalendarPopup(True)
         self.editor.setDisplayFormat('yyyy-MM-dd')
+        self.editor.setSpecialValueText('')
+        self.editor.setWrapping(False)
         self.editor.setEnabled(initial_value is not None)
+        self.clear_button.setEnabled(initial_value is not None)
+        self.clear_button.setFixedWidth(60)
 
         initial_qdate = QDate.currentDate()
         if initial_value is not None:
@@ -428,9 +1020,27 @@ class OptionalDateField(QWidget):
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
         layout.addWidget(self.checkbox)
-        layout.addWidget(self.editor)
-        self.checkbox.toggled.connect(self.editor.setEnabled)
+        layout.addWidget(self.editor, 1)
+        layout.addWidget(self.clear_button)
+        self.checkbox.toggled.connect(self._set_enabled_state)
+        self.clear_button.clicked.connect(self.clear)
+
+    def _set_enabled_state(self, checked: bool):
+        """Synchronize the editor state with the checkbox."""
+        self.editor.setEnabled(checked)
+        self.clear_button.setEnabled(checked)
+        if checked:
+            if not self.editor.date().isValid():
+                self.editor.setDate(QDate.currentDate())
+            self.editor.setFocus(Qt.FocusReason.TabFocusReason)
+            self.editor.selectAll()
+
+    def clear(self):
+        """Disable the field and drop its value from the dialog state."""
+        self.checkbox.setChecked(False)
+        self.editor.setDate(QDate.currentDate())
 
     def value(self) -> Optional[date]:
         """Return the selected date, if enabled."""
@@ -443,11 +1053,19 @@ class OptionalDateField(QWidget):
 class CardTile(QFrame):
     """Structured card widget used inside each column list."""
 
-    def __init__(self, board: KanbanBoard, card, selected: bool = False, parent: Optional[QWidget] = None):
+    def __init__(self, board: KanbanBoard, card, selected: bool = False,
+                 file_drop_callback=None, select_callback=None,
+                 edit_callback=None, context_action_callback=None,
+                 parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.board = board
         self.card = card
         self.selected = selected
+        self.file_drop_callback = file_drop_callback
+        self.select_callback = select_callback
+        self.edit_callback = edit_callback
+        self.context_action_callback = context_action_callback
+        self._drop_highlight = False
 
         self.background = resolve_hex_color(card.color, '#fffaf3')
         self.foreground = contrasting_text_color(self.background)
@@ -456,47 +1074,112 @@ class CardTile(QFrame):
         self.border_color = '#7d3b14' if selected else ('#a63c30' if card.has_past_end_date() and not board.is_card_done(card) else '#d7c4aa')
 
         self.setObjectName('CardTile')
+        self.setAcceptDrops(True)
         self._build_ui()
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(24)
+        shadow.setOffset(0, 5)
+        shadow.setColor(QColor(64, 39, 21, 38))
+        self.setGraphicsEffect(shadow)
         self._apply_style()
+
+    def _create_badge(self, text: str, background: str, foreground: str, border: Optional[str] = None) -> QLabel:
+        """Create a compact badge label for card metadata."""
+        label = QLabel(text)
+        label.setFixedHeight(24)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setStyleSheet(
+            f"""
+            background: {background};
+            color: {foreground};
+            border: 1px solid {border or background};
+            border-radius: 9px;
+            padding: 3px 8px;
+            font-size: 6.5pt;
+            font-weight: 700;
+            """
+        )
+        return label
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
 
         priority_bar = QFrame()
-        priority_bar.setFixedHeight(5)
-        priority_bar.setStyleSheet(f'background: {self.priority_color}; border-radius: 2px;')
+        priority_bar.setFixedHeight(6)
+        priority_bar.setStyleSheet(f'background: {self.priority_color}; border-radius: 3px;')
         layout.addWidget(priority_bar)
 
-        title_label = QLabel(self.card.title)
+        header_row = QWidget()
+        header_layout = QHBoxLayout(header_row)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(6)
+        header_layout.addWidget(
+            self._create_badge(
+                priority_label(self.card.priority).upper(),
+                rgba_color(self.priority_color, 0.14),
+                self.priority_color,
+                rgba_color(self.priority_color, 0.30),
+            )
+        )
+
+        card_type = self.board.get_card_type(self.card.card_type_id)
+        if card_type is None:
+            card_type = self.board.get_default_card_type()
+        if card_type is not None:
+            header_layout.addWidget(
+                self._create_badge(
+                    card_type.name,
+                    rgba_color(self.foreground, 0.08),
+                    self.foreground,
+                    rgba_color(self.foreground, 0.12),
+                )
+            )
+
+        if self.card.has_past_end_date() and not self.board.is_card_done(self.card):
+            header_layout.addWidget(
+                self._create_badge('LATE', 'rgba(166, 60, 48, 0.14)', '#a63c30', 'rgba(166, 60, 48, 0.28)')
+            )
+        header_layout.addStretch(1)
+        if self.card.assignee:
+            header_layout.addWidget(
+                self._create_badge(
+                    f'@{self.card.assignee}',
+                    rgba_color(self.foreground, 0.08),
+                    self.foreground,
+                    rgba_color(self.foreground, 0.12),
+                )
+            )
+        layout.addWidget(header_row)
+
+        title_label = QLabel(clipped_title(self.card.title))
         title_label.setWordWrap(True)
-        title_label.setStyleSheet(f'font-size: 11pt; font-weight: 700; color: {self.foreground}; background: transparent;')
+        title_label.setStyleSheet(
+            f'font-size: 9pt; font-weight: 700; color: {self.foreground}; background: transparent;'
+        )
         layout.addWidget(title_label)
+
+        meta_parts = []
+        if self.card.project:
+            meta_parts.append(self.card.project)
+        parent_card = self.board.get_parent_card(self.card)
+        if parent_card is not None:
+            meta_parts.append(f'Subcard of {parent_card.title}')
+        if meta_parts:
+            meta_label = QLabel(' | '.join(meta_parts))
+            meta_label.setWordWrap(True)
+            meta_label.setStyleSheet(f'color: {self.muted}; background: transparent; font-size: 7pt; font-weight: 600;')
+            layout.addWidget(meta_label)
 
         description = clipped_description(self.card.description)
         if description:
             description_label = QLabel(description)
             description_label.setWordWrap(True)
-            description_label.setStyleSheet(f'color: {self.muted}; background: transparent; line-height: 1.3;')
+            description_label.setStyleSheet(
+                f'color: {self.muted}; background: transparent; font-size: 7.5pt;'
+            )
             layout.addWidget(description_label)
-
-        details = []
-        card_type = self.board.get_card_type(self.card.card_type_id)
-        if card_type is None:
-            card_type = self.board.get_default_card_type()
-        details.append(priority_label(self.card.priority))
-        if card_type is not None:
-            details.append(card_type.name)
-        if self.card.project:
-            details.append(self.card.project)
-        if self.card.assignee:
-            details.append(f'@{self.card.assignee}')
-        if details:
-            details_label = QLabel(' | '.join(details))
-            details_label.setWordWrap(True)
-            details_label.setStyleSheet(f'color: {self.muted}; background: transparent; font-weight: 600;')
-            layout.addWidget(details_label)
 
         schedule_parts = []
         schedule_text = schedule_summary(self.card)
@@ -504,62 +1187,261 @@ class CardTile(QFrame):
             schedule_parts.append(schedule_text)
         if self.card.has_past_end_date() and not self.board.is_card_done(self.card):
             schedule_parts.append('Late')
-        parent_card = self.board.get_parent_card(self.card)
-        if parent_card is not None:
-            schedule_parts.append(f'Subcard of {parent_card.title}')
-        else:
+        if parent_card is None:
             completed, total = self.board.get_subcard_progress(self.card.id)
             if total:
                 schedule_parts.append(f'Subcards {completed}/{total}')
         if schedule_parts:
             schedule_label = QLabel(' | '.join(schedule_parts))
             schedule_label.setWordWrap(True)
-            schedule_label.setStyleSheet(f'color: {self.muted}; background: transparent;')
+            schedule_label.setStyleSheet(
+                f'color: {self.foreground}; background: {rgba_color(self.foreground, 0.055)}; '
+                f'border: 1px solid {rgba_color(self.foreground, 0.08)}; border-radius: 10px; padding: 7px 9px; font-size: 7.5pt;'
+            )
             layout.addWidget(schedule_label)
 
         if self.card.tags:
             tags_label = QLabel(' '.join(f'#{tag}' for tag in self.card.tags))
             tags_label.setWordWrap(True)
-            tags_label.setStyleSheet(f'color: {self.foreground}; background: transparent; font-weight: 600;')
+            tags_label.setStyleSheet(
+                f'color: {self.foreground}; background: {rgba_color(self.priority_color, 0.08)}; '
+                f'border-radius: 10px; padding: 6px 8px; font-weight: 600; font-size: 8pt;'
+            )
             layout.addWidget(tags_label)
 
-        extras = []
+        footer_badges = []
         if self.card.notes:
-            extras.append(f'{len(self.card.notes)} note' + ('' if len(self.card.notes) == 1 else 's'))
+            footer_badges.append(
+                self._create_badge(
+                    f'{len(self.card.notes)} note' + ('' if len(self.card.notes) == 1 else 's'),
+                    rgba_color(self.foreground, 0.06),
+                    self.muted,
+                    rgba_color(self.foreground, 0.09),
+                )
+            )
         if self.card.attachments:
-            extras.append(f'{len(self.card.attachments)} attachment' + ('' if len(self.card.attachments) == 1 else 's'))
-        if extras:
-            extras_label = QLabel(' | '.join(extras))
-            extras_label.setWordWrap(True)
-            extras_label.setStyleSheet(f'color: {self.muted}; background: transparent;')
-            layout.addWidget(extras_label)
+            footer_badges.append(
+                self._create_badge(
+                    f'{len(self.card.attachments)} attachment' + ('' if len(self.card.attachments) == 1 else 's'),
+                    rgba_color(self.foreground, 0.06),
+                    self.muted,
+                    rgba_color(self.foreground, 0.09),
+                )
+            )
+        if footer_badges:
+            footer_row = QWidget()
+            footer_layout = QHBoxLayout(footer_row)
+            footer_layout.setContentsMargins(0, 0, 0, 0)
+            footer_layout.setSpacing(6)
+            for badge in footer_badges:
+                footer_layout.addWidget(badge)
+            footer_layout.addStretch(1)
+            layout.addWidget(footer_row)
 
     def _apply_style(self):
+        active_border = '#3e7a5e' if self._drop_highlight else self.border_color
+        soft_top = QColor(self.background).lighter(104).name()
+        soft_bottom = QColor(self.background).darker(102).name()
         self.setStyleSheet(
             f"""
             QFrame#CardTile {{
-                background: {self.background};
-                border: 2px solid {self.border_color};
-                border-radius: 12px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 {soft_top}, stop:1 {soft_bottom});
+                border: 2px solid {active_border};
+                border-radius: 14px;
             }}
             """
         )
 
+    def dragEnterEvent(self, event):
+        """Accept dropped files for attachment creation."""
+        if self.file_drop_callback is None:
+            event.ignore()
+            return
+        paths = file_paths_from_mime_data(event.mimeData())
+        if not paths:
+            event.ignore()
+            return
+        self._drop_highlight = True
+        self._apply_style()
+        event.acceptProposedAction()
+
+    def dragLeaveEvent(self, event):
+        """Clear file-drop highlight state."""
+        self._drop_highlight = False
+        self._apply_style()
+        super().dragLeaveEvent(event)
+
+    def dropEvent(self, event):
+        """Handle dropped files on a card tile."""
+        paths = file_paths_from_mime_data(event.mimeData())
+        self._drop_highlight = False
+        self._apply_style()
+        if not paths or self.file_drop_callback is None:
+            event.ignore()
+            return
+        self.file_drop_callback(self.card.id, paths)
+        event.acceptProposedAction()
+
+    def mousePressEvent(self, event):
+        """Let the parent item view handle left-button selection and drag initiation."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            event.ignore()
+            return
+        super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        """Edit the card from a normal left double-click on the embedded tile."""
+        if event.button() == Qt.MouseButton.LeftButton and self.edit_callback is not None:
+            self.edit_callback(self.card.id)
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def contextMenuEvent(self, event):
+        """Show card actions for the current tile."""
+        menu = QMenu(self)
+        edit_action = menu.addAction('Edit Card')
+        add_subcard_action = None
+        if self.context_action_callback is not None and not self.card.parent_id:
+            add_subcard_action = menu.addAction('Add Subcard')
+        chosen_action = menu.exec(event.globalPos())
+        if chosen_action == edit_action and self.edit_callback is not None:
+            self.edit_callback(self.card.id)
+            event.accept()
+            return
+        if chosen_action == add_subcard_action and self.context_action_callback is not None:
+            self.context_action_callback(self.card.id, 'add_subcard')
+            event.accept()
+            return
+        super().contextMenuEvent(event)
+
     def sizeHint(self) -> QSize:
-        hint = super().sizeHint()
-        return QSize(hint.width(), max(hint.height(), 132))
+        width = self.width() if self.width() > 0 else super().sizeHint().width()
+        return QSize(width, self.heightForWidth(width))
+
+    def minimumSizeHint(self) -> QSize:
+        hint = super().minimumSizeHint()
+        width = self.width() if self.width() > 0 else max(hint.width(), super().sizeHint().width())
+        return QSize(width, self.heightForWidth(width))
+
+    def hasHeightForWidth(self) -> bool:
+        return True
+
+    def heightForWidth(self, width: int) -> int:
+        layout = self.layout()
+        if layout is None:
+            return max(super().sizeHint().height(), 156)
+        constrained_width = max(width, 120)
+        return max(layout.totalHeightForWidth(constrained_width), 156)
 
 
 class CardListWidget(QListWidget):
     """List widget that keeps custom card tiles sized to the column width."""
 
-    def __init__(self, parent: Optional[QWidget] = None):
+    CARD_MIME_TYPE = 'application/x-kanban-card'
+
+    def __init__(self, column_id: Optional[str] = None, board_view=None, parent: Optional[QWidget] = None):
         super().__init__(parent)
+        self.column_id = column_id
+        self.board_view = board_view
+        self._drop_highlight = False
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.viewport().setAcceptDrops(True)
+        self.setDropIndicatorShown(False)
+
+    def _apply_drop_style(self):
+        border_style = '2px solid #3e7a5e' if self._drop_highlight else 'none'
+        background = '#eef7f0' if self._drop_highlight else 'transparent'
+        padding = '8px' if self._drop_highlight else '0'
+        self.setStyleSheet(
+            f"""
+            QListWidget {{
+                background: {background};
+                border: {border_style};
+                border-radius: 14px;
+                padding: {padding};
+                outline: 0;
+            }}
+            QListWidget::item {{
+                background: transparent;
+                border: none;
+                padding: 0;
+                margin: 0 0 10px 0;
+            }}
+            QListWidget::item:selected {{
+                background: transparent;
+                border: none;
+            }}
+            """
+        )
+
+    def startDrag(self, supported_actions):
+        """Start a drag carrying the selected card metadata."""
+        item = self.currentItem()
+        if item is None:
+            return
+        payload = item.data(Qt.ItemDataRole.UserRole) or {}
+        card_id = payload.get('card_id')
+        if not card_id:
+            return
+        mime_data = QMimeData()
+        mime_payload = {
+            'card_id': card_id,
+            'source_column_id': payload.get('column_id') or self.column_id,
+        }
+        mime_data.setData(self.CARD_MIME_TYPE, json.dumps(mime_payload).encode('utf-8'))
+
+        drag = QDrag(self)
+        drag.setMimeData(mime_data)
+        widget = self.itemWidget(item)
+        if widget is not None:
+            preview = create_drag_preview(widget.grab())
+            drag.setPixmap(preview)
+            drag.setHotSpot(clamp_drag_hotspot(widget.mapFromGlobal(QCursor.pos()), preview.size()))
+        drag.exec(Qt.DropAction.MoveAction)
+
+    def dragEnterEvent(self, event):
+        """Accept card drags into a target column list."""
+        if event.mimeData().hasFormat(self.CARD_MIME_TYPE):
+            self._drop_highlight = True
+            self._apply_drop_style()
+            event.acceptProposedAction()
+            return
+        event.ignore()
+
+    def dragMoveEvent(self, event):
+        """Keep accepting valid card drags over the column list."""
+        if event.mimeData().hasFormat(self.CARD_MIME_TYPE):
+            event.acceptProposedAction()
+            return
+        event.ignore()
+
+    def dragLeaveEvent(self, event):
+        """Clear target highlighting when a drag leaves the list."""
+        self._drop_highlight = False
+        self._apply_drop_style()
+        super().dragLeaveEvent(event)
+
+    def dropEvent(self, event):
+        """Move a dragged card into this column."""
+        self._drop_highlight = False
+        self._apply_drop_style()
+        if not event.mimeData().hasFormat(self.CARD_MIME_TYPE) or self.board_view is None:
+            event.ignore()
+            return
+        payload = json.loads(bytes(event.mimeData().data(self.CARD_MIME_TYPE)).decode('utf-8'))
+        self.board_view.handle_card_drop(payload.get('card_id'), payload.get('source_column_id'), self.column_id)
+        event.acceptProposedAction()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.refresh_card_sizes()
+
+    def wheelEvent(self, event):
+        handle_scrollable_wheel_event(self, event, lambda: super(CardListWidget, self).wheelEvent(event))
 
     def refresh_card_sizes(self):
         """Resize card widgets to the available viewport width and refresh item heights."""
@@ -573,7 +1455,176 @@ class CardListWidget(QListWidget):
                 continue
             widget.setFixedWidth(available_width)
             widget.updateGeometry()
-            item.setSizeHint(QSize(available_width, widget.sizeHint().height()))
+            if widget.hasHeightForWidth():
+                height = widget.heightForWidth(available_width)
+            else:
+                height = widget.sizeHint().height()
+            widget.setMinimumHeight(height)
+            item.setSizeHint(QSize(available_width, height))
+
+
+class ColumnTitleButton(QPushButton):
+    """Header title control used to select or edit a column."""
+
+    def __init__(self, text: str, click_callback=None, double_click_callback=None, parent: Optional[QWidget] = None):
+        super().__init__(text, parent)
+        self._double_click_callback = double_click_callback
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFlat(True)
+        if click_callback is not None:
+            self.clicked.connect(click_callback)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self._double_click_callback is not None:
+            self._double_click_callback()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+
+class ColumnAddButton(QPushButton):
+    """Circular add-card button with a painted plus icon."""
+
+    def __init__(self, accent_color: str, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self.accent_color = resolve_hex_color(accent_color, '#8f4a1d')
+        self.setObjectName('ColumnAddButton')
+        self.setToolTip('Add card')
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFixedSize(28, 28)
+        self.setStyleSheet(
+            f"QPushButton#ColumnAddButton {{ background: {rgba_color(self.accent_color, 0.14)}; border: 1px solid {rgba_color(self.accent_color, 0.28)}; border-radius: 14px; }}"
+            f"QPushButton#ColumnAddButton:hover {{ background: {rgba_color(self.accent_color, 0.22)}; border-color: {rgba_color(self.accent_color, 0.40)}; }}"
+            f"QPushButton#ColumnAddButton:pressed {{ background: {rgba_color(self.accent_color, 0.30)}; }}"
+        )
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        pen = QPen(QColor(self.accent_color))
+        pen.setWidth(2)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        center_x = self.width() / 2
+        center_y = self.height() / 2
+        arm = 5
+        painter.drawLine(QPointF(center_x - arm, center_y), QPointF(center_x + arm, center_y))
+        painter.drawLine(QPointF(center_x, center_y - arm), QPointF(center_x, center_y + arm))
+        painter.end()
+
+
+class ColumnGroupBox(QGroupBox):
+    """Column widget that supports drag reordering."""
+
+    COLUMN_MIME_TYPE = 'application/x-kanban-column'
+    DRAG_HANDLE_HEIGHT = 56
+
+    def __init__(self, title: str, column_id: str, board_view, selected: bool, parent: Optional[QWidget] = None):
+        super().__init__(title, parent)
+        self.column_id = column_id
+        self.board_view = board_view
+        self.selected = selected
+        self._drop_highlight = False
+        self._press_pos = None
+        self.setAcceptDrops(True)
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(30)
+        shadow.setOffset(0, 8)
+        shadow.setColor(QColor(74, 49, 30, 26))
+        self.setGraphicsEffect(shadow)
+        self._apply_style()
+
+    def _apply_style(self):
+        border_color = '#3e7a5e' if self._drop_highlight else ('#7d3b14' if self.selected else '#ccb391')
+        title_background = 'rgba(125, 59, 20, 0.12)' if self.selected else 'rgba(98, 76, 58, 0.08)'
+        self.setStyleSheet(
+            f"""
+            QGroupBox {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #fdf7ed, stop:1 #f3e6d5);
+                border: 2px solid {border_color};
+                border-radius: 18px;
+                margin-top: 12px;
+                padding-top: 0px;
+            }}
+            """
+        )
+
+    def mousePressEvent(self, event):
+        """Record a potential header drag start."""
+        if event.button() == Qt.MouseButton.LeftButton and event.position().y() <= self.DRAG_HANDLE_HEIGHT:
+            self._press_pos = event.position().toPoint()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        """Start a column drag when the header is dragged."""
+        if self._press_pos is None:
+            super().mouseMoveEvent(event)
+            return
+        if not (event.buttons() & Qt.MouseButton.LeftButton):
+            super().mouseMoveEvent(event)
+            return
+        if (event.position().toPoint() - self._press_pos).manhattanLength() < QApplication.startDragDistance():
+            super().mouseMoveEvent(event)
+            return
+        mime_data = QMimeData()
+        mime_data.setData(self.COLUMN_MIME_TYPE, self.column_id.encode('utf-8'))
+        drag = QDrag(self)
+        drag.setMimeData(mime_data)
+        preview = create_drag_preview(self.grab())
+        drag.setPixmap(preview)
+        drag.setHotSpot(clamp_drag_hotspot(self._press_pos, preview.size()))
+        self._press_pos = None
+        drag.exec(Qt.DropAction.MoveAction)
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        """Clear any pending drag state."""
+        self._press_pos = None
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        """Open column editing when the header is double-clicked."""
+        if event.button() == Qt.MouseButton.LeftButton and event.position().y() <= 34:
+            self.board_view.handle_column_double_click(self.column_id)
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def dragEnterEvent(self, event):
+        """Accept column drags so the user can reorder columns."""
+        if event.mimeData().hasFormat(self.COLUMN_MIME_TYPE):
+            self._drop_highlight = True
+            self._apply_style()
+            event.acceptProposedAction()
+            return
+        event.ignore()
+
+    def dragMoveEvent(self, event):
+        """Continue accepting valid column drags."""
+        if event.mimeData().hasFormat(self.COLUMN_MIME_TYPE):
+            event.acceptProposedAction()
+            return
+        event.ignore()
+
+    def dragLeaveEvent(self, event):
+        """Clear highlight when a column drag leaves."""
+        self._drop_highlight = False
+        self._apply_style()
+        super().dragLeaveEvent(event)
+
+    def dropEvent(self, event):
+        """Reorder columns relative to this target column."""
+        self._drop_highlight = False
+        self._apply_style()
+        if not event.mimeData().hasFormat(self.COLUMN_MIME_TYPE):
+            event.ignore()
+            return
+        dragged_column_id = bytes(event.mimeData().data(self.COLUMN_MIME_TYPE)).decode('utf-8')
+        insert_after = event.position().x() > (self.width() / 2)
+        self.board_view.handle_column_drop(dragged_column_id, self.column_id, insert_after)
+        event.acceptProposedAction()
 
 
 class DueDateViewDialog(QDialog):
@@ -730,7 +1781,7 @@ class DueDateViewDialog(QDialog):
         table_layout.setContentsMargins(12, 12, 12, 12)
         table_layout.setSpacing(10)
 
-        self.table = QTableWidget(0, 7)
+        self.table = PropagatingTableWidget(0, 7)
         self.table.setObjectName('DueDateTable')
         self.table.setHorizontalHeaderLabels(['Card', 'Column', 'Start', 'Due', 'State', 'Assignee', 'Priority'])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -905,8 +1956,9 @@ class BoardDialog(QDialog):
     def __init__(self, default_directory: str, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setWindowTitle('Create Board')
+        self.resize(620, 420)
         self.name_edit = QLineEdit()
-        self.description_edit = QTextEdit()
+        self.description_edit = PropagatingTextEdit()
         self.description_edit.setFixedHeight(90)
         self.directory_edit = QLineEdit(default_directory)
         browse_button = QPushButton('Browse')
@@ -918,19 +1970,28 @@ class BoardDialog(QDialog):
         directory_layout.addWidget(self.directory_edit)
         directory_layout.addWidget(browse_button)
 
-        form = QFormLayout(self)
+        content_layout = build_dialog_shell(
+            self,
+            'Create Board',
+            'Create a new board and choose where its data should be stored.',
+        )
+        content_layout.addWidget(create_dialog_section_label('Board Details'))
+        form = QFormLayout()
+        configure_form_layout(form)
         form.addRow('Name', self.name_edit)
         form.addRow('Description', self.description_edit)
         form.addRow('Storage Folder', directory_row)
+        content_layout.addLayout(form)
+        content_layout.addWidget(create_dialog_hint_label('Board names should be short and identifiable. The storage folder can be inside or outside the default boards directory.'))
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        form.addRow(buttons)
+        content_layout.addWidget(buttons)
 
     def choose_directory(self):
         """Choose a storage directory."""
-        directory = QFileDialog.getExistingDirectory(self, 'Select Board Storage Folder', self.directory_edit.text())
+        directory = choose_existing_directory_dialog(self, 'Select Board Storage Folder', self.directory_edit.text())
         if directory:
             self.directory_edit.setText(directory)
 
@@ -956,43 +2017,45 @@ class ColumnDialog(QDialog):
     def __init__(self, column: Optional[CustomColumn] = None, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setWindowTitle('Column')
-        self.name_edit = QLineEdit(column.name if column else '')
-        self.color_edit = QLineEdit(column.color if column else '#2196F3')
+        self.resize(560, 360)
+        self.name_edit = QLineEdit()
+        self.name_edit.setText(column.name if column is not None else '')
+        self.color_field = ColorSelectionField(
+            initial_color=column.color if column is not None else '#2196F3',
+            allow_clear=False,
+            default_label='Required',
+            selected_label='Color selected',
+        )
         self.completed_check = QCheckBox('Completed column')
-        self.completed_check.setChecked(bool(column and column.is_completed))
+        self.completed_check.setChecked(bool(column is not None and column.is_completed))
         self.add_card_check = QCheckBox('Show add-card action')
-        self.add_card_check.setChecked(bool(column and column.can_add_card))
-        color_button = QPushButton('Pick Color')
-        color_button.clicked.connect(self.choose_color)
+        self.add_card_check.setChecked(bool(column is not None and column.can_add_card))
 
-        color_row = QWidget()
-        color_layout = QHBoxLayout(color_row)
-        color_layout.setContentsMargins(0, 0, 0, 0)
-        color_layout.addWidget(self.color_edit)
-        color_layout.addWidget(color_button)
-
-        form = QFormLayout(self)
+        content_layout = build_dialog_shell(
+            self,
+            'Column Settings',
+            'Choose the name, accent color, and workflow behavior for this column.',
+        )
+        content_layout.addWidget(create_dialog_section_label('Column Details'))
+        form = QFormLayout()
+        configure_form_layout(form)
         form.addRow('Name', self.name_edit)
-        form.addRow('Color', color_row)
+        form.addRow('Color', self.color_field)
         form.addRow('', self.completed_check)
         form.addRow('', self.add_card_check)
+        content_layout.addLayout(form)
+        content_layout.addWidget(create_dialog_hint_label('Completed columns are treated as done. Add-card actions make the column a creation target from the board view.'))
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        form.addRow(buttons)
-
-    def choose_color(self):
-        """Choose a column color."""
-        color = QColorDialog.getColor(QColor(self.color_edit.text() or '#2196F3'), self, 'Choose Column Color')
-        if color.isValid():
-            self.color_edit.setText(color.name())
+        content_layout.addWidget(buttons)
 
     def values(self) -> Dict[str, object]:
         """Return dialog values."""
         return {
             'name': self.name_edit.text().strip(),
-            'color': self.color_edit.text().strip() or '#2196F3',
+            'color': self.color_field.color() or '#2196F3',
             'is_completed': self.completed_check.isChecked(),
             'can_add_card': self.add_card_check.isChecked(),
         }
@@ -1011,8 +2074,9 @@ class ReorderColumnsDialog(QDialog):
     def __init__(self, columns: List[CustomColumn], parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setWindowTitle('Reorder Columns')
+        self.resize(560, 440)
         self.columns = list(columns)
-        self.list_widget = QListWidget()
+        self.list_widget = PropagatingListWidget()
         self.refresh_items()
 
         up_button = QPushButton('Move Up')
@@ -1026,13 +2090,19 @@ class ReorderColumnsDialog(QDialog):
         button_layout.addWidget(up_button)
         button_layout.addWidget(down_button)
 
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.list_widget)
-        layout.addWidget(button_row)
+        content_layout = build_dialog_shell(
+            self,
+            'Reorder Columns',
+            'Adjust the sequence of columns as they appear in the board view.',
+        )
+        content_layout.addWidget(create_dialog_section_label('Column Order'))
+        content_layout.addWidget(self.list_widget, 1)
+        content_layout.addWidget(create_dialog_hint_label('Select a column, then use Move Up or Move Down until the order is correct.'))
+        content_layout.addWidget(button_row)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        content_layout.addWidget(buttons)
 
     def refresh_items(self):
         """Refresh the list content."""
@@ -1068,59 +2138,53 @@ class ReorderColumnsDialog(QDialog):
 class CardTypeDialog(QDialog):
     """Dialog for creating or editing a card type."""
 
-    def __init__(self, card_type: Optional[CardType] = None, is_default: bool = False, parent: Optional[QWidget] = None):
+    def __init__(self, card_type: Optional[CardType] = None, is_default: bool = False,
+                 board: Optional[KanbanBoard] = None, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.card_type = card_type
         self.is_default = is_default
         self.setWindowTitle('Edit Card Type' if card_type else 'Create Card Type')
+        self.resize(660, 480)
 
         self.name_edit = QLineEdit(card_type.name if card_type else '')
         self.name_edit.setEnabled(not is_default)
-        self.description_edit = QTextEdit(card_type.description if card_type else '')
+        self.description_edit = PropagatingTextEdit(card_type.description if card_type else '')
         self.description_edit.setFixedHeight(100)
-        self.project_edit = QLineEdit(card_type.default_project or '' if card_type else '')
-        self.color_edit = QLineEdit(card_type.default_color or '' if card_type else '')
-        color_button = QPushButton('Pick Color')
-        color_button.clicked.connect(self.choose_color)
-        clear_color_button = QPushButton('Clear')
-        clear_color_button.clicked.connect(lambda: self.color_edit.clear())
+        self.project_edit = create_project_name_combo(board, card_type.default_project if card_type else None)
+        self.color_field = ColorSelectionField(
+            initial_color=card_type.default_color if card_type else None,
+            allow_clear=True,
+            default_label='Default color',
+            selected_label='Preset color selected',
+        )
 
-        color_row = QWidget()
-        color_layout = QHBoxLayout(color_row)
-        color_layout.setContentsMargins(0, 0, 0, 0)
-        color_layout.addWidget(self.color_edit)
-        color_layout.addWidget(color_button)
-        color_layout.addWidget(clear_color_button)
-
-        info_label = QLabel('Card types can define reusable project and color presets. The default type cannot be renamed or deleted.')
-        info_label.setWordWrap(True)
-
-        layout = QFormLayout(self)
+        content_layout = build_dialog_shell(
+            self,
+            'Card Type Preset',
+            'Define reusable metadata that can prefill card creation fields across the board.',
+        )
+        content_layout.addWidget(create_dialog_section_label('Preset Details'))
+        layout = QFormLayout()
+        configure_form_layout(layout)
         layout.addRow('Name', self.name_edit)
         layout.addRow('Description', self.description_edit)
         layout.addRow('Project Preset', self.project_edit)
-        layout.addRow('Color Preset', color_row)
-        layout.addRow('', info_label)
+        layout.addRow('Color Preset', self.color_field)
+        content_layout.addLayout(layout)
+        content_layout.addWidget(create_dialog_hint_label('Card types can define reusable project and color presets. The default type cannot be renamed or deleted.'))
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        layout.addRow(buttons)
-
-    def choose_color(self):
-        """Choose a preset color."""
-        initial = self.color_edit.text().strip() or '#ffffff'
-        color = QColorDialog.getColor(QColor(initial), self, 'Choose Card Type Color')
-        if color.isValid():
-            self.color_edit.setText(color.name())
+        content_layout.addWidget(buttons)
 
     def values(self) -> Dict[str, Optional[str]]:
         """Return the dialog values."""
         return {
             'name': self.name_edit.text().strip(),
             'description': self.description_edit.toPlainText().strip(),
-            'default_project': self.project_edit.text().strip() or None,
-            'default_color': self.color_edit.text().strip() or None,
+            'default_project': self.project_edit.currentText().strip() or None,
+            'default_color': self.color_field.color(),
         }
 
     def accept(self):
@@ -1140,21 +2204,24 @@ class CardTypesBrowserDialog(QDialog):
     def __init__(self, board: KanbanBoard, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.board = board
+        self.selected_card_type_id: Optional[str] = None
         self.setWindowTitle('Card Types')
-        self.resize(860, 520)
+        self.resize(920, 580)
 
-        layout = QVBoxLayout(self)
+        content_layout = build_dialog_shell(
+            self,
+            'Card Types',
+            'Review reusable card presets, their project and color defaults, and how widely each one is used.',
+        )
+        content_layout.addWidget(create_dialog_section_label('Configured Types'))
 
-        intro = QLabel('Browse the reusable card types configured for this board, including project presets, color presets, and usage counts.')
-        intro.setWordWrap(True)
-        layout.addWidget(intro)
-
-        self.table = QTableWidget(0, 6)
+        self.table = PropagatingTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(['Name', 'Description', 'Project Preset', 'Color Preset', 'Cards', 'Flags'])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
+        self.table.itemDoubleClicked.connect(lambda _item: self._activate_selected_card_type())
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
@@ -1162,11 +2229,12 @@ class CardTypesBrowserDialog(QDialog):
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-        layout.addWidget(self.table, 1)
+        content_layout.addWidget(self.table, 1)
+        content_layout.addWidget(create_dialog_hint_label('Default marks the fallback type for new cards. Last used reflects the preset currently remembered for quick card creation.'))
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        content_layout.addWidget(buttons)
 
         self.refresh_rows()
 
@@ -1188,7 +2256,7 @@ class CardTypesBrowserDialog(QDialog):
             swatch.setStyleSheet(
                 f'background: {resolved}; border: 1px solid #b8a17f; border-radius: 5px;'
             )
-            label.setText(resolved)
+            label.setText('Preset selected')
         else:
             swatch.setStyleSheet(
                 'background: #efe6d8; border: 1px dashed #b8a17f; border-radius: 5px;'
@@ -1228,19 +2296,170 @@ class CardTypesBrowserDialog(QDialog):
             self.table.setCellWidget(row_index, 3, self._create_color_swatch(card_type.default_color))
             self.table.setRowHeight(row_index, 36)
 
+    def _activate_selected_card_type(self):
+        """Accept the dialog with the currently selected card type."""
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        item = self.table.item(row, 0)
+        if item is None:
+            return
+        self.selected_card_type_id = item.data(Qt.ItemDataRole.UserRole)
+        if self.selected_card_type_id:
+            self.accept()
+
+
+class ProjectDialog(QDialog):
+    """Dialog for creating or editing a managed project."""
+
+    def __init__(self, project: Optional[Project] = None, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self.project = project
+        self.setWindowTitle('Edit Project' if project else 'Create Project')
+        self.resize(660, 420)
+
+        self.name_edit = QLineEdit(project.name if project else '')
+        self.description_edit = PropagatingTextEdit(project.description if project else '')
+        self.description_edit.setFixedHeight(120)
+
+        content_layout = build_dialog_shell(
+            self,
+            'Project',
+            'Define reusable project names so cards and card-type presets can reference them consistently.',
+        )
+        content_layout.addWidget(create_dialog_section_label('Project Details'))
+        layout = QFormLayout()
+        configure_form_layout(layout)
+        layout.addRow('Name', self.name_edit)
+        layout.addRow('Description', self.description_edit)
+        content_layout.addLayout(layout)
+        content_layout.addWidget(create_dialog_hint_label('Renaming a project updates cards and any card-type project presets that reference it.'))
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        content_layout.addWidget(buttons)
+
+    def values(self) -> Dict[str, str]:
+        """Return the dialog values."""
+        return {
+            'name': self.name_edit.text().strip(),
+            'description': self.description_edit.toPlainText().strip(),
+        }
+
+    def accept(self):
+        """Validate before closing."""
+        if not self.name_edit.text().strip():
+            QMessageBox.warning(self, 'Missing Name', 'Project name is required.')
+            return
+        super().accept()
+
+
+class ProjectsBrowserDialog(QDialog):
+    """Read-only browser for managed projects and their usage counts."""
+
+    def __init__(self, board: KanbanBoard, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self.board = board
+        self.selected_project_id: Optional[str] = None
+        self.setWindowTitle('Projects')
+        self.resize(900, 560)
+
+        content_layout = build_dialog_shell(
+            self,
+            'Projects',
+            'Review managed project names, their descriptions, and how widely they are referenced across the board.',
+        )
+        content_layout.addWidget(create_dialog_section_label('Configured Projects'))
+
+        self.table = PropagatingTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(['Name', 'Description', 'Cards', 'Card Type Presets'])
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.verticalHeader().setVisible(False)
+        self.table.itemDoubleClicked.connect(lambda _item: self._activate_selected_project())
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        content_layout.addWidget(self.table, 1)
+        content_layout.addWidget(create_dialog_hint_label('Double-click a project to open it for editing. Deleting a project can clear or reassign both card references and card-type presets.'))
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(self.reject)
+        content_layout.addWidget(buttons)
+
+        self.refresh_rows()
+
+    def refresh_rows(self):
+        """Populate the browser rows."""
+        projects = self.board.get_projects_ordered()
+        self.table.setRowCount(len(projects))
+        for row_index, project in enumerate(projects):
+            values = [
+                project.name,
+                project.description or '—',
+                str(len(self.board.get_cards_by_project(project.id))),
+                str(len(self.board.get_card_types_by_project(project.id))),
+            ]
+            for column_index, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                if column_index == 0:
+                    item.setData(Qt.ItemDataRole.UserRole, project.id)
+                self.table.setItem(row_index, column_index, item)
+            self.table.setRowHeight(row_index, 36)
+
+    def _activate_selected_project(self):
+        """Accept the dialog with the currently selected project."""
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        item = self.table.item(row, 0)
+        if item is None:
+            return
+        self.selected_project_id = item.data(Qt.ItemDataRole.UserRole)
+        if self.selected_project_id:
+            self.accept()
+
+
+class AttachmentDropFrame(QFrame):
+    """Drop target used by the card dialog attachment area."""
+
+    def __init__(self, dialog, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self.dialog = dialog
+        self.setObjectName('AttachmentDropFrame')
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event):
+        self.dialog._attachment_drag_enter_event(event)
+
+    def dragLeaveEvent(self, event):
+        self.dialog._attachment_drag_leave_event(event)
+
+    def dropEvent(self, event):
+        self.dialog._attachment_drop_event(event)
+
 
 class CardDialog(QDialog):
     """Dialog for creating or editing a card."""
 
     def __init__(self, board: KanbanBoard, card=None, target_column_id: Optional[str] = None,
+                 parent_card=None,
                  parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.board = board
         self.card = card
-        self.setWindowTitle('Edit Card' if card else 'Create Card')
+        self.parent_card = parent_card
+        self.did_mutate_board = False
+        self.subcards: List[object] = []
+        self.setWindowTitle('Edit Card' if card else ('Add Subcard' if parent_card else 'Create Card'))
+        self.resize(720, 700)
 
         self.title_edit = QLineEdit(card.title if card else '')
-        self.description_edit = QTextEdit(card.description if card else '')
+        self.description_edit = PropagatingTextEdit(card.description if card else '')
         self.description_edit.setFixedHeight(120)
 
         self.priority_combo = QComboBox()
@@ -1251,28 +2470,67 @@ class CardDialog(QDialog):
 
         self.column_combo = QComboBox()
         for column in board.get_columns_ordered():
-            self.column_combo.addItem(column.name, column.id)
-        desired_column = target_column_id or (card.column_id if card else board.get_default_add_card_column_id())
+            self.column_combo.addItem(column_label(column), column_target_value(column))
+        desired_column = target_column_id
+        if desired_column is None and card:
+            desired_column = card.column_id
+        if desired_column is None and parent_card is not None:
+            desired_column = parent_card.column_id
+        if desired_column is None:
+            desired_column = board.get_default_add_card_column_id()
         if desired_column:
             for index in range(self.column_combo.count()):
                 if self.column_combo.itemData(index) == desired_column:
                     self.column_combo.setCurrentIndex(index)
                     break
+        if parent_card is not None:
+            self.column_combo.setEnabled(False)
 
         self.assignee_edit = QLineEdit(card.assignee or '' if card else '')
-        self.project_edit = QLineEdit(card.project or '' if card else '')
+        initial_project = card.project if card else (parent_card.project if parent_card else None)
+        self.project_edit = create_project_name_combo(board, initial_project)
         self.tags_edit = QLineEdit(', '.join(card.tags) if card else '')
-        self.color_edit = QLineEdit(card.color or '' if card else '')
-        color_button = QPushButton('Pick Color')
-        color_button.clicked.connect(self.choose_color)
-        color_row = QWidget()
-        color_layout = QHBoxLayout(color_row)
-        color_layout.setContentsMargins(0, 0, 0, 0)
-        color_layout.addWidget(self.color_edit)
-        color_layout.addWidget(color_button)
+        self.color_field = ColorSelectionField(
+            initial_color=card.color if card else (parent_card.color if parent_card else None),
+            allow_clear=True,
+            default_label='Board default color',
+            selected_label='Card color selected',
+        )
 
         self.start_date = OptionalDateField('Start Date', card.start_date if card else None)
         self.end_date = OptionalDateField('End Date', card.end_date if card else None)
+        self.attachments_list = PropagatingListWidget()
+        self.attachments_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.attachments_list.setMinimumHeight(140)
+        self.attachments_list.itemDoubleClicked.connect(lambda _item: self.open_selected_attachment())
+
+        self.attachment_drop_frame = AttachmentDropFrame(self)
+
+        drop_layout = QVBoxLayout(self.attachment_drop_frame)
+        drop_layout.setContentsMargins(14, 14, 14, 14)
+        drop_layout.setSpacing(10)
+        self.attachment_drop_label = QLabel(
+            'Drop files here to attach them to this card.' if card else 'Create the card first, then reopen it to add attachments.'
+        )
+        self.attachment_drop_label.setWordWrap(True)
+        drop_layout.addWidget(self.attachment_drop_label)
+        drop_layout.addWidget(self.attachments_list)
+
+        attachment_buttons = QWidget()
+        attachment_button_layout = QHBoxLayout(attachment_buttons)
+        attachment_button_layout.setContentsMargins(0, 0, 0, 0)
+        attachment_button_layout.setSpacing(8)
+        self.add_attachment_button = QPushButton('Add Files')
+        self.add_attachment_button.clicked.connect(self.add_attachments_via_picker)
+        attachment_button_layout.addWidget(self.add_attachment_button)
+        self.open_attachment_button = QPushButton('Open')
+        self.open_attachment_button.clicked.connect(self.open_selected_attachment)
+        attachment_button_layout.addWidget(self.open_attachment_button)
+        self.delete_attachment_button = QPushButton('Remove')
+        self.delete_attachment_button.clicked.connect(self.delete_selected_attachment)
+        attachment_button_layout.addWidget(self.delete_attachment_button)
+        attachment_button_layout.addStretch(1)
+        drop_layout.addWidget(attachment_buttons)
 
         self.card_type_combo = QComboBox()
         for card_type in board.get_card_types_ordered():
@@ -1280,6 +2538,8 @@ class CardDialog(QDialog):
         selected_type_id = None
         if card and card.card_type_id:
             selected_type_id = card.card_type_id
+        elif parent_card and parent_card.card_type_id:
+            selected_type_id = parent_card.card_type_id
         elif not card:
             selected_type_id = board.get_last_used_card_type().id
         if selected_type_id:
@@ -1288,10 +2548,20 @@ class CardDialog(QDialog):
                     self.card_type_combo.setCurrentIndex(index)
                     break
 
-        info_label = QLabel('Existing notes and attachments are preserved. Use the CLI for advanced note and attachment maintenance.')
-        info_label.setWordWrap(True)
+        shell_title = 'Card Details'
+        shell_subtitle = 'Set the core metadata, scheduling, and reusable preset values for this card.'
+        if parent_card is not None:
+            shell_title = 'Subcard Details'
+            shell_subtitle = f"Create a child card under '{parent_card.title}'. Subcards inherit the parent column and cannot contain nested subcards."
 
-        layout = QFormLayout(self)
+        content_layout = build_dialog_shell(
+            self,
+            shell_title,
+            shell_subtitle,
+        )
+        content_layout.addWidget(create_dialog_section_label('Card Fields'))
+        layout = QFormLayout()
+        configure_form_layout(layout)
         layout.addRow('Title', self.title_edit)
         layout.addRow('Description', self.description_edit)
         layout.addRow('Priority', self.priority_combo)
@@ -1299,23 +2569,325 @@ class CardDialog(QDialog):
         layout.addRow('Assignee', self.assignee_edit)
         layout.addRow('Project', self.project_edit)
         layout.addRow('Tags', self.tags_edit)
-        layout.addRow('Color', color_row)
+        layout.addRow('Color', self.color_field)
         layout.addRow('Card Type', self.card_type_combo)
         layout.addRow('', self.start_date)
         layout.addRow('', self.end_date)
-        layout.addRow('', info_label)
+        content_layout.addLayout(layout)
+        content_layout.addWidget(create_dialog_section_label('Attachments'))
+        content_layout.addWidget(self.attachment_drop_frame)
+        self._set_attachment_drop_active(False)
+        self.refresh_attachments_list()
+
+        if self._supports_subcard_management():
+            content_layout.addWidget(create_dialog_section_label('Subcards'))
+            subcards_frame = QFrame()
+            subcards_frame.setObjectName('DialogCard')
+            subcards_layout = QVBoxLayout(subcards_frame)
+            subcards_layout.setContentsMargins(14, 14, 14, 14)
+            subcards_layout.setSpacing(10)
+            self.subcards_list = PropagatingListWidget()
+            self.subcards_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+            self.subcards_list.setMinimumHeight(150)
+            self.subcards_list.itemDoubleClicked.connect(lambda _item: self.edit_selected_subcard())
+            subcards_layout.addWidget(self.subcards_list)
+
+            subcard_buttons = QWidget()
+            subcard_button_layout = QHBoxLayout(subcard_buttons)
+            subcard_button_layout.setContentsMargins(0, 0, 0, 0)
+            subcard_button_layout.setSpacing(8)
+            self.add_subcard_button = QPushButton('Add Subcard')
+            self.add_subcard_button.clicked.connect(self.add_subcard)
+            subcard_button_layout.addWidget(self.add_subcard_button)
+            self.delete_subcard_button = QPushButton('Delete Selected')
+            self.delete_subcard_button.clicked.connect(self.delete_selected_subcard)
+            subcard_button_layout.addWidget(self.delete_subcard_button)
+            subcard_button_layout.addStretch(1)
+            subcards_layout.addWidget(subcard_buttons)
+            content_layout.addWidget(subcards_frame)
+            self.refresh_subcards_list()
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        layout.addRow(buttons)
+        content_layout.addWidget(buttons)
 
-    def choose_color(self):
-        """Choose a card color."""
-        initial = self.color_edit.text().strip() or '#ffffff'
-        color = QColorDialog.getColor(QColor(initial), self, 'Choose Card Color')
-        if color.isValid():
-            self.color_edit.setText(color.name())
+    def _supports_subcard_management(self) -> bool:
+        """Return whether the dialog should expose subcard management."""
+        return self.card is not None and not self.card.parent_id
+
+    def _set_attachment_drop_active(self, active: bool):
+        """Update the attachment drop target styling."""
+        border_color = '#3e7a5e' if active else '#d2ba97'
+        background = '#eef7f0' if active else '#fffaf2'
+        self.attachment_drop_frame.setStyleSheet(
+            f"""
+            QFrame#AttachmentDropFrame {{
+                background: {background};
+                border: 2px dashed {border_color};
+                border-radius: 14px;
+            }}
+            QListWidget {{
+                background: #fbf5ea;
+                border: 1px solid #d8c6ab;
+                border-radius: 10px;
+                padding: 4px;
+            }}
+            """
+        )
+
+    def _attachment_drag_enter_event(self, event):
+        """Accept dropped files for existing cards."""
+        if self.card is None:
+            event.ignore()
+            return
+        if not file_paths_from_mime_data(event.mimeData()):
+            event.ignore()
+            return
+        self._set_attachment_drop_active(True)
+        event.acceptProposedAction()
+
+    def _attachment_drag_leave_event(self, event):
+        """Clear attachment drop highlighting."""
+        self._set_attachment_drop_active(False)
+        QFrame.dragLeaveEvent(self.attachment_drop_frame, event)
+
+    def _attachment_drop_event(self, event):
+        """Attach dropped files to the current card."""
+        self._set_attachment_drop_active(False)
+        if self.card is None:
+            event.ignore()
+            return
+        paths = file_paths_from_mime_data(event.mimeData())
+        if not paths:
+            event.ignore()
+            return
+        self.add_attachments_from_drop(paths)
+        event.acceptProposedAction()
+
+    def refresh_attachments_list(self):
+        """Reload the dialog attachment list."""
+        self.attachments_list.clear()
+        editable = self.card is not None and not self.board.is_read_only()
+        self.attachment_drop_frame.setEnabled(editable)
+        self.add_attachment_button.setEnabled(editable)
+        self.delete_attachment_button.setEnabled(editable)
+        self.open_attachment_button.setEnabled(self.card is not None)
+        if self.card is None:
+            placeholder = QListWidgetItem('Attachments are available after the card is created.')
+            placeholder.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.attachments_list.addItem(placeholder)
+            return
+        if not self.card.attachments:
+            placeholder = QListWidgetItem('No attachments added yet.')
+            placeholder.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.attachments_list.addItem(placeholder)
+            return
+        for attachment in self.card.attachments:
+            item = QListWidgetItem(attachment.name)
+            item.setData(Qt.ItemDataRole.UserRole, attachment.id)
+            self.attachments_list.addItem(item)
+
+    def _selected_attachment_id(self) -> Optional[str]:
+        """Return the selected attachment identifier."""
+        item = self.attachments_list.currentItem()
+        if item is None:
+            return None
+        return item.data(Qt.ItemDataRole.UserRole)
+
+    def add_attachments_via_picker(self):
+        """Select files and attach them to the card."""
+        if self.card is None:
+            QMessageBox.information(self, 'Create Card First', 'Save the card before adding attachments.')
+            return
+        if self.board.is_read_only():
+            QMessageBox.warning(self, 'Read Only Board', self.board.get_read_only_message())
+            return
+        paths = choose_open_files_dialog(self, 'Add Card Attachments')
+        if paths:
+            self.add_attachments_from_drop(paths)
+
+    def add_attachments_from_drop(self, file_paths: List[str]):
+        """Attach files to the current card and refresh the list."""
+        if self.card is None:
+            return
+        try:
+            added = self.board.add_card_attachments(self.card.id, file_paths)
+        except Exception as exc:
+            QMessageBox.warning(self, 'Attachment Error', f'Unable to add attachments.\n\n{exc}')
+            return
+        if not added:
+            QMessageBox.information(self, 'No Files Added', 'No valid files were provided.')
+            return
+        self.card = self.board.find_card(self.card.id)
+        self.did_mutate_board = True
+        self.refresh_attachments_list()
+
+    def open_selected_attachment(self):
+        """Open the selected attachment in the system default application."""
+        if self.card is None:
+            return
+        attachment_id = self._selected_attachment_id()
+        if not attachment_id:
+            QMessageBox.information(self, 'No Attachment Selected', 'Select an attachment first.')
+            return
+        path = self.board.get_card_attachment_path(self.card.id, attachment_id)
+        if not path or not os.path.exists(path):
+            QMessageBox.warning(self, 'Attachment Missing', 'The attachment file could not be found.')
+            return
+        open_path_with_default_app(path)
+
+    def delete_selected_attachment(self):
+        """Remove the selected attachment from the card."""
+        if self.card is None:
+            return
+        if self.board.is_read_only():
+            QMessageBox.warning(self, 'Read Only Board', self.board.get_read_only_message())
+            return
+        attachment_id = self._selected_attachment_id()
+        if not attachment_id:
+            QMessageBox.information(self, 'No Attachment Selected', 'Select an attachment first.')
+            return
+        result = QMessageBox.question(
+            self,
+            'Remove Attachment',
+            'Remove the selected attachment from this card?',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if result != QMessageBox.StandardButton.Yes:
+            return
+        if not self.board.delete_card_attachment(self.card.id, attachment_id):
+            QMessageBox.warning(self, 'Attachment Error', 'Unable to remove the selected attachment.')
+            return
+        self.card = self.board.find_card(self.card.id)
+        self.did_mutate_board = True
+        self.refresh_attachments_list()
+
+    def refresh_subcards_list(self):
+        """Reload the dialog subcard list."""
+        if not hasattr(self, 'subcards_list'):
+            return
+        self.subcards = self.board.get_subcards(self.card.id)
+        self.subcards_list.clear()
+        editable = not self.board.is_read_only()
+        self.add_subcard_button.setEnabled(editable)
+        self.delete_subcard_button.setEnabled(editable and bool(self.subcards))
+        if not self.subcards:
+            placeholder = QListWidgetItem('No subcards yet.')
+            placeholder.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.subcards_list.addItem(placeholder)
+            return
+        for subcard in self.subcards:
+            tick = '[x]' if self.board.is_card_done(subcard) else '[ ]'
+            location = self.board.get_card_location_label(subcard)
+            item = QListWidgetItem(f'{tick} {subcard.title} ({location})')
+            item.setData(Qt.ItemDataRole.UserRole, subcard.id)
+            self.subcards_list.addItem(item)
+
+    def _selected_subcard(self):
+        """Return the subcard currently selected in the list."""
+        if not hasattr(self, 'subcards_list'):
+            return None
+        item = self.subcards_list.currentItem()
+        if item is None:
+            return None
+        subcard_id = item.data(Qt.ItemDataRole.UserRole)
+        if not subcard_id:
+            return None
+        return self.board.find_card(subcard_id)
+
+    def add_subcard(self):
+        """Open a nested dialog to create a subcard for the current card."""
+        if self.card is None:
+            return
+        if self.board.is_read_only():
+            QMessageBox.warning(self, 'Read Only Board', self.board.get_read_only_message())
+            return
+        dialog = CardDialog(
+            self.board,
+            target_column_id=self.card.column_id,
+            parent_card=self.card,
+            parent=self,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            if dialog.did_mutate_board:
+                self.did_mutate_board = True
+                self.card = self.board.find_card(self.card.id)
+                self.refresh_subcards_list()
+            return
+        values = dialog.values()
+        try:
+            self.board.create_subcard(
+                self.card.id,
+                values['title'],
+                values['description'],
+                values['priority'],
+                values['project'] or None,
+                values['color'],
+                values['card_type_id'],
+                values['start_date'],
+                values['end_date'],
+                values['assignee'] or None,
+                values['tags'],
+            )
+        except ValueError as error:
+            QMessageBox.warning(self, 'Add Subcard', str(error))
+            return
+        self.did_mutate_board = True
+        self.card = self.board.find_card(self.card.id)
+        self.refresh_subcards_list()
+
+    def edit_selected_subcard(self):
+        """Edit the currently selected subcard from the list."""
+        subcard = self._selected_subcard()
+        if subcard is None:
+            return
+        original_column_id = subcard.column_id
+        dialog = CardDialog(self.board, card=subcard, parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            if dialog.did_mutate_board:
+                self.did_mutate_board = True
+                self.card = self.board.find_card(self.card.id)
+                self.refresh_subcards_list()
+            return
+        values = dialog.values()
+        self.board.edit_card(
+            subcard.id,
+            title=values['title'],
+            description=values['description'],
+            priority=values['priority'],
+            assignee=values['assignee'] or None,
+            project=values['project'] or None,
+            start_date=values['start_date'],
+            end_date=values['end_date'],
+            color=values['color'],
+            tags=values['tags'],
+            card_type_id=values['card_type_id'],
+        )
+        if values['column_id'] != original_column_id:
+            self.board.move_card(subcard.id, values['column_id'])
+        self.did_mutate_board = True
+        self.card = self.board.find_card(self.card.id)
+        self.refresh_subcards_list()
+
+    def delete_selected_subcard(self):
+        """Delete the currently selected subcard."""
+        subcard = self._selected_subcard()
+        if subcard is None:
+            QMessageBox.information(self, 'Delete Subcard', 'Select a subcard to delete.')
+            return
+        result = QMessageBox.question(
+            self,
+            'Delete Subcard',
+            f"Delete subcard '{subcard.title}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if result != QMessageBox.StandardButton.Yes:
+            return
+        self.board.delete_card(subcard.id)
+        self.did_mutate_board = True
+        self.card = self.board.find_card(self.card.id)
+        self.refresh_subcards_list()
 
     def values(self) -> Dict[str, object]:
         """Return dialog values."""
@@ -1325,9 +2897,9 @@ class CardDialog(QDialog):
             'priority': self.priority_combo.currentData(),
             'column_id': self.column_combo.currentData(),
             'assignee': self.assignee_edit.text().strip(),
-            'project': self.project_edit.text().strip(),
+            'project': self.project_edit.currentText().strip(),
             'tags': parse_tags(self.tags_edit.text()),
-            'color': self.color_edit.text().strip() or None,
+            'color': self.color_field.color(),
             'card_type_id': self.card_type_combo.currentData(),
             'start_date': self.start_date.value(),
             'end_date': self.end_date.value(),
@@ -1381,7 +2953,7 @@ class MultiBoardGUI:
         self.summary_label.setWordWrap(True)
         root_layout.addWidget(self.summary_label)
 
-        self.scroll_area = QScrollArea()
+        self.scroll_area = PropagatingScrollArea()
         self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
         self.scroll_area.setWidgetResizable(True)
         self.columns_container = QWidget()
@@ -1399,60 +2971,62 @@ class MultiBoardGUI:
         toolbar.setMovable(False)
         self.window.addToolBar(toolbar)
 
-        title_label = QLabel('Card Filters')
-        toolbar.addWidget(title_label)
-
         self.toolbar_search_entry = QLineEdit()
         self.toolbar_search_entry.setObjectName('CardSearchEntry')
-        self.toolbar_search_entry.setPlaceholderText('Search title or description')
+        self.toolbar_search_entry.setPlaceholderText('Search cards')
+        self.toolbar_search_entry.setClearButtonEnabled(True)
+        self.toolbar_search_entry.setFixedWidth(190)
+        self.toolbar_search_entry.setToolTip('Search title and description')
         self.toolbar_search_entry.textChanged.connect(self.apply_toolbar_filters)
         toolbar.addWidget(self.toolbar_search_entry)
 
-        priority_label_widget = QLabel('Priority')
-        toolbar.addWidget(priority_label_widget)
         self.toolbar_priority_combo = QComboBox()
         self.toolbar_priority_combo.setObjectName('CardPriorityFilter')
-        self.toolbar_priority_combo.addItem('All Priorities', '')
+        self.toolbar_priority_combo.setFixedWidth(118)
+        self.toolbar_priority_combo.setToolTip('Filter by priority')
+        self.toolbar_priority_combo.addItem('Priority', '')
         for priority in Priority:
             self.toolbar_priority_combo.addItem(priority_label(priority), priority.value)
         self.toolbar_priority_combo.currentIndexChanged.connect(self.apply_toolbar_filters)
         toolbar.addWidget(self.toolbar_priority_combo)
 
-        assignee_label_widget = QLabel('Assignee')
-        toolbar.addWidget(assignee_label_widget)
         self.toolbar_assignee_combo = QComboBox()
         self.toolbar_assignee_combo.setObjectName('CardAssigneeFilter')
-        self.toolbar_assignee_combo.addItem('All Assignees', '')
+        self.toolbar_assignee_combo.setFixedWidth(120)
+        self.toolbar_assignee_combo.setToolTip('Filter by assignee')
+        self.toolbar_assignee_combo.addItem('Assignee', '')
         self.toolbar_assignee_combo.currentIndexChanged.connect(self.apply_toolbar_filters)
         toolbar.addWidget(self.toolbar_assignee_combo)
 
-        type_label_widget = QLabel('Type')
-        toolbar.addWidget(type_label_widget)
         self.toolbar_card_type_combo = QComboBox()
         self.toolbar_card_type_combo.setObjectName('CardTypeFilter')
-        self.toolbar_card_type_combo.addItem('All Types', '')
+        self.toolbar_card_type_combo.setFixedWidth(112)
+        self.toolbar_card_type_combo.setToolTip('Filter by card type')
+        self.toolbar_card_type_combo.addItem('Type', '')
         self.toolbar_card_type_combo.currentIndexChanged.connect(self.apply_toolbar_filters)
         toolbar.addWidget(self.toolbar_card_type_combo)
 
-        tag_label_widget = QLabel('Tag')
-        toolbar.addWidget(tag_label_widget)
         self.toolbar_tag_combo = QComboBox()
         self.toolbar_tag_combo.setObjectName('CardTagFilter')
-        self.toolbar_tag_combo.addItem('All Tags', '')
+        self.toolbar_tag_combo.setFixedWidth(108)
+        self.toolbar_tag_combo.setToolTip('Filter by tag')
+        self.toolbar_tag_combo.addItem('Tag', '')
         self.toolbar_tag_combo.currentIndexChanged.connect(self.apply_toolbar_filters)
         toolbar.addWidget(self.toolbar_tag_combo)
 
-        due_state_label_widget = QLabel('Due State')
-        toolbar.addWidget(due_state_label_widget)
         self.toolbar_due_state_combo = QComboBox()
         self.toolbar_due_state_combo.setObjectName('CardDueStateFilter')
-        self.toolbar_due_state_combo.addItem('All States', '')
+        self.toolbar_due_state_combo.setFixedWidth(118)
+        self.toolbar_due_state_combo.setToolTip('Filter by due-date state')
+        self.toolbar_due_state_combo.addItem('Due', '')
         for due_state in ['Overdue', 'Due Today', 'Due Soon', 'Scheduled', 'Done', 'Start Date Only', 'No Due Date']:
             self.toolbar_due_state_combo.addItem(due_state, due_state)
         self.toolbar_due_state_combo.currentIndexChanged.connect(self.apply_toolbar_filters)
         toolbar.addWidget(self.toolbar_due_state_combo)
 
         self.toolbar_overdue_checkbox = QCheckBox('Late only')
+        self.toolbar_overdue_checkbox.setObjectName('ToolbarLateOnlyCheckbox')
+        self.toolbar_overdue_checkbox.setToolTip('Only show overdue cards')
         self.toolbar_overdue_checkbox.toggled.connect(self.apply_toolbar_filters)
         toolbar.addWidget(self.toolbar_overdue_checkbox)
 
@@ -1464,6 +3038,18 @@ class MultiBoardGUI:
     def _build_menu(self):
         """Create the menu bar."""
         menu_bar = self.window.menuBar()
+
+        self.edit_menu = menu_bar.addMenu('Edit')
+        self.edit_menu.addSection('History')
+        self.undo_current_board_qaction = self._action('Undo Current Board Action', self.undo_current_board_action, 'Ctrl+Z')
+        self.redo_current_board_qaction = self._action('Redo Current Board Action', self.redo_current_board_action, 'Ctrl+Y')
+        self.undo_board_management_qaction = self._action('Undo Board Management Action', self.undo_board_management_action, 'Ctrl+Shift+Z')
+        self.redo_board_management_qaction = self._action('Redo Board Management Action', self.redo_board_management_action, 'Ctrl+Shift+Y')
+        self.edit_menu.addAction(self.undo_current_board_qaction)
+        self.edit_menu.addAction(self.redo_current_board_qaction)
+        self.edit_menu.addSeparator()
+        self.edit_menu.addAction(self.undo_board_management_qaction)
+        self.edit_menu.addAction(self.redo_board_management_qaction)
 
         self.board_menu = menu_bar.addMenu('Boards')
         self.board_menu.addSection('Open')
@@ -1500,6 +3086,7 @@ class MultiBoardGUI:
         card_menu = menu_bar.addMenu('Cards')
         card_menu.addSection('Selected Card')
         card_menu.addAction(self._action('New Card', self.create_card, 'Ctrl+Shift+N'))
+        card_menu.addAction(self._action('Add Subcard', self.add_subcard_to_selected_card, 'Ctrl+Shift+J'))
         card_menu.addAction(self._action('Edit Selected Card', self.edit_selected_card, 'Ctrl+E'))
         card_menu.addAction(self._action('Move Selected Card', self.move_selected_card, 'Ctrl+M'))
         card_menu.addAction(self._action('Delete Selected Card', self.delete_selected_card, 'Ctrl+D'))
@@ -1510,6 +3097,11 @@ class MultiBoardGUI:
         card_menu.addAction(self._action('Create Card Type', self.create_card_type))
         card_menu.addAction(self._action('Edit Card Type', self.edit_card_type))
         card_menu.addAction(self._action('Delete Card Type', self.delete_card_type))
+        card_menu.addSection('Projects')
+        card_menu.addAction(self._action('View Projects', self.show_projects_browser))
+        card_menu.addAction(self._action('Create Project', self.create_project))
+        card_menu.addAction(self._action('Edit Project', self.edit_project))
+        card_menu.addAction(self._action('Delete Project', self.delete_project))
 
         column_menu = menu_bar.addMenu('Columns')
         column_menu.addSection('Structure')
@@ -1527,6 +3119,93 @@ class MultiBoardGUI:
         action.triggered.connect(callback)
         return action
 
+    def _history_action_text(self, base_title: str, description: Optional[str]) -> str:
+        """Return a menu label for a history action."""
+        if not description:
+            return base_title
+        return f'{base_title}: {description}'
+
+    def _refresh_history_actions(self, board: Optional[KanbanBoard] = None):
+        """Sync the history actions with the available undo and redo stacks."""
+        current_board = board if board is not None else self.current_board()
+        board_can_undo = bool(current_board and not current_board.is_read_only() and current_board.can_undo())
+        board_can_redo = bool(current_board and not current_board.is_read_only() and current_board.can_redo())
+
+        undo_board_description = current_board.get_next_undo_description() if board_can_undo else None
+        redo_board_description = current_board.get_next_redo_description() if board_can_redo else None
+        undo_manager_description = self.board_manager.get_next_undo_description()
+        redo_manager_description = self.board_manager.get_next_redo_description()
+
+        self.undo_current_board_qaction.setText(self._history_action_text('Undo Current Board Action', undo_board_description))
+        self.redo_current_board_qaction.setText(self._history_action_text('Redo Current Board Action', redo_board_description))
+        self.undo_board_management_qaction.setText(self._history_action_text('Undo Board Management Action', undo_manager_description))
+        self.redo_board_management_qaction.setText(self._history_action_text('Redo Board Management Action', redo_manager_description))
+
+        self.undo_current_board_qaction.setEnabled(board_can_undo)
+        self.redo_current_board_qaction.setEnabled(board_can_redo)
+        self.undo_board_management_qaction.setEnabled(self.board_manager.can_undo())
+        self.redo_board_management_qaction.setEnabled(self.board_manager.can_redo())
+
+        self.undo_current_board_qaction.setStatusTip(undo_board_description or 'Undo the most recent change on the current board')
+        self.redo_current_board_qaction.setStatusTip(redo_board_description or 'Redo the most recently undone change on the current board')
+        self.undo_board_management_qaction.setStatusTip(undo_manager_description or 'Undo the most recent board-management change')
+        self.redo_board_management_qaction.setStatusTip(redo_manager_description or 'Redo the most recently undone board-management change')
+
+    def _show_history_feedback(self, message: str, timeout_ms: int = 4000):
+        """Show transient feedback for history actions."""
+        self.window.statusBar().showMessage(message, timeout_ms)
+
+    def _run_current_board_history_action(self, method_name: str, unavailable_message: str, success_prefix: str):
+        """Invoke an undo or redo action on the current board."""
+        board = self.ensure_writable_board()
+        if board is None:
+            return
+
+        action = getattr(board, method_name, None)
+        if action is None:
+            QMessageBox.warning(self.window, 'History Unavailable', 'That action is not available for the current board.')
+            return
+
+        description = action()
+        if not description:
+            self._show_history_feedback(unavailable_message)
+            self.refresh_ui()
+            return
+
+        self.refresh_ui()
+        self._show_history_feedback(f'{success_prefix}: {description}')
+
+    def undo_current_board_action(self):
+        """Undo the most recent change on the current board."""
+        self._run_current_board_history_action('undo_last_action', 'No board action is available to undo.', 'Undid')
+
+    def redo_current_board_action(self):
+        """Redo the most recently undone change on the current board."""
+        self._run_current_board_history_action('redo_last_action', 'No board action is available to redo.', 'Redid')
+
+    def _run_board_management_history_action(self, method_name: str, unavailable_message: str, success_prefix: str):
+        """Invoke an undo or redo action on the board manager."""
+        action = getattr(self.board_manager, method_name)
+        description = action()
+        if not description:
+            self._show_history_feedback(unavailable_message)
+            self.refresh_ui()
+            return
+
+        current_board_id = self.board_manager.current_board_id
+        if current_board_id:
+            self._remember_recent_board(current_board_id)
+        self.refresh_ui()
+        self._show_history_feedback(f'{success_prefix}: {description}')
+
+    def undo_board_management_action(self):
+        """Undo the most recent board-management action."""
+        self._run_board_management_history_action('undo_last_action', 'No board-management action is available to undo.', 'Undid')
+
+    def redo_board_management_action(self):
+        """Redo the most recently undone board-management action."""
+        self._run_board_management_history_action('redo_last_action', 'No board-management action is available to redo.', 'Redid')
+
     def _default_filter_state(self) -> Dict[str, object]:
         """Return the default filter state."""
         return {
@@ -1537,6 +3216,7 @@ class MultiBoardGUI:
             'tag': '',
             'due_state': '',
             'overdue': False,
+            'column_search': {},
         }
 
     def _get_current_filter_state(self) -> Dict[str, object]:
@@ -1562,6 +3242,32 @@ class MultiBoardGUI:
             state['due_state'],
             state['overdue'],
         ])
+
+    def _column_search_text(self, column_id: str) -> str:
+        """Return the saved in-column search text for the given column."""
+        state = self._get_current_filter_state()
+        column_search = state.get('column_search') or {}
+        return str(column_search.get(column_id, ''))
+
+    def _set_column_search_text(self, column_id: str, value: str):
+        """Persist the in-column search text for the given column."""
+        state = self._get_current_filter_state()
+        column_search = dict(state.get('column_search') or {})
+        normalized = value.strip()
+        if normalized:
+            column_search[column_id] = normalized
+        else:
+            column_search.pop(column_id, None)
+        state['column_search'] = column_search
+
+    def _card_matches_column_search(self, card, search_text: str) -> bool:
+        """Return whether a card matches a column-local search string."""
+        needle = search_text.lower().strip()
+        if not needle:
+            return True
+        haystacks = [card.title or '', card.description or '', card.project or '', card.assignee or '']
+        haystacks.extend(card.tags or [])
+        return any(needle in text.lower() for text in haystacks)
 
     def _set_filter_toolbar_enabled(self, enabled: bool):
         """Enable or disable the filter controls."""
@@ -1839,6 +3545,7 @@ class MultiBoardGUI:
 
         if current_board is None:
             self.summary_label.setText('No board selected')
+            self._refresh_history_actions(None)
             return
 
         stats = current_board.get_board_stats()
@@ -1849,6 +3556,7 @@ class MultiBoardGUI:
             f"{self._filter_summary_suffix()}{read_only_suffix}"
         )
         self._populate_columns(current_board)
+        self._refresh_history_actions(current_board)
 
     def _current_board_name(self) -> str:
         """Return the current board name."""
@@ -1873,95 +3581,110 @@ class MultiBoardGUI:
 
     def _create_column_widget(self, board: KanbanBoard, column: CustomColumn) -> QWidget:
         """Create a widget for a board column."""
-        column_box = QGroupBox(column.name)
-        column_border = '#7d3b14' if column.id == self.selected_column_id else '#b59c77'
-        column_box.setStyleSheet(
-            f"""
-            QGroupBox {{
-                background: #fbf5ea;
-                border: 2px solid {column_border};
-                border-radius: 12px;
-                margin-top: 14px;
-                font-weight: bold;
-            }}
-            QGroupBox::title {{
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 4px;
-                color: #3f2f21;
-            }}
-            """
+        column_id = column_identifier(column)
+        accent_color = resolve_hex_color(column_color(column), '#8f4a1d')
+        column_box = ColumnGroupBox(
+            '',
+            column_id,
+            self,
+            selected=column_id == self.selected_column_id,
         )
         layout = QVBoxLayout(column_box)
-        layout.setSpacing(8)
+        layout.setContentsMargins(12, 18, 12, 12)
+        layout.setSpacing(10)
+
+        title_row = QWidget()
+        title_layout = QHBoxLayout(title_row)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setSpacing(8)
+
+        title_button = ColumnTitleButton(
+            column_label(column),
+            click_callback=lambda _checked=False, cid=column_id: self.select_column(cid),
+            double_click_callback=lambda cid=column_id: self.handle_column_double_click(cid),
+        )
+        title_button.setStyleSheet(
+            "QPushButton { text-align: left; background: rgba(98, 76, 58, 0.08); color: #3f2f21; border: none; border-radius: 10px; padding: 6px 10px; font-weight: 700; }"
+            "QPushButton:hover { background: rgba(125, 59, 20, 0.12); }"
+            "QPushButton:pressed { background: rgba(125, 59, 20, 0.18); }"
+        )
+        title_layout.addWidget(title_button, 1)
+
+        if column_can_add_card(column):
+            add_button = ColumnAddButton(accent_color)
+            add_button.clicked.connect(lambda _checked=False, cid=column_target_value(column): self.create_card(cid))
+            title_layout.addWidget(add_button)
+
+        layout.addWidget(title_row)
 
         color_strip = QFrame()
         color_strip.setFixedHeight(8)
-        color_strip.setStyleSheet(f"background: {resolve_hex_color(column.color, '#8f4a1d')}; border-radius: 4px;")
+        color_strip.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        color_strip.setStyleSheet(
+            f"background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {accent_color}, stop:1 {QColor(accent_color).lighter(120).name()}); border-radius: 4px;"
+        )
         layout.addWidget(color_strip)
 
-        meta = []
-        if column.is_completed:
-            meta.append('completed')
-        if column.can_add_card:
-            meta.append('add enabled')
-        filtered_cards = self._filter_cards(board, list(column.cards))
-        if self._filters_active() and len(filtered_cards) != len(column.cards):
-            meta.append(f'{len(filtered_cards)} of {len(column.cards)} shown')
-        elif column.cards:
-            meta.append(f'{len(column.cards)} card' + ('' if len(column.cards) == 1 else 's'))
-        meta_label = QLabel(' | '.join(meta) if meta else 'active column')
-        layout.addWidget(meta_label)
-
-        list_widget = CardListWidget()
+        list_widget = CardListWidget(column_id, self)
         list_widget.setFrameShape(QFrame.Shape.NoFrame)
         list_widget.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
-        list_widget.setStyleSheet(
-            """
-            QListWidget {
-                background: #f3eadc;
-                border: 1px solid #d5c3a6;
-                border-radius: 10px;
-                padding: 6px;
-                outline: 0;
-            }
-            QListWidget::item {
-                background: transparent;
-                border: none;
-                padding: 0;
-                margin: 0 0 8px 0;
-            }
-            QListWidget::item:selected {
-                background: transparent;
-                border: none;
-            }
-            """
-        )
-        list_widget.itemClicked.connect(lambda item, cid=column.id: self.on_card_clicked(cid, item))
+        list_widget._apply_drop_style()
+        list_widget.itemClicked.connect(lambda item, cid=column_id: self.on_card_clicked(cid, item))
         list_widget.itemDoubleClicked.connect(lambda _item: self.edit_selected_card())
-        for card in filtered_cards:
-            item = QListWidgetItem()
-            item.setData(Qt.ItemDataRole.UserRole, {'card_id': card.id, 'column_id': column.id})
-            card_widget = CardTile(board, card, selected=card.id == self.selected_card_id)
-            item.setSizeHint(card_widget.sizeHint())
-            list_widget.addItem(item)
-            list_widget.setItemWidget(item, card_widget)
-            if card.id == self.selected_card_id:
-                item.setSelected(True)
-        QTimer.singleShot(0, list_widget.refresh_card_sizes)
-        layout.addWidget(list_widget, 1)
 
-        button_row = QWidget()
-        button_layout = QHBoxLayout(button_row)
-        button_layout.setContentsMargins(0, 0, 0, 0)
-        select_button = QPushButton('Select')
-        select_button.clicked.connect(lambda _checked=False, cid=column.id: self.select_column(cid))
-        button_layout.addWidget(select_button)
-        if column.can_add_card:
-            add_button = QPushButton('Add Card')
-            add_button.clicked.connect(lambda _checked=False, cid=column.id: self.create_card(cid))
-            button_layout.addWidget(add_button)
-        layout.addWidget(button_row)
+        header_row = QWidget()
+        header_layout = QHBoxLayout(header_row)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(8)
+
+        card_count_label = QLabel()
+        card_count_label.setStyleSheet(
+            "color: #6a5847; background: rgba(125, 59, 20, 0.06); border: 1px solid rgba(125, 59, 20, 0.08); border-radius: 10px; padding: 6px 8px; font-weight: 600;"
+        )
+        header_layout.addWidget(card_count_label)
+
+        column_search_edit = QLineEdit(self._column_search_text(column_id))
+        column_search_edit.setPlaceholderText('Search this column')
+        column_search_edit.setClearButtonEnabled(True)
+        column_search_edit.setStyleSheet(
+            "background: #fffaf5; color: #3f2f21; border: 1px solid #d5bea0; border-radius: 10px; padding: 6px 10px;"
+        )
+        header_layout.addWidget(column_search_edit, 1)
+        layout.addWidget(header_row)
+
+        def populate_cards(search_text: str):
+            filtered_cards = [
+                card for card in self._filter_cards(board, list(column.cards))
+                if self._card_matches_column_search(card, search_text)
+            ]
+            list_widget.clear()
+            for card in filtered_cards:
+                item = QListWidgetItem()
+                item.setData(Qt.ItemDataRole.UserRole, {'card_id': card.id, 'column_id': column_id})
+                card_widget = CardTile(
+                    board,
+                    card,
+                    selected=card.id == self.selected_card_id,
+                    file_drop_callback=self.handle_card_file_drop,
+                    select_callback=lambda card_id, cid=column_id: self.select_card_from_tile(cid, card_id),
+                    edit_callback=lambda card_id, cid=column_id: self.edit_card_from_tile(cid, card_id),
+                    context_action_callback=lambda card_id, action, cid=column_id: self.handle_card_tile_action(cid, card_id, action),
+                )
+                item.setSizeHint(card_widget.sizeHint())
+                list_widget.addItem(item)
+                list_widget.setItemWidget(item, card_widget)
+                if card.id == self.selected_card_id:
+                    item.setSelected(True)
+            count_text = f"{len(filtered_cards)} card" + ('' if len(filtered_cards) == 1 else 's')
+            if search_text.strip() or (self._filters_active() and len(filtered_cards) != len(column.cards)):
+                count_text = f"{len(filtered_cards)} of {len(column.cards)} cards"
+            card_count_label.setText(count_text)
+            QTimer.singleShot(0, lambda lw=list_widget: lw.refresh_card_sizes() if isValid(lw) else None)
+
+        column_search_edit.textChanged.connect(lambda value, cid=column_id: self._set_column_search_text(cid, value))
+        column_search_edit.textChanged.connect(populate_cards)
+        populate_cards(column_search_edit.text())
+        layout.addWidget(list_widget, 1)
         column_box.setMinimumWidth(280)
         return column_box
 
@@ -1972,10 +3695,95 @@ class MultiBoardGUI:
         self.selected_card_id = payload.get('card_id')
         self.refresh_ui()
 
+    def handle_column_double_click(self, column_id: str):
+        """Select a column and open its edit dialog from a double-click."""
+        self.selected_column_id = column_id
+        self.selected_card_id = None
+        self.edit_selected_column()
+
+    def select_card_from_tile(self, column_id: str, card_id: str):
+        """Track the selected card from a direct card-tile click."""
+        self.selected_column_id = column_id
+        self.selected_card_id = card_id
+        self.refresh_ui()
+
+    def edit_card_from_tile(self, column_id: str, card_id: str):
+        """Edit a card from a direct card-tile double-click."""
+        self.selected_column_id = column_id
+        self.selected_card_id = card_id
+        self.edit_selected_card()
+
+    def handle_card_tile_action(self, column_id: str, card_id: str, action: str):
+        """Run a context-menu action requested from a card tile."""
+        self.selected_column_id = column_id
+        self.selected_card_id = card_id
+        if action == 'add_subcard':
+            self.add_subcard_to_selected_card()
+
     def select_column(self, column_id: str):
         """Track the selected column."""
         self.selected_column_id = column_id
         self.selected_card_id = None
+        self.refresh_ui()
+
+    def handle_card_drop(self, card_id: Optional[str], source_column_id: Optional[str], target_column_id: Optional[str]):
+        """Move a card between columns from a drag-drop gesture."""
+        if not card_id or not target_column_id:
+            return
+        board = self.ensure_writable_board()
+        if board is None:
+            return
+        target_value = resolve_column_target(board, target_column_id)
+        if target_value is None:
+            return
+        if source_column_id == target_column_id:
+            self.selected_column_id = target_column_id
+            self.selected_card_id = card_id
+            self.refresh_ui()
+            return
+        board.move_card(card_id, target_value)
+        self.selected_column_id = target_column_id
+        self.selected_card_id = card_id
+        self.refresh_ui()
+
+    def handle_column_drop(self, dragged_column_id: Optional[str], target_column_id: Optional[str], insert_after: bool):
+        """Reorder columns from a drag-drop gesture."""
+        if not dragged_column_id or not target_column_id or dragged_column_id == target_column_id:
+            return
+        board = self.ensure_writable_board()
+        if board is None:
+            return
+        ordered_ids = [column.id for column in board.get_columns_ordered()]
+        if dragged_column_id not in ordered_ids or target_column_id not in ordered_ids:
+            return
+        ordered_ids.remove(dragged_column_id)
+        target_index = ordered_ids.index(target_column_id)
+        if insert_after:
+            target_index += 1
+        ordered_ids.insert(target_index, dragged_column_id)
+        board.reorder_columns(ordered_ids)
+        self.selected_column_id = dragged_column_id
+        self.refresh_ui()
+
+    def handle_card_file_drop(self, card_id: Optional[str], file_paths: List[str]):
+        """Attach dropped files to a card."""
+        if not card_id or not file_paths:
+            return
+        board = self.ensure_writable_board()
+        if board is None:
+            return
+        try:
+            added = board.add_card_attachments(card_id, file_paths)
+        except Exception as exc:
+            QMessageBox.warning(self.window, 'Attachment Error', f'Unable to attach dropped files.\n\n{exc}')
+            return
+        if not added:
+            QMessageBox.information(self.window, 'No Files Added', 'No valid files were dropped onto the card.')
+            return
+        self.selected_card_id = card_id
+        card = board.find_card(card_id)
+        if card is not None:
+            self.selected_column_id = card.column_id
         self.refresh_ui()
 
     def _refresh_board_menus(self, boards: List[Dict[str, object]]):
@@ -2143,14 +3951,15 @@ class MultiBoardGUI:
         if board is None:
             return
         dialog = CardTypesBrowserDialog(board, self.window)
-        dialog.exec()
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_card_type_id:
+            self.edit_card_type_by_id(dialog.selected_card_type_id)
 
     def create_card_type(self):
         """Create a new card type for the current board."""
         board = self.ensure_writable_board()
         if board is None:
             return
-        dialog = CardTypeDialog(parent=self.window)
+        dialog = CardTypeDialog(board=board, parent=self.window)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         values = dialog.values()
@@ -2174,8 +3983,23 @@ class MultiBoardGUI:
         card_type = self._choose_card_type(board, 'Edit Card Type', 'Card type')
         if card_type is None:
             return
+        self._edit_card_type(board, card_type)
+
+    def edit_card_type_by_id(self, card_type_id: str):
+        """Edit a specific card type by identifier."""
+        board = self.ensure_writable_board()
+        if board is None:
+            return
+        card_type = next((item for item in board.get_card_types_ordered() if item.id == card_type_id), None)
+        if card_type is None:
+            QMessageBox.information(self.window, 'Card Type', 'The selected card type no longer exists.')
+            return
+        self._edit_card_type(board, card_type)
+
+    def _edit_card_type(self, board: KanbanBoard, card_type: CardType):
+        """Edit the provided card type."""
         is_default = card_type.id == board.get_default_card_type_id()
-        dialog = CardTypeDialog(card_type=card_type, is_default=is_default, parent=self.window)
+        dialog = CardTypeDialog(card_type=card_type, is_default=is_default, board=board, parent=self.window)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         values = dialog.values()
@@ -2264,6 +4088,166 @@ class MultiBoardGUI:
                 return
             self.refresh_ui()
 
+    def _choose_project(self, board: KanbanBoard, title: str, prompt: str,
+                        exclude_ids: Optional[set[str]] = None) -> Optional[Project]:
+        """Prompt the user to select a managed project from the current board."""
+        exclude_ids = set(exclude_ids or set())
+        projects = [project for project in board.get_projects_ordered() if project.id not in exclude_ids]
+        if not projects:
+            QMessageBox.information(self.window, title, 'No projects available.')
+            return None
+
+        option_map: Dict[str, Project] = {}
+        for project in projects:
+            option_map[project.name] = project
+
+        selected, ok = QInputDialog.getItem(self.window, title, prompt, list(option_map.keys()), editable=False)
+        if not ok or not selected:
+            return None
+        return option_map[selected]
+
+    def show_projects_browser(self):
+        """Show the current board's managed projects."""
+        board = self.ensure_board()
+        if board is None:
+            return
+        dialog = ProjectsBrowserDialog(board, self.window)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_project_id:
+            self.edit_project_by_id(dialog.selected_project_id)
+
+    def create_project(self):
+        """Create a managed project for the current board."""
+        board = self.ensure_writable_board()
+        if board is None:
+            return
+        dialog = ProjectDialog(parent=self.window)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        values = dialog.values()
+        try:
+            board.create_project(values['name'], values['description'])
+        except ValueError as error:
+            QMessageBox.warning(self.window, 'Create Project', str(error))
+            return
+        self.refresh_ui()
+
+    def edit_project(self):
+        """Edit a managed project on the current board."""
+        board = self.ensure_writable_board()
+        if board is None:
+            return
+        project = self._choose_project(board, 'Edit Project', 'Project')
+        if project is None:
+            return
+        self._edit_project(board, project)
+
+    def edit_project_by_id(self, project_id: str):
+        """Edit a specific managed project by identifier."""
+        board = self.ensure_writable_board()
+        if board is None:
+            return
+        project = board.get_project(project_id)
+        if project is None:
+            QMessageBox.information(self.window, 'Project', 'The selected project no longer exists.')
+            return
+        self._edit_project(board, project)
+
+    def _edit_project(self, board: KanbanBoard, project: Project):
+        """Edit the provided managed project."""
+        dialog = ProjectDialog(project=project, parent=self.window)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        values = dialog.values()
+        try:
+            board.edit_project(project.id, values['name'], values['description'])
+        except ValueError as error:
+            QMessageBox.warning(self.window, 'Edit Project', str(error))
+            return
+        self.refresh_ui()
+
+    def delete_project(self):
+        """Delete a project, optionally reassigning or deleting referenced cards."""
+        board = self.ensure_writable_board()
+        if board is None:
+            return
+        project = self._choose_project(board, 'Delete Project', 'Project')
+        if project is None:
+            return
+
+        cards_using_project = board.get_cards_by_project(project.id)
+        card_types_using_project = board.get_card_types_by_project(project.id)
+        if not cards_using_project and not card_types_using_project:
+            result = QMessageBox.question(
+                self.window,
+                'Delete Project',
+                f"Delete project '{project.name}'?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if result != QMessageBox.StandardButton.Yes:
+                return
+            try:
+                board.delete_project(project.id, delete_cards=False)
+            except ValueError as error:
+                QMessageBox.warning(self.window, 'Delete Project', str(error))
+                return
+            self.refresh_ui()
+            return
+
+        dialog = QMessageBox(self.window)
+        dialog.setWindowTitle('Delete Project')
+        dialog.setIcon(QMessageBox.Icon.Warning)
+        dialog.setText(
+            f"Project '{project.name}' is used by {len(cards_using_project)} card(s) and {len(card_types_using_project)} card type preset(s). Choose what to do with those references."
+        )
+        reassign_button = dialog.addButton('Reassign References', QMessageBox.ButtonRole.AcceptRole)
+        clear_references_button = dialog.addButton('Clear References', QMessageBox.ButtonRole.ActionRole)
+        delete_cards_button = dialog.addButton('Delete Cards', QMessageBox.ButtonRole.DestructiveRole)
+        dialog.addButton(QMessageBox.StandardButton.Cancel)
+        dialog.exec()
+
+        clicked = dialog.clickedButton()
+        if clicked == reassign_button:
+            replacement = self._choose_project(
+                board,
+                'Replacement Project',
+                'Reassign references to',
+                exclude_ids={project.id},
+            )
+            if replacement is None:
+                return
+            try:
+                board.delete_project(project.id, delete_cards=False, replacement_project_id=replacement.id)
+            except ValueError as error:
+                QMessageBox.warning(self.window, 'Delete Project', str(error))
+                return
+            self.refresh_ui()
+            return
+
+        if clicked == clear_references_button:
+            try:
+                board.delete_project(project.id, delete_cards=False)
+            except ValueError as error:
+                QMessageBox.warning(self.window, 'Delete Project', str(error))
+                return
+            self.refresh_ui()
+            return
+
+        if clicked == delete_cards_button:
+            confirm = QMessageBox.question(
+                self.window,
+                'Delete Cards',
+                f"Delete project '{project.name}' and all {len(cards_using_project)} card(s) using it? Card type presets will be cleared.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if confirm != QMessageBox.StandardButton.Yes:
+                return
+            try:
+                board.delete_project(project.id, delete_cards=True)
+            except ValueError as error:
+                QMessageBox.warning(self.window, 'Delete Project', str(error))
+                return
+            self.refresh_ui()
+
     def show_due_date_view(self):
         """Show the active board's due-date overview dialog."""
         board = self.ensure_board()
@@ -2282,7 +4266,7 @@ class MultiBoardGUI:
 
     def export_all_boards(self):
         """Export all boards to a JSON backup file."""
-        file_name, _ = QFileDialog.getSaveFileName(self.window, 'Export All Boards', 'kanban_backup.json', 'JSON Files (*.json)')
+        file_name = choose_save_file_dialog(self.window, 'Export All Boards', 'kanban_backup.json', 'JSON Files (*.json)')
         if not file_name:
             return
         export_data = self.board_manager.export_all_boards()
@@ -2292,7 +4276,7 @@ class MultiBoardGUI:
 
     def import_boards(self):
         """Import boards from a JSON backup file."""
-        file_name, _ = QFileDialog.getOpenFileName(self.window, 'Import Boards', '', 'JSON Files (*.json)')
+        file_name = choose_open_file_dialog(self.window, 'Import Boards', '', 'JSON Files (*.json)')
         if not file_name:
             return
         result = QMessageBox.question(
@@ -2316,6 +4300,8 @@ class MultiBoardGUI:
             with open(metadata_path, 'r', encoding='utf-8') as metadata_file:
                 metadata = json.load(metadata_file)
             for board_id, board_info in metadata.get('boards', {}).items():
+                if board_info.get('use_custom_columns') is False:
+                    continue
                 data_file = board_info.get('data_file')
                 if not data_file:
                     continue
@@ -2326,13 +4312,15 @@ class MultiBoardGUI:
                     'data_file': data_file,
                     'name': board_info.get('name', label),
                     'description': board_info.get('description', ''),
-                    'use_custom_columns': board_info.get('use_custom_columns'),
                 }
         else:
             for entry in sorted(os.listdir(folder)):
                 if not entry.endswith('.json') or entry == 'boards_metadata.json' or entry.endswith('.backup.json'):
                     continue
-                inspected = self.board_manager.inspect_board_file(os.path.join(folder, entry))
+                try:
+                    inspected = self.board_manager.inspect_board_file(os.path.join(folder, entry))
+                except ValueError:
+                    continue
                 label = inspected['name']
                 if label in option_map:
                     label = f"{label} ({entry})"
@@ -2340,13 +4328,12 @@ class MultiBoardGUI:
                     'data_file': inspected['data_file'],
                     'name': inspected['name'],
                     'description': '',
-                    'use_custom_columns': inspected['use_custom_columns'],
                 }
         return option_map
 
     def load_board_from_folder(self):
         """Load a board file from an external folder."""
-        folder = QFileDialog.getExistingDirectory(self.window, 'Select Folder Containing a Board')
+        folder = choose_existing_directory_dialog(self.window, 'Select Folder Containing a Board')
         if not folder:
             return
         option_map = self._discover_boards_in_folder(folder)
@@ -2362,7 +4349,6 @@ class MultiBoardGUI:
             board_choice['data_file'],
             name=board_choice['name'],
             description=board_choice['description'],
-            use_custom_columns=board_choice['use_custom_columns'],
             switch_to=True,
         )
         if board_id:
@@ -2394,6 +4380,50 @@ class MultiBoardGUI:
         )
         self.refresh_ui()
 
+    def add_subcard_to_selected_card(self):
+        """Create a subcard under the currently selected top-level card."""
+        board = self.ensure_writable_board()
+        if board is None:
+            return
+        parent_card = self._selected_card()
+        if parent_card is None:
+            QMessageBox.information(self.window, 'No Card Selected', 'Select a parent card first.')
+            return
+        if parent_card.parent_id:
+            QMessageBox.information(self.window, 'Add Subcard', 'Nested subcards are not supported.')
+            return
+
+        dialog = CardDialog(
+            board,
+            target_column_id=parent_card.column_id,
+            parent_card=parent_card,
+            parent=self.window,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            if dialog.did_mutate_board:
+                self.refresh_ui()
+            return
+        values = dialog.values()
+        try:
+            created = board.create_subcard(
+                parent_card.id,
+                values['title'],
+                values['description'],
+                values['priority'],
+                values['project'] or None,
+                values['color'],
+                values['card_type_id'],
+                values['start_date'],
+                values['end_date'],
+                values['assignee'] or None,
+                values['tags'],
+            )
+        except ValueError as error:
+            QMessageBox.warning(self.window, 'Add Subcard', str(error))
+            return
+        self.selected_card_id = created.id
+        self.refresh_ui()
+
     def _selected_card(self):
         """Return the selected card from the current board."""
         board = self.current_board()
@@ -2413,6 +4443,8 @@ class MultiBoardGUI:
         original_column_id = card.column_id
         dialog = CardDialog(board, card=card, parent=self.window)
         if dialog.exec() != QDialog.DialogCode.Accepted:
+            if dialog.did_mutate_board:
+                self.refresh_ui()
             return
         values = dialog.values()
         board.edit_card(
@@ -2460,15 +4492,16 @@ class MultiBoardGUI:
         if card is None:
             QMessageBox.information(self.window, 'No Card Selected', 'Select a card first.')
             return
-        choices = [column.name for column in board.get_columns_ordered() if column.id != card.column_id]
+        current_column_token = card.column_id
+        choices = [column_label(column) for column in board.get_columns_ordered() if column_identifier(column) != current_column_token]
         if not choices:
             return
         selected, ok = QInputDialog.getItem(self.window, 'Move Card', 'Target Column', choices, editable=False)
         if not ok or not selected:
             return
         for column in board.get_columns_ordered():
-            if column.name == selected:
-                board.move_card(card.id, column.id)
+            if column_label(column) == selected:
+                board.move_card(card.id, column_target_value(column))
                 self.refresh_ui()
                 return
 

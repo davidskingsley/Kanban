@@ -5,7 +5,7 @@
 from copy import deepcopy
 from datetime import date, datetime
 from typing import Dict, List, Optional, Set, Union
-from .models import Card, Column, CustomColumn, Status, Priority, CardType, CardAttachment, UNSET
+from .models import Card, Column, CustomColumn, Status, Priority, CardType, CardAttachment, Project, UNSET
 from .storage import DataStorage, LockHandler, get_default_single_board_file
 import os
 import uuid
@@ -23,25 +23,14 @@ class KanbanBoard:
             data_file = get_default_single_board_file()
         
         self.storage = DataStorage(data_file, lock_handler=lock_handler)
-        self.use_custom_columns = use_custom_columns
+        self.use_custom_columns = True
         self.card_types: Dict[str, CardType] = {}
+        self.projects: Dict[str, Project] = {}
         self.last_used_card_type_id = None
         self._undo_stack: List[Dict[str, object]] = []
         self._redo_stack: List[Dict[str, object]] = []
-        
-        # Initialize columns based on mode
-        if use_custom_columns:
-            self.custom_columns: Dict[str, CustomColumn] = {}
-            self.columns = None  # Legacy columns not used
-        else:
-            # Legacy mode
-            self.columns: Dict[Status, Column] = {
-                Status.TODO: Column(Status.TODO),
-                Status.IN_PROGRESS: Column(Status.IN_PROGRESS),
-                Status.REVIEW: Column(Status.REVIEW),
-                Status.DONE: Column(Status.DONE)
-            }
-            self.custom_columns = None
+        self.custom_columns: Dict[str, CustomColumn] = {}
+        self.columns = None
         
         # Load existing data
         self.load_board()
@@ -70,30 +59,20 @@ class KanbanBoard:
             self.last_used_card_type_id = self.get_default_card_type_id()
 
         card_types_data = [card_type.to_dict() for card_type in self.get_card_types_ordered()]
-        if self.use_custom_columns:
-            columns_data = [column.to_dict() for column in self.custom_columns.values()]
-            cards_data = []
-            for column in self.custom_columns.values():
-                for card in column:
-                    cards_data.append(card.to_dict())
-
-            return {
-                'columns': columns_data,
-                'card_types': card_types_data,
-                'cards': cards_data,
-                'last_used_card_type_id': self.last_used_card_type_id,
-                'format_version': '2.0'
-            }
-
+        projects_data = [project.to_dict() for project in self.get_projects_ordered()]
+        columns_data = [column.to_dict() for column in self.custom_columns.values()]
         cards_data = []
-        for column in self.columns.values():
+        for column in self.custom_columns.values():
             for card in column:
                 cards_data.append(card.to_dict())
 
         return {
+            'columns': columns_data,
             'cards': cards_data,
             'card_types': card_types_data,
+            'projects': projects_data,
             'last_used_card_type_id': self.last_used_card_type_id,
+            'format_version': '2.0',
         }
 
     def _push_history_state(self, stack: List[Dict[str, object]], description: str):
@@ -286,35 +265,24 @@ class KanbanBoard:
         return True
     
     def get_columns_ordered(self) -> List[Union[CustomColumn, Column]]:
-        """Get columns in order (by position for custom columns, fixed order for legacy)."""
-        if self.use_custom_columns:
-            return sorted(self.custom_columns.values(), key=lambda col: col.position)
-        else:
-            return [self.columns[status] for status in Status]
+        """Get columns in position order."""
+        return sorted(self.custom_columns.values(), key=lambda col: col.position)
     
     def get_column_by_id(self, column_id: str) -> Optional[CustomColumn]:
         """Get a custom column by ID."""
-        if not self.use_custom_columns:
-            return None
         return self.custom_columns.get(column_id)
     
     def _adjust_column_positions(self):
         """Ensure column positions are sequential starting from 0."""
-        if not self.use_custom_columns:
-            return
-        
         ordered_columns = sorted(self.custom_columns.values(), key=lambda col: col.position)
         for index, column in enumerate(ordered_columns):
             column.position = index
     
     def _get_first_column_id(self) -> Optional[str]:
         """Get the ID of the first column."""
-        if self.use_custom_columns:
-            if not self.custom_columns:
-                return None
-            return min(self.custom_columns.keys(), key=lambda cid: self.custom_columns[cid].position)
-        else:
-            return None  # Legacy mode uses Status enum
+        if not self.custom_columns:
+            return None
+        return min(self.custom_columns.keys(), key=lambda cid: self.custom_columns[cid].position)
 
     def get_default_add_card_column_id(self) -> Optional[str]:
         """Return the preferred column for creating new cards in custom-column mode."""
@@ -355,6 +323,158 @@ class KanbanBoard:
         other_types.sort(key=lambda card_type: card_type.name.lower())
         return [default_type] + other_types
 
+    def get_project(self, project_id: str) -> Optional[Project]:
+        """Return a project by ID."""
+        return self.projects.get(project_id)
+
+    def get_project_by_name(self, name: Optional[str]) -> Optional[Project]:
+        """Return a project matching the provided name, ignoring case."""
+        normalized_name = (name or '').strip().lower()
+        if not normalized_name:
+            return None
+        return next(
+            (project for project in self.projects.values() if project.name.strip().lower() == normalized_name),
+            None,
+        )
+
+    def get_projects_ordered(self) -> List[Project]:
+        """Return projects sorted by name."""
+        return sorted(self.projects.values(), key=lambda project: project.name.lower())
+
+    def _project_name_matches(self, value: Optional[str], project_name: str) -> bool:
+        """Return whether a stored project reference matches the given project name."""
+        return bool(value and value.strip().lower() == project_name.strip().lower())
+
+    def _ensure_project_exists(self, project_name: Optional[str], description: str = '') -> Optional[Project]:
+        """Ensure a project registry entry exists for the provided name."""
+        normalized_name = (project_name or '').strip()
+        if not normalized_name:
+            return None
+        existing = self.get_project_by_name(normalized_name)
+        if existing is not None:
+            return existing
+        project = Project(normalized_name, description)
+        self.projects[project.id] = project
+        return project
+
+    def _sync_projects_from_references(self):
+        """Backfill managed projects from cards and card-type presets."""
+        for card_type in self.card_types.values():
+            self._ensure_project_exists(card_type.default_project)
+        for card in self.get_all_cards():
+            self._ensure_project_exists(card.project)
+
+    def create_project(self, name: str, description: str = '') -> str:
+        """Create a new reusable project."""
+        self._ensure_writable()
+
+        name = (name or '').strip()
+        if not name:
+            raise ValueError('Project name is required')
+        if self.get_project_by_name(name) is not None:
+            raise ValueError('A project with that name already exists')
+
+        self._push_undo_state(f"Create project '{name}'")
+
+        project = Project(name, description)
+        self.projects[project.id] = project
+        self.save_board()
+        return project.id
+
+    def edit_project(self, project_id: str, name: str = None, description: str = None) -> Optional[Project]:
+        """Edit an existing project and update any references to it."""
+        self._ensure_writable()
+
+        project = self.get_project(project_id)
+        if project is None:
+            return None
+
+        if name is not None:
+            name = name.strip()
+            if not name:
+                raise ValueError('Project name is required')
+            duplicate = next(
+                (existing for existing in self.projects.values()
+                 if existing.id != project_id and existing.name.lower() == name.lower()),
+                None,
+            )
+            if duplicate is not None:
+                raise ValueError('A project with that name already exists')
+
+        old_name = project.name
+        self._push_undo_state(f"Edit project '{old_name}'")
+
+        project.update(name, description)
+        if name is not None and project.name != old_name:
+            for card in self.get_all_cards():
+                if self._project_name_matches(card.project, old_name):
+                    card.project = project.name
+                    card.updated_at = datetime.now()
+            for card_type in self.card_types.values():
+                if self._project_name_matches(card_type.default_project, old_name):
+                    card_type.update(default_project=project.name)
+
+        self.save_board()
+        return project
+
+    def get_cards_by_project(self, project_id: str) -> List[Card]:
+        """Return all cards referencing the given project."""
+        project = self.get_project(project_id)
+        if project is None:
+            return []
+        return [card for card in self.get_all_cards() if self._project_name_matches(card.project, project.name)]
+
+    def get_card_types_by_project(self, project_id: str) -> List[CardType]:
+        """Return card types whose project preset references the given project."""
+        project = self.get_project(project_id)
+        if project is None:
+            return []
+        return [
+            card_type
+            for card_type in self.card_types.values()
+            if self._project_name_matches(card_type.default_project, project.name)
+        ]
+
+    def delete_project(self, project_id: str, delete_cards: bool = False,
+                       replacement_project_id: str = None) -> bool:
+        """Delete a project and either remove, clear, or reassign its references."""
+        self._ensure_writable()
+
+        project = self.get_project(project_id)
+        if project is None:
+            return False
+
+        replacement_project = None
+        replacement_name = None
+        if replacement_project_id:
+            replacement_project = self.get_project(replacement_project_id)
+            if replacement_project is None:
+                raise ValueError('Replacement project does not exist')
+            if replacement_project.id == project_id:
+                raise ValueError('Replacement project must be different')
+            replacement_name = replacement_project.name
+
+        self._push_undo_state(f"Delete project '{project.name}'")
+
+        cards = self.get_cards_by_project(project_id)
+        if delete_cards:
+            top_level_cards = [card for card in cards if not card.parent_id]
+            nested_cards = [card for card in cards if card.parent_id]
+            for card in top_level_cards + nested_cards:
+                if self.find_card(card.id):
+                    self._delete_card_internal(card.id)
+        else:
+            for card in cards:
+                card.project = replacement_name
+                card.updated_at = datetime.now()
+
+        for card_type in self.get_card_types_by_project(project_id):
+            card_type.update(default_project=replacement_name)
+
+        del self.projects[project_id]
+        self.save_board()
+        return True
+
     def get_last_used_card_type(self) -> CardType:
         """Return the last used card type, or the default type if unavailable."""
         card_type = self.get_card_type(self.last_used_card_type_id)
@@ -387,6 +507,7 @@ class KanbanBoard:
 
         card_type = CardType(name, description, default_project, default_color)
         self.card_types[card_type.id] = card_type
+        self._ensure_project_exists(default_project)
         self.last_used_card_type_id = card_type.id
         self.save_board()
         return card_type.id
@@ -414,6 +535,8 @@ class KanbanBoard:
         self._push_undo_state(f"Edit card type '{card_type.name}'")
 
         card_type.update(name, description, default_project, default_color)
+        if default_project is not UNSET:
+            self._ensure_project_exists(card_type.default_project)
         self.save_board()
         return card_type
 
@@ -465,6 +588,7 @@ class KanbanBoard:
         card_type = self._resolve_card_type(card_type_id)
         effective_project = project if project is not None else card_type.default_project
         effective_color = color if color is not None else card_type.default_color
+        self._ensure_project_exists(effective_project)
 
         if self.use_custom_columns:
             if not column_id:
@@ -525,6 +649,8 @@ class KanbanBoard:
                 self.last_used_card_type_id = resolved_type.id
             self._push_undo_state(f"Edit card '{card.title}'")
             card.update(title, description, priority, assignee, project, start_date, end_date, parent_id, color, resolved_type_id)
+            if project is not None:
+                self._ensure_project_exists(project)
             if tags is not UNSET:
                 card.tags = list(dict.fromkeys(tags or []))
                 card.updated_at = datetime.now()
@@ -958,27 +1084,18 @@ class KanbanBoard:
         """Remove all cards from done columns."""
         self._ensure_writable()
 
-        if not self.use_custom_columns:
-            done_count = len(self.columns[Status.DONE])
-            if done_count == 0:
-                return 0
-            self._push_undo_state("Clear done cards")
-            self.columns[Status.DONE].cards.clear()
-            self.save_board()
-            return done_count
-        else:
-            if not self.custom_columns:
-                return 0
+        if not self.custom_columns:
+            return 0
 
-            completed_columns = [column for column in self.custom_columns.values() if column.is_completed]
-            card_count = sum(len(column.cards) for column in completed_columns)
-            if card_count == 0:
-                return 0
-            self._push_undo_state("Clear done cards")
-            for column in completed_columns:
-                column.cards.clear()
-            self.save_board()
-            return card_count
+        completed_columns = [column for column in self.custom_columns.values() if column.is_completed]
+        card_count = sum(len(column.cards) for column in completed_columns)
+        if card_count == 0:
+            return 0
+        self._push_undo_state("Clear done cards")
+        for column in completed_columns:
+            column.cards.clear()
+        self.save_board()
+        return card_count
     
     def load_board(self):
         """Load board data from storage."""
@@ -987,12 +1104,9 @@ class KanbanBoard:
 
     def _load_from_data(self, data: Dict, persist_defaults: bool = True):
         """Load board data from a provided serialized representation."""
-        if self.use_custom_columns:
-            self.custom_columns.clear()
-        else:
-            for column in self.columns.values():
-                column.cards.clear()
+        self.custom_columns.clear()
         self.card_types.clear()
+        self.projects.clear()
         self.last_used_card_type_id = None
         
         # Check if data contains custom columns
@@ -1000,20 +1114,16 @@ class KanbanBoard:
         is_legacy_data = 'cards' in data and not has_custom_columns
         is_empty_board = not data.get('cards') and not has_custom_columns
 
-        if self.use_custom_columns and is_empty_board:
+        if is_empty_board:
             self._init_default_custom_columns(persist=persist_defaults)
             return
-        
-        if has_custom_columns and self.use_custom_columns:
+
+        if has_custom_columns:
             # Load custom columns format
             self._load_custom_columns(data)
         elif is_legacy_data:
-            # Handle legacy data or convert to custom columns
-            if self.use_custom_columns:
-                self._convert_legacy_to_custom(data, persist=persist_defaults)
-            else:
-                self._load_legacy_data(data)
-        elif self.use_custom_columns and not self.custom_columns:
+            raise ValueError('Legacy boards are no longer supported. Boards must use custom columns.')
+        elif not self.custom_columns:
             # Initialize default custom columns if empty
             self._init_default_custom_columns(persist=persist_defaults)
     
@@ -1021,10 +1131,16 @@ class KanbanBoard:
         """Load custom columns format."""
         self.custom_columns.clear()
         self.card_types.clear()
+        self.projects.clear()
 
         for card_type_data in data.get('card_types', []):
             card_type = CardType.from_dict(card_type_data)
             self.card_types[card_type.id] = card_type
+
+        for project_data in data.get('projects', []):
+            project = Project.from_dict(project_data)
+            if self.get_project_by_name(project.name) is None:
+                self.projects[project.id] = project
 
         self._ensure_default_card_type()
         self.last_used_card_type_id = data.get('last_used_card_type_id') or self.get_default_card_type_id()
@@ -1043,10 +1159,12 @@ class KanbanBoard:
                 card.card_type_id = self.get_default_card_type_id()
             if card.column_id in self.custom_columns:
                 self.custom_columns[card.column_id].add_card(card)
+        self._sync_projects_from_references()
     
     def _load_legacy_data(self, data: Dict):
         """Load legacy format data."""
         self.card_types.clear()
+        self.projects.clear()
         self._ensure_default_card_type()
         self.last_used_card_type_id = data.get('last_used_card_type_id') or self.get_default_card_type_id()
         # Clear current columns
@@ -1060,11 +1178,13 @@ class KanbanBoard:
                 card.card_type_id = self.get_default_card_type_id()
             if card.status:
                 self.columns[card.status].add_card(card)
+        self._sync_projects_from_references()
     
     def _convert_legacy_to_custom(self, data: Dict, persist: bool = True):
         """Convert legacy data to custom columns format."""
         self.custom_columns.clear()
         self.card_types.clear()
+        self.projects.clear()
         self._ensure_default_card_type()
         self.last_used_card_type_id = self.get_default_card_type_id()
         
@@ -1094,6 +1214,8 @@ class KanbanBoard:
                 column_id = status_to_column_id[card.status]
                 card.move_to_column(column_id)
                 self.custom_columns[column_id].add_card(card)
+
+        self._sync_projects_from_references()
         
         # Save in new format
         if persist:
