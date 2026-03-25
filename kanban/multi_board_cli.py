@@ -91,17 +91,18 @@ class MultiBoardCLI:
             print("4. Rename board")
             print("5. Delete board")
             print("6. Board statistics")
-            print("7. Export all boards")
-            print("8. Import boards")
-            print("9. Load board from folder")
-            print("10. Undo last board-management change")
-            print("11. Redo last undone board-management change")
+            print("7. Export current board")
+            print("8. Export all boards")
+            print("9. Import boards")
+            print("10. Load board from folder")
+            print("11. Undo last board-management change")
+            print("12. Redo last undone board-management change")
         else:
             print("3. Create new board")
-            print("8. Import boards")
-            print("9. Load board from folder")
-            print("10. Undo last board-management change")
-            print("11. Redo last undone board-management change")
+            print("9. Import boards")
+            print("10. Load board from folder")
+            print("11. Undo last board-management change")
+            print("12. Redo last undone board-management change")
         print("0. Exit")
         print()
     
@@ -116,11 +117,12 @@ class MultiBoardCLI:
             '4': self.rename_board if boards else None,
             '5': self.delete_board if boards else None,
             '6': self.show_board_statistics if boards else None,
-            '7': self.export_all_boards if boards else None,
-            '8': self.import_boards,
-            '9': self.load_board_from_folder,
-            '10': self.undo_last_change,
-            '11': self.redo_last_change,
+            '7': self.export_current_board if boards else None,
+            '8': self.export_all_boards if boards else None,
+            '9': self.import_boards,
+            '10': self.load_board_from_folder,
+            '11': self.undo_last_change,
+            '12': self.redo_last_change,
             '0': self.exit_app
         }
         
@@ -333,6 +335,37 @@ class MultiBoardCLI:
             print(f"✅ All boards exported to '{filename}'!")
         except Exception as e:
             print(f"❌ Failed to export boards: {e}")
+
+    def export_current_board(self):
+        """Export the current board as a standalone board JSON file."""
+        print("\n--- EXPORT CURRENT BOARD ---")
+        current_board_id = self.board_manager.current_board_id
+        if not current_board_id:
+            print("No current board selected!")
+            return
+
+        board_name = next(
+            (board['name'] for board in self.board_manager.get_board_list() if board['id'] == current_board_id),
+            'board',
+        )
+        default_filename = f"{''.join(c.lower() if c.isalnum() else '_' for c in board_name).strip('_') or 'board'}.json"
+        filename = input(f"Export filename (default: {default_filename}): ").strip()
+        if not filename:
+            filename = default_filename
+
+        if not filename.endswith('.json'):
+            filename += '.json'
+
+        try:
+            import json
+
+            export_data = self.board_manager.export_board_data(current_board_id)
+            with open(filename, 'w', encoding='utf-8') as output_file:
+                json.dump(export_data, output_file, indent=2, ensure_ascii=False)
+
+            print(f"✅ Current board exported to '{filename}'!")
+        except Exception as e:
+            print(f"❌ Failed to export current board: {e}")
     
     def import_boards(self):
         """Import boards from a backup file."""

@@ -439,6 +439,21 @@ class BoardManager:
                 export_data['boards'][board_id] = load_json_file(data_file)
         
         return export_data
+
+    def export_board_data(self, board_id: str) -> Dict:
+        """Export a single board as standalone board-file data."""
+        metadata = self.load_metadata()
+        if board_id not in metadata['boards']:
+            raise KeyError(board_id)
+
+        if board_id in self.boards:
+            return deepcopy(self.boards[board_id].export_data())
+
+        data_file = metadata['boards'][board_id]['data_file']
+        if not os.path.exists(data_file):
+            raise FileNotFoundError(data_file)
+
+        return load_json_file(data_file)
     
     def import_boards(self, import_data: Dict) -> bool:
         """Import boards data from backup."""

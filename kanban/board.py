@@ -958,7 +958,13 @@ class KanbanBoard:
             self.save_board()
         return removed
     
-    def move_card(self, card_id: str, to_column: Union[str, Status]) -> bool:
+    def move_card(
+        self,
+        card_id: str,
+        to_column: Union[str, Status],
+        target_card_id: Optional[str] = None,
+        insert_after: bool = False,
+    ) -> bool:
         """Move a card to a different column."""
         self._ensure_writable()
 
@@ -969,15 +975,38 @@ class KanbanBoard:
         self._push_undo_state(f"Move card '{existing_card.title}'")
         
         if self.use_custom_columns:
+            if not isinstance(to_column, str) or to_column not in self.custom_columns:
+                self._undo_stack.pop()
+                return False
+
+            target_column = self.custom_columns[to_column]
+            source_column = self.custom_columns.get(existing_card.column_id)
+            if source_column is None:
+                self._undo_stack.pop()
+                return False
+
+            if target_card_id == card_id and source_column is target_column:
+                self._undo_stack.pop()
+                return False
+
             # Find and remove the card from its current column
             for column in self.custom_columns.values():
                 card = column.remove_card(card_id)
                 if card:
                     break
-            
-            if card and isinstance(to_column, str) and to_column in self.custom_columns:
+
+            if card:
+                target_index = None
+                if target_card_id is not None:
+                    target_index = target_column.card_index(target_card_id)
+                    if target_index is None:
+                        self._undo_stack.pop()
+                        return False
+                    if insert_after:
+                        target_index += 1
+
                 card.move_to_column(to_column)
-                self.custom_columns[to_column].add_card(card)
+                target_column.add_card(card, target_index)
                 self.save_board()
                 return True
         else:

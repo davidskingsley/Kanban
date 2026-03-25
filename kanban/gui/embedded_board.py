@@ -394,6 +394,15 @@ class CardListWidget(QListWidget):
 			return
 		event.ignore()
 
+	def _drop_target_details(self, point):
+		item = self.itemAt(point)
+		if item is None:
+			return None, True
+		payload = item.data(Qt.ItemDataRole.UserRole) or {}
+		item_rect = self.visualItemRect(item)
+		insert_after = point.y() > item_rect.center().y()
+		return payload.get('card_id'), insert_after
+
 	def dragLeaveEvent(self, event):
 		self._drop_highlight = False
 		self._apply_drop_style()
@@ -406,7 +415,14 @@ class CardListWidget(QListWidget):
 			event.ignore()
 			return
 		payload = json.loads(bytes(event.mimeData().data(self.CARD_MIME_TYPE)).decode('utf-8'))
-		self.board_view.handle_card_drop(payload.get('card_id'), payload.get('source_column_id'), self.column_id)
+		target_card_id, insert_after = self._drop_target_details(event.position().toPoint())
+		self.board_view.handle_card_drop(
+			payload.get('card_id'),
+			payload.get('source_column_id'),
+			self.column_id,
+			target_card_id=target_card_id,
+			insert_after=insert_after,
+		)
 		event.acceptProposedAction()
 
 	def resizeEvent(self, event):

@@ -1,4 +1,5 @@
 import os
+import json
 from unittest.mock import patch
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
@@ -13,6 +14,41 @@ from gui_test_case import GuiTestCase
 
 
 class GuiBoardRegressionTests(GuiTestCase):
+    def test_file_menu_exposes_exit_action(self):
+        self.board_manager.create_board('File Menu Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+
+        menu_actions = self.gui.window.menuBar().actions()
+        self.assertTrue(menu_actions)
+        self.assertEqual(menu_actions[0].text().replace('&', ''), 'File')
+
+        file_menu = menu_actions[0].menu()
+        file_action_texts = [action.text().replace('&', '') for action in file_menu.actions()]
+        self.assertIn('Exit', file_action_texts)
+
+    def test_export_current_board_writes_standalone_board_json(self):
+        self.board_manager.create_board('Exportable Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        column_id = board.get_columns_ordered()[0].id
+        board.create_card('Standalone Export', 'card data', Priority.HIGH, column_id)
+        export_path = os.path.join(self.temp_dir, 'exported_board.json')
+
+        with patch('kanban.gui.pyside_app.choose_save_file_dialog', return_value=export_path), patch(
+            'kanban.gui.pyside_app.QMessageBox.information'
+        ) as information_mock:
+            self.gui.export_current_board()
+
+        self.assertTrue(os.path.exists(export_path))
+        with open(export_path, 'r', encoding='utf-8') as input_file:
+            export_data = json.load(input_file)
+
+        self.assertIn('columns', export_data)
+        self.assertIn('cards', export_data)
+        self.assertNotIn('metadata', export_data)
+        self.assertEqual(export_data['cards'][0]['title'], 'Standalone Export')
+        information_mock.assert_called_once()
+
     def test_custom_board_drag_drop_and_attachment_flow(self):
         self.board_manager.create_board('Regression Board')
         self.gui = MultiBoardGUI(self.board_manager)
@@ -20,7 +56,13 @@ class GuiBoardRegressionTests(GuiTestCase):
 
         columns = board.get_columns_ordered()
         first_column, second_column = columns[0], columns[1]
+        first_card = board.create_card('First', 'top card', Priority.LOW, first_column.id)
+        second_card = board.create_card('Second', 'middle card', Priority.MEDIUM, first_column.id)
         card = board.create_card('Drag Target', 'drag me', Priority.MEDIUM, first_column.id)
+
+        self.gui.handle_card_drop(card.id, first_column.id, first_column.id, target_card_id=first_card.id, insert_after=False)
+        reordered_ids = [entry.id for entry in board.custom_columns[first_column.id].cards]
+        self.assertEqual(reordered_ids, [card.id, first_card.id, second_card.id])
 
         self.gui.handle_card_drop(card.id, first_column.id, second_column.id)
         moved_card = board.find_card(card.id)

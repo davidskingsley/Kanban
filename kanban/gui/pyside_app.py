@@ -215,6 +215,9 @@ class MultiBoardGUI:
         """Create the menu bar."""
         menu_bar = self.window.menuBar()
 
+        self.file_menu = menu_bar.addMenu('File')
+        self.file_menu.addAction(self._action('Exit', self.window.close, QKeySequence.Quit))
+
         self.edit_menu = menu_bar.addMenu('Edit')
         self.edit_menu.addSection('History')
         self.undo_current_board_qaction = self._action('Undo Current Board Action', self.undo_current_board_action, 'Ctrl+Z')
@@ -237,6 +240,7 @@ class MultiBoardGUI:
         self.board_menu.addAction(self._action('Refresh Boards', self.refresh_ui, 'F5'))
         self.board_menu.addAction(self._action('Rename Current Board', self.rename_current_board, 'Ctrl+R'))
         self.board_menu.addAction(self._action('Delete Current Board', self.delete_current_board, 'Ctrl+Shift+D'))
+        self.board_menu.addAction(self._action('Export Current Board', self.export_current_board, 'Ctrl+Shift+S'))
         self.board_menu.addSection('Import / Export')
         self.board_menu.addAction(self._action('Load Board From Folder', self.load_board_from_folder, 'Ctrl+Shift+O'))
         self.board_menu.addAction(self._action('Export All Boards', self.export_all_boards, 'Ctrl+Shift+E'))
@@ -244,8 +248,6 @@ class MultiBoardGUI:
         self.board_menu.addSection('Overview')
         self.board_menu.addAction(self._action('Due Date View', self.show_due_date_view, 'Ctrl+Shift+T'))
         self.board_menu.addAction(self._action('Board Statistics', self.show_board_statistics, 'Ctrl+I'))
-        self.board_menu.addSection('Application')
-        self.board_menu.addAction(self._action('Quit', self.window.close, QKeySequence.Quit))
 
         self.filters_menu = menu_bar.addMenu('Filters')
         self.filters_menu.addSection('Toolbar Filters')
@@ -895,7 +897,14 @@ class MultiBoardGUI:
         self.selected_card_id = None
         self.refresh_ui()
 
-    def handle_card_drop(self, card_id: Optional[str], source_column_id: Optional[str], target_column_id: Optional[str]):
+    def handle_card_drop(
+        self,
+        card_id: Optional[str],
+        source_column_id: Optional[str],
+        target_column_id: Optional[str],
+        target_card_id: Optional[str] = None,
+        insert_after: bool = False,
+    ):
         """Move a card between columns from a drag-drop gesture."""
         if not card_id or not target_column_id:
             return
@@ -905,12 +914,13 @@ class MultiBoardGUI:
         target_value = resolve_column_target(board, target_column_id)
         if target_value is None:
             return
-        if source_column_id == target_column_id:
+        if target_card_id == card_id and source_column_id == target_column_id:
             self.selected_column_id = target_column_id
             self.selected_card_id = card_id
             self.refresh_ui()
             return
-        board.move_card(card_id, target_value)
+        if not board.move_card(card_id, target_value, target_card_id=target_card_id, insert_after=insert_after):
+            return
         self.selected_column_id = target_column_id
         self.selected_card_id = card_id
         self.refresh_ui()
@@ -1439,6 +1449,27 @@ class MultiBoardGUI:
         with open(file_name, 'w', encoding='utf-8') as output_file:
             json.dump(export_data, output_file, indent=2, ensure_ascii=False)
         QMessageBox.information(self.window, 'Export Complete', f'Exported boards to {file_name}.')
+
+    def export_current_board(self):
+        """Export the current board to a standalone JSON file."""
+        board = self.ensure_board()
+        if board is None:
+            return
+
+        suggested_name = ''.join(c.lower() if c.isalnum() else '_' for c in self._current_board_name()).strip('_') or 'board'
+        file_name = choose_save_file_dialog(
+            self.window,
+            'Export Current Board',
+            f'{suggested_name}.json',
+            'JSON Files (*.json)',
+        )
+        if not file_name:
+            return
+
+        export_data = self.board_manager.export_board_data(self.board_manager.current_board_id)
+        with open(file_name, 'w', encoding='utf-8') as output_file:
+            json.dump(export_data, output_file, indent=2, ensure_ascii=False)
+        QMessageBox.information(self.window, 'Export Complete', f'Exported current board to {file_name}.')
 
     def import_boards(self):
         """Import boards from a JSON backup file."""

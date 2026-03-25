@@ -93,11 +93,12 @@ External board loading:
 1. Create a board from the Boards menu.
    The create-board dialog defaults to the standard boards folder, but you can browse to a different storage folder and the board will still be remembered in the board list.
 2. Load an external board with `Boards -> Load Board From Folder`.
-3. Switch boards from the dropdown or with `Ctrl+O`.
-4. Double-click a card to edit it.
-5. Select a column and use the Columns menu to edit, delete, or reorder it.
-6. Choose a custom card color in the create or edit card dialog, or leave it blank to use the default board style.
-7. Manage reusable card types from the card dialog when creating or editing cards.
+3. Export the current board with `Boards -> Export Current Board` to create a standalone board JSON file that can be loaded later from a folder.
+4. Switch boards from the dropdown or with `Ctrl+O`.
+5. Double-click a card to edit it.
+6. Select a column and use the Columns menu to edit, delete, or reorder it.
+7. Choose a custom card color in the create or edit card dialog, or leave it blank to use the default board style.
+8. Manage reusable card types from the card dialog when creating or editing cards.
 
 ### Visual Indicators
 
@@ -116,6 +117,7 @@ External board loading:
 |----------|--------|
 | `Ctrl+N` | Create new board |
 | `Ctrl+Shift+O` | Load board from folder |
+| `Ctrl+Shift+S` | Export current board |
 | `Ctrl+O` | Switch board |
 | `Ctrl+R` | Rename current board |
 | `Ctrl+Shift+D` | Delete current board |

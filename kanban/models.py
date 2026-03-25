@@ -198,10 +198,14 @@ class CustomColumn:
         self.created_at = datetime.now()
         self.updated_at = datetime.now()
     
-    def add_card(self, card: 'Card'):
+    def add_card(self, card: 'Card', index: Optional[int] = None):
         """Add a card to this column."""
         card.column_id = self.id
-        self.cards.append(card)
+        if index is None:
+            self.cards.append(card)
+        else:
+            bounded_index = max(0, min(index, len(self.cards)))
+            self.cards.insert(bounded_index, card)
         self.updated_at = datetime.now()
     
     def remove_card(self, card_id: str) -> Optional['Card']:
@@ -218,6 +222,13 @@ class CustomColumn:
         for card in self.cards:
             if card.id == card_id:
                 return card
+        return None
+
+    def card_index(self, card_id: str) -> Optional[int]:
+        """Return the index of a card in this column, if present."""
+        for index, card in enumerate(self.cards):
+            if card.id == card_id:
+                return index
         return None
     
     def rename(self, new_name: str):
