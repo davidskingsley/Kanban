@@ -197,6 +197,13 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(self.gui.toolbar_tag_combo.width(), 108)
         self.assertEqual(self.gui.toolbar_due_state_combo.width(), 118)
 
+    def test_board_summary_moves_to_title_bar(self):
+        self.board_manager.create_board('Title Summary Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+
+        self.assertFalse(hasattr(self.gui, 'summary_label'))
+        self.assertEqual(self.gui.window.windowTitle(), 'Multi-Board Kanban Manager - Title Summary Board | 0 cards | 0 completed')
+
     def test_card_dialog_restores_subcard_management_for_top_level_cards(self):
         self.board_manager.create_board('Subcard Dialog Board')
         board = self.board_manager.get_current_board()

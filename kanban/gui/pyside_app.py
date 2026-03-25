@@ -107,9 +107,10 @@ class MultiBoardGUI:
         self.app.setApplicationName('Kanban')
         self.app.setStyle('Fusion')
         self.app.setStyleSheet(WINDOW_STYLE)
+        self.base_window_title = 'Multi-Board Kanban Manager'
 
         self.window = QMainWindow()
-        self.window.setWindowTitle('Multi-Board Kanban Manager')
+        self.window.setWindowTitle(self.base_window_title)
         self.window.resize(1480, 860)
 
         self.selected_card_id: Optional[str] = None
@@ -132,10 +133,6 @@ class MultiBoardGUI:
         root_layout = QVBoxLayout(central)
         root_layout.setContentsMargins(8, 8, 8, 8)
         root_layout.setSpacing(8)
-
-        self.summary_label = QLabel('No board selected')
-        self.summary_label.setWordWrap(True)
-        root_layout.addWidget(self.summary_label)
 
         self.scroll_area = PropagatingScrollArea()
         self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
@@ -208,12 +205,6 @@ class MultiBoardGUI:
         self.toolbar_due_state_combo.currentIndexChanged.connect(self.apply_toolbar_filters)
         toolbar.addWidget(self.toolbar_due_state_combo)
 
-        self.toolbar_overdue_checkbox = QCheckBox('Late only')
-        self.toolbar_overdue_checkbox.setObjectName('ToolbarLateOnlyCheckbox')
-        self.toolbar_overdue_checkbox.setToolTip('Only show overdue cards')
-        self.toolbar_overdue_checkbox.toggled.connect(self.apply_toolbar_filters)
-        toolbar.addWidget(self.toolbar_overdue_checkbox)
-
         self.toolbar_clear_filters_button = QPushButton('Clear')
         self.toolbar_clear_filters_button.setObjectName('ClearCardFiltersButton')
         self.toolbar_clear_filters_button.clicked.connect(self.clear_toolbar_filters)
@@ -263,7 +254,6 @@ class MultiBoardGUI:
         self.filters_menu.addAction(self._action('Filter by Due State', self.show_due_state_filter_popup, 'Ctrl+Shift+L'))
         self.filters_menu.addAction(self._action('Filter by Card Type', self.show_card_type_filter_popup, 'Ctrl+Shift+Y'))
         self.filters_menu.addAction(self._action('Filter by Tag', self.show_tag_filter_popup, 'Ctrl+Shift+G'))
-        self.filters_menu.addAction(self._action('Toggle Late Only', self.toggle_late_only_filter, 'Ctrl+Alt+L'))
         self.filters_menu.addSeparator()
         self.filters_menu.addAction(self._action('Clear Filters', self.clear_toolbar_filters, 'Ctrl+Shift+F'))
 
@@ -294,6 +284,16 @@ class MultiBoardGUI:
         column_menu.addAction(self._action('Delete Selected Column', self.delete_selected_column, 'Ctrl+Alt+D'))
         column_menu.addSection('Layout')
         column_menu.addAction(self._action('Reorder Columns', self.reorder_columns, 'Ctrl+Alt+O'))
+
+    def _set_window_title_summary(self, board_name: str, stats_text: str = ''):
+        """Update the native window title with board summary details."""
+        if board_name == 'No board selected' and not stats_text:
+            self.window.setWindowTitle(self.base_window_title)
+            return
+        suffix = f' - {board_name}'
+        if stats_text:
+            suffix += f' | {stats_text}'
+        self.window.setWindowTitle(f'{self.base_window_title}{suffix}')
 
     def _action(self, title: str, callback, shortcut=None) -> QAction:
         """Create a QAction helper."""
@@ -399,7 +399,6 @@ class MultiBoardGUI:
             'card_type': '',
             'tag': '',
             'due_state': '',
-            'overdue': False,
             'column_search': {},
         }
 
@@ -424,7 +423,6 @@ class MultiBoardGUI:
             state['card_type'],
             state['tag'],
             state['due_state'],
-            state['overdue'],
         ])
 
     def _column_search_text(self, column_id: str) -> str:
@@ -461,7 +459,6 @@ class MultiBoardGUI:
         self.toolbar_card_type_combo.setEnabled(enabled)
         self.toolbar_tag_combo.setEnabled(enabled)
         self.toolbar_due_state_combo.setEnabled(enabled)
-        self.toolbar_overdue_checkbox.setEnabled(enabled)
         self.toolbar_clear_filters_button.setEnabled(enabled and self._filters_active())
 
     def _sync_filter_toolbar(self, board: Optional[KanbanBoard]):
@@ -478,7 +475,6 @@ class MultiBoardGUI:
                 self.toolbar_card_type_combo.setCurrentIndex(0)
                 self.toolbar_tag_combo.setCurrentIndex(0)
                 self.toolbar_due_state_combo.setCurrentIndex(0)
-                self.toolbar_overdue_checkbox.setChecked(False)
                 self._set_filter_toolbar_enabled(False)
                 return
 
@@ -489,7 +485,6 @@ class MultiBoardGUI:
             self._set_combo_to_data(self.toolbar_card_type_combo, state['card_type'])
             self._set_combo_to_data(self.toolbar_tag_combo, state['tag'])
             self._set_combo_to_data(self.toolbar_due_state_combo, state['due_state'])
-            self.toolbar_overdue_checkbox.setChecked(bool(state['overdue']))
             self._set_filter_toolbar_enabled(True)
         finally:
             self._updating_filter_controls = False
@@ -551,7 +546,6 @@ class MultiBoardGUI:
             'card_type': self.toolbar_card_type_combo.currentData() or '',
             'tag': self.toolbar_tag_combo.currentData() or '',
             'due_state': self.toolbar_due_state_combo.currentData() or '',
-            'overdue': self.toolbar_overdue_checkbox.isChecked(),
         }
         self.selected_card_id = None
         self.refresh_ui()
@@ -568,7 +562,6 @@ class MultiBoardGUI:
             self.toolbar_card_type_combo.setCurrentIndex(0)
             self.toolbar_tag_combo.setCurrentIndex(0)
             self.toolbar_due_state_combo.setCurrentIndex(0)
-            self.toolbar_overdue_checkbox.setChecked(False)
         finally:
             self._updating_filter_controls = False
         self.board_filter_states[self.board_manager.current_board_id] = self._default_filter_state()
@@ -605,12 +598,6 @@ class MultiBoardGUI:
         self.toolbar_due_state_combo.setFocus()
         self.toolbar_due_state_combo.showPopup()
 
-    def toggle_late_only_filter(self):
-        """Toggle the late-only checkbox from the Filters menu."""
-        if not self.toolbar_overdue_checkbox.isEnabled():
-            return
-        self.toolbar_overdue_checkbox.setChecked(not self.toolbar_overdue_checkbox.isChecked())
-
     def _card_matches_filters(self, board: KanbanBoard, card) -> bool:
         """Return whether a card matches the active board filters."""
         state = self._get_current_filter_state()
@@ -630,8 +617,6 @@ class MultiBoardGUI:
             return False
         if state['due_state'] and due_state_label(board, card) != state['due_state']:
             return False
-        if state['overdue'] and not (card.has_past_end_date() and not board.is_card_done(card)):
-            return False
         return True
 
     def _filter_cards(self, board: KanbanBoard, cards: List[object]) -> List[object]:
@@ -641,7 +626,7 @@ class MultiBoardGUI:
     def _filter_summary_suffix(self) -> str:
         """Return a readable summary of the current active filters."""
         state = self._get_current_filter_state()
-        if not any([state['search'], state['priority'], state['assignee'], state['card_type'], state['tag'], state['due_state'], state['overdue']]):
+        if not any([state['search'], state['priority'], state['assignee'], state['card_type'], state['tag'], state['due_state']]):
             return ''
         parts: List[str] = []
         if state['search']:
@@ -656,8 +641,6 @@ class MultiBoardGUI:
             parts.append(f"#{state['tag']}")
         if state['due_state']:
             parts.append(str(state['due_state']))
-        if state['overdue']:
-            parts.append('late only')
         return f" | filtered: {', '.join(parts)}"
 
     def run(self):
@@ -728,15 +711,16 @@ class MultiBoardGUI:
                 self.selected_column_id = None
 
         if current_board is None:
-            self.summary_label.setText('No board selected')
+            self._set_window_title_summary('No board selected')
             self._refresh_history_actions(None)
             return
 
         stats = current_board.get_board_stats()
         completed_cards = sum(1 for card in current_board.get_all_cards() if current_board.is_card_done(card))
         read_only_suffix = ' | read only' if current_board.is_read_only() else ''
-        self.summary_label.setText(
-            f"Board: {self._current_board_name()} | {stats['total_cards']} cards | {completed_cards} completed"
+        self._set_window_title_summary(
+            self._current_board_name(),
+            f"{stats['total_cards']} cards | {completed_cards} completed"
             f"{self._filter_summary_suffix()}{read_only_suffix}"
         )
         self._populate_columns(current_board)

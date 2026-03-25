@@ -123,13 +123,6 @@ QComboBox#DueFilterCombo {
 	max-width: 126px;
 	background: #fffdf9;
 }
-QCheckBox#ToolbarLateOnlyCheckbox {
-	background: rgba(125, 59, 20, 0.08);
-	border: 1px solid rgba(125, 59, 20, 0.12);
-	border-radius: 10px;
-	padding: 6px 8px;
-	font-weight: 600;
-}
 QPushButton#ClearCardFiltersButton {
 	padding: 6px 10px;
 	min-width: 58px;
