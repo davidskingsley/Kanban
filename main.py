@@ -6,7 +6,6 @@
 import argparse
 import sys
 from kanban.multi_board_cli import MultiBoardCLI
-from kanban.multi_board_gui import MultiBoardGUI
 from kanban.board_manager import BoardManager
 
 
@@ -34,11 +33,11 @@ def main():
             # Use GUI interface with multi-board support
             print("Starting multi-board GUI mode...")
             try:
-                import tkinter
+                from kanban.multi_board_gui import MultiBoardGUI
                 multi_gui = MultiBoardGUI(board_manager)
                 multi_gui.run()
             except ImportError:
-                print("Tkinter not available. Using multi-board CLI mode...")
+                print("PySide6 not available. Using multi-board CLI mode...")
                 multi_cli = MultiBoardCLI(board_manager)
                 multi_cli.run()
             except Exception as e:

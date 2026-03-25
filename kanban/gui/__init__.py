@@ -1,7 +1,7 @@
 ## @file
-#  @brief Public exports for the split multi-board GUI package.
-"""Split multi-board GUI package."""
+#  @brief Public exports for the PySide6 GUI package.
+"""PySide6 GUI package."""
 
-from .multi_board_app import MultiBoardGUI
+from .pyside_app import MultiBoardGUI
 
 __all__ = ['MultiBoardGUI']
