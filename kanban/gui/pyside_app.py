@@ -1409,15 +1409,26 @@ class MultiBoardGUI:
         if board is None:
             return
 
-        dialog = DueDateViewDialog(board, self._current_board_name(), self.window)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        if not dialog.selected_card_id:
-            return
+        dialog = DueDateViewDialog(
+            board,
+            self._current_board_name(),
+            self.window,
+            on_focus_card=self._focus_card_from_due_date_view,
+            on_edit_card=self._edit_card_from_due_date_view,
+        )
+        dialog.exec()
 
-        self.selected_column_id = dialog.selected_column_id
-        self.selected_card_id = dialog.selected_card_id
+    def _focus_card_from_due_date_view(self, card_id: str, column_id: Optional[str]):
+        """Focus a card selected from the due date dialog without closing it."""
+        self.selected_column_id = column_id
+        self.selected_card_id = card_id
         self.refresh_ui()
+
+    def _edit_card_from_due_date_view(self, card_id: str, column_id: Optional[str]):
+        """Open the selected due date dialog card in the editor without dismissing the dialog."""
+        self.selected_column_id = column_id
+        self.selected_card_id = card_id
+        self.edit_selected_card()
 
     def export_all_boards(self):
         """Export all boards to a JSON backup file."""

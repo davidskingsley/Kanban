@@ -1,5 +1,6 @@
 import os
 import shutil
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -18,6 +19,7 @@ from kanban.gui.pyside_app import (
     ColumnAddButton,
     ColumnDialog,
     ColumnTitleButton,
+    DueDateViewDialog,
     MultiBoardGUI,
     OptionalDateField,
     ProjectsBrowserDialog,
@@ -225,6 +227,81 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertGreaterEqual(dialog.due_state_table.rowCount(), 1)
         self.assertEqual(dialog.stat_cards['cards']['value'].text(), '3')
         self.assertEqual(dialog.stat_cards['completed']['value'].text(), '2')
+
+    def test_due_date_dialog_uses_timeline_column_for_gantt_style_view(self):
+        self.board_manager.create_board('Timeline Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        column_id = board.get_columns_ordered()[0].id
+        board.create_card(
+            'Scheduled Work',
+            'Timeline entry',
+            Priority.HIGH,
+            column_id,
+            start_date=date(2026, 3, 24),
+            end_date=date(2026, 3, 28),
+        )
+
+        dialog = DueDateViewDialog(board, 'Timeline Board', self.gui.window)
+
+        self.assertEqual(dialog.table.columnCount(), 6)
+        self.assertIn('Timeline', dialog.table.horizontalHeaderItem(2).text())
+        self.assertTrue(dialog.timeline_hint_label.text())
+        timeline_payload = dialog.table.item(0, 2).data(Qt.ItemDataRole.UserRole)
+        self.assertEqual(timeline_payload['label'], 'Scheduled Work')
+        self.assertEqual(timeline_payload['start_date'], date(2026, 3, 24))
+        self.assertEqual(timeline_payload['end_date'], date(2026, 3, 28))
+
+    def test_due_date_dialog_filter_popup_has_explicit_readable_styling(self):
+        self.board_manager.create_board('Readable Due Filter Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+
+        dialog = DueDateViewDialog(board, 'Readable Due Filter Board', self.gui.window)
+        popup_style = dialog.filter_combo.view().styleSheet()
+
+        self.assertIn('background: #fffaf2;', popup_style)
+        self.assertIn('color: #2d241c;', popup_style)
+        self.assertIn('selection-background-color: #7d3b14;', popup_style)
+        self.assertIn('selection-color: #ffffff;', popup_style)
+
+    def test_due_date_dialog_edit_action_is_selected_on_double_click(self):
+        self.board_manager.create_board('Due Edit Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        column_id = board.get_columns_ordered()[0].id
+        card = board.create_card('Editable Scheduled Work', 'Timeline entry', Priority.HIGH, column_id, end_date=date(2026, 3, 28))
+        callback_calls = []
+
+        dialog = DueDateViewDialog(
+            board,
+            'Due Edit Board',
+            self.gui.window,
+            on_edit_card=lambda card_id, selected_column_id: callback_calls.append((card_id, selected_column_id)),
+        )
+        dialog.table.setCurrentCell(0, 0)
+
+        dialog._edit_selected_card()
+
+        self.assertEqual(dialog.selected_action, 'edit')
+        self.assertEqual(dialog.selected_card_id, card.id)
+        self.assertEqual(callback_calls, [(card.id, column_id)])
+        self.assertEqual(dialog.result(), dialog.DialogCode.Rejected)
+
+    def test_due_date_dialog_has_no_open_card_button(self):
+        self.board_manager.create_board('Due Focus Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        column_id = board.get_columns_ordered()[0].id
+        board.create_card('Focused Scheduled Work', 'Timeline entry', Priority.MEDIUM, column_id, end_date=date(2026, 3, 28))
+
+        dialog = DueDateViewDialog(
+            board,
+            'Due Focus Board',
+            self.gui.window,
+        )
+
+        self.assertFalse(hasattr(dialog, 'open_button'))
 
     def test_card_dialog_restores_subcard_management_for_top_level_cards(self):
         self.board_manager.create_board('Subcard Dialog Board')

@@ -5,11 +5,11 @@
 from __future__ import annotations
 
 import os
-from datetime import date
+from datetime import date, timedelta
 from typing import Dict, List, Optional
 
-from PySide6.QtCore import QDate, Qt
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QDate, QRectF, Qt
+from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
 	QAbstractItemView,
 	QCheckBox,
@@ -25,6 +25,8 @@ from PySide6.QtWidgets import (
 	QLineEdit,
 	QMessageBox,
 	QPushButton,
+	QStyledItemDelegate,
+	QStyle,
 	QTableWidgetItem,
 	QVBoxLayout,
 	QWidget,
@@ -47,7 +49,6 @@ from .common import (
 	create_dialog_hint_label,
 	create_dialog_section_label,
 	create_project_name_combo,
-	display_date,
 	due_state_colors,
 	due_state_label,
 	file_paths_from_mime_data,
@@ -56,6 +57,105 @@ from .common import (
 	priority_label,
 	resolve_hex_color,
 )
+
+
+class DueTimelineDelegate(QStyledItemDelegate):
+	"""Paint a gantt-style schedule bar inside the due-date table."""
+
+	def __init__(self, parent: Optional[QWidget] = None):
+		super().__init__(parent)
+		self.range_start = date.today() - timedelta(days=3)
+		self.range_end = date.today() + timedelta(days=10)
+
+	def set_range(self, start_date: date, end_date: date):
+		self.range_start = start_date
+		self.range_end = end_date
+
+	def paint(self, painter: QPainter, option, index):
+		payload = index.data(Qt.ItemDataRole.UserRole) or {}
+		painter.save()
+
+		if option.state & QStyle.StateFlag.State_Selected:
+			painter.fillRect(option.rect, option.palette.highlight())
+		else:
+			background = QColor('#fffdfa' if index.row() % 2 == 0 else '#fbf3e8')
+			painter.fillRect(option.rect, background)
+
+		content_rect = QRectF(option.rect.adjusted(10, 10, -10, -10))
+		if content_rect.width() <= 0 or content_rect.height() <= 0:
+			painter.restore()
+			return
+
+		total_days = max(1, (self.range_end - self.range_start).days + 1)
+		day_width = content_rect.width() / total_days
+		today = date.today()
+
+		for day_index in range(total_days):
+			day = self.range_start + timedelta(days=day_index)
+			left = content_rect.left() + (day_index * day_width)
+			right = content_rect.left() + ((day_index + 1) * day_width)
+			day_rect = QRectF(left, content_rect.top(), max(1.0, right - left), content_rect.height())
+			if day.weekday() >= 5:
+				painter.fillRect(day_rect, QColor(244, 236, 224, 165))
+			if day == today:
+				painter.setPen(QPen(QColor('#a63c30'), 2))
+				marker_x = day_rect.left() + (day_rect.width() / 2)
+				painter.drawLine(int(marker_x), int(content_rect.top()), int(marker_x), int(content_rect.bottom()))
+			elif day_index > 0:
+				painter.setPen(QPen(QColor('#eadfcd'), 1))
+				painter.drawLine(int(day_rect.left()), int(content_rect.top()), int(day_rect.left()), int(content_rect.bottom()))
+
+		painter.setPen(QPen(QColor('#d7c5ac'), 1))
+		painter.drawRoundedRect(content_rect, 10, 10)
+
+		start_date = payload.get('start_date')
+		end_date = payload.get('end_date')
+		state = str(payload.get('state') or '')
+		label = str(payload.get('label') or '')
+
+		if not start_date and not end_date:
+			painter.setPen(QColor('#7a6c5f'))
+			painter.drawText(content_rect.adjusted(10, 0, -10, 0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, 'No scheduled dates')
+			painter.restore()
+			return
+
+		bar_start = start_date or end_date
+		bar_end = end_date or start_date
+		if bar_start is None:
+			bar_start = today
+		if bar_end is None:
+			bar_end = bar_start
+		if bar_end < bar_start:
+			bar_start, bar_end = bar_end, bar_start
+
+		bar_start = max(bar_start, self.range_start)
+		bar_end = min(bar_end, self.range_end)
+		start_offset = (bar_start - self.range_start).days
+		end_offset = (bar_end - self.range_start).days + 1
+		bar_left = content_rect.left() + (start_offset * day_width) + 2
+		bar_right = content_rect.left() + (end_offset * day_width) - 2
+		bar_width = max(10.0, bar_right - bar_left)
+		bar_rect = QRectF(bar_left, content_rect.top() + 8, bar_width, max(18.0, content_rect.height() - 16))
+
+		bar_background, bar_foreground = due_state_colors(state)
+		painter.setBrush(QColor(bar_background).darker(104))
+		painter.setPen(QPen(QColor(bar_foreground).darker(105), 1))
+		if start_date and end_date and start_date != end_date:
+			painter.drawRoundedRect(bar_rect, 8, 8)
+		else:
+			center_x = bar_rect.center().x()
+			milestone = QRectF(center_x - 7, bar_rect.center().y() - 7, 14, 14)
+			painter.drawEllipse(milestone)
+
+		painter.setPen(QColor(bar_foreground))
+		text_rect = bar_rect.adjusted(8, 0, -8, 0)
+		if start_date and end_date and start_date != end_date and text_rect.width() > 72:
+			painter.drawText(text_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, label)
+		else:
+			trailing_rect = QRectF(min(content_rect.right() - 120, bar_rect.right() + 8), content_rect.top(), 120, content_rect.height())
+			painter.drawText(trailing_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, label)
+
+		painter.restore()
 
 
 class OptionalDateField(QWidget):
@@ -112,13 +212,24 @@ class OptionalDateField(QWidget):
 class DueDateViewDialog(QDialog):
 	"""Dialog showing due-date status for cards on the active board."""
 
-	def __init__(self, board: KanbanBoard, board_name: str, parent: Optional[QWidget] = None):
+	def __init__(
+		self,
+		board: KanbanBoard,
+		board_name: str,
+		parent: Optional[QWidget] = None,
+		on_focus_card=None,
+		on_edit_card=None,
+	):
 		super().__init__(parent)
 		self.board = board
 		self.board_name = board_name
+		self.on_focus_card = on_focus_card
+		self.on_edit_card = on_edit_card
 		self.selected_card_id: Optional[str] = None
 		self.selected_column_id: Optional[str] = None
+		self.selected_action = 'focus'
 		self.entries = self._build_entries()
+		self.timeline_delegate = DueTimelineDelegate(self)
 
 		self.setWindowTitle(f'Due Date View - {board_name}')
 		self.resize(980, 620)
@@ -167,6 +278,10 @@ class DueDateViewDialog(QDialog):
 			QLabel#DueSummaryText {
 				color: #5f5246;
 				font-size: 10pt;
+			}
+			QLabel#DueTimelineHint {
+				color: #7a6c5f;
+				font-size: 9pt;
 			}
 			QTableWidget#DueDateTable {
 				background: #fffdfa;
@@ -248,6 +363,28 @@ class DueDateViewDialog(QDialog):
 		self.filter_combo = QComboBox()
 		self.filter_combo.setObjectName('DueFilterCombo')
 		self.filter_combo.addItems(['With Due Date', 'Overdue', 'Due in 7 Days', 'All Scheduled', 'No Due Date'])
+		self.filter_combo.view().setStyleSheet(
+			"""
+			QListView {
+				background: #fffaf2;
+				color: #2d241c;
+				border: 1px solid #ccb490;
+				outline: 0;
+				padding: 4px;
+				selection-background-color: #7d3b14;
+				selection-color: #ffffff;
+			}
+			QListView::item {
+				min-height: 24px;
+				padding: 6px 10px;
+				border-radius: 6px;
+			}
+			QListView::item:hover {
+				background: #eadfcf;
+				color: #2d241c;
+			}
+			"""
+		)
 		self.filter_combo.currentIndexChanged.connect(self._populate_table)
 		controls_layout.addWidget(self.filter_combo)
 		controls_layout.addStretch(1)
@@ -263,32 +400,50 @@ class DueDateViewDialog(QDialog):
 		table_layout.setContentsMargins(12, 12, 12, 12)
 		table_layout.setSpacing(10)
 
-		self.table = PropagatingTableWidget(0, 7)
+		self.timeline_hint_label = QLabel()
+		self.timeline_hint_label.setObjectName('DueTimelineHint')
+		self.timeline_hint_label.setWordWrap(True)
+		table_layout.addWidget(self.timeline_hint_label)
+
+		self.table = PropagatingTableWidget(0, 6)
 		self.table.setObjectName('DueDateTable')
-		self.table.setHorizontalHeaderLabels(['Card', 'Column', 'Start', 'Due', 'State', 'Assignee', 'Priority'])
+		self.table.setHorizontalHeaderLabels(['Card', 'Column', 'Timeline', 'State', 'Assignee', 'Priority'])
 		self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 		self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
 		self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 		self.table.setAlternatingRowColors(True)
 		self.table.setShowGrid(False)
 		self.table.verticalHeader().setVisible(False)
-		self.table.itemDoubleClicked.connect(lambda _item: self._open_selected_card())
+		self.table.itemDoubleClicked.connect(lambda _item: self._edit_selected_card())
+		self.table.setItemDelegateForColumn(2, self.timeline_delegate)
 
 		header = self.table.horizontalHeader()
-		header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-		for column in range(1, self.table.columnCount()):
+		header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+		header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+		header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+		for column in range(3, self.table.columnCount()):
 			header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
 		table_layout.addWidget(self.table, 1)
 		layout.addWidget(table_card, 1)
 
 		button_row = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-		self.open_button = button_row.addButton('Open Card', QDialogButtonBox.ButtonRole.AcceptRole)
-		self.open_button.setEnabled(False)
-		self.open_button.clicked.connect(self._open_selected_card)
 		button_row.rejected.connect(self.reject)
 		layout.addWidget(button_row)
 
 		self.table.itemSelectionChanged.connect(self._update_selection_state)
+
+	def _activate_selected_row(self, action: str):
+		self._update_selection_state()
+		if not self.selected_card_id:
+			return
+		self.selected_action = action
+		if action == 'edit' and self.on_edit_card is not None:
+			self.on_edit_card(self.selected_card_id, self.selected_column_id)
+			return
+		if action == 'focus' and self.on_focus_card is not None:
+			self.on_focus_card(self.selected_card_id, self.selected_column_id)
+			return
+		self.accept()
 
 	def _create_stat_card(self, caption: str) -> Dict[str, QWidget]:
 		frame = QFrame()
@@ -331,12 +486,27 @@ class DueDateViewDialog(QDialog):
 		return sorted(
 			entries,
 			key=lambda entry: (
-				entry['end_date'] is None,
-				entry['end_date'] or date.max,
-				entry['start_date'] or date.max,
+				(entry['start_date'] or entry['end_date']) is None,
+				entry['start_date'] or entry['end_date'] or date.max,
+				entry['end_date'] or entry['start_date'] or date.max,
 				str(entry['title']).lower(),
 			),
 		)
+
+	def _timeline_bounds(self, rows: List[Dict[str, object]]) -> tuple[date, date]:
+		reference = date.today()
+		anchors = [reference]
+		for entry in rows:
+			if entry['start_date'] is not None:
+				anchors.append(entry['start_date'])
+			if entry['end_date'] is not None:
+				anchors.append(entry['end_date'])
+		range_start = min(anchors) - timedelta(days=2)
+		range_end = max(anchors) + timedelta(days=2)
+		while (range_end - range_start).days < 13:
+			range_start -= timedelta(days=1)
+			range_end += timedelta(days=1)
+		return range_start, range_end
 
 	def _filtered_entries(self) -> List[Dict[str, object]]:
 		today = date.today()
@@ -371,14 +541,19 @@ class DueDateViewDialog(QDialog):
 		self.total_due_stat['value'].setText(str(total_due))
 		self.overdue_stat['value'].setText(str(overdue))
 		self.due_soon_stat['value'].setText(str(due_soon))
+		range_start, range_end = self._timeline_bounds(rows)
+		self.timeline_delegate.set_range(range_start, range_end)
+		self.timeline_hint_label.setText(
+			f"Timeline window {range_start.strftime('%b %d')} to {range_end.strftime('%b %d')} | red marker shows today | bars map scheduled work across the range."
+		)
+		self.table.horizontalHeaderItem(2).setText(f"Timeline ({range_start.strftime('%b %d')} - {range_end.strftime('%b %d')})")
 
 		self.table.setRowCount(len(rows))
 		for row_index, entry in enumerate(rows):
 			values = [
 				entry['title'],
 				entry['column'],
-				display_date(entry['start_date']),
-				display_date(entry['end_date']),
+				'',
 				entry['state'],
 				entry['assignee'],
 				entry['priority'],
@@ -394,36 +569,39 @@ class DueDateViewDialog(QDialog):
 					font = item.font()
 					font.setBold(True)
 					item.setFont(font)
-				if column_index == 4:
+				if column_index == 2:
+					item.setData(Qt.ItemDataRole.UserRole, {
+						'start_date': entry['start_date'],
+						'end_date': entry['end_date'],
+						'state': entry['state'],
+						'label': entry['title'],
+					})
+				if column_index == 3:
 					font = item.font()
 					font.setBold(True)
 					item.setFont(font)
-				item.setBackground(QColor(row_background))
-				item.setForeground(QColor(row_foreground))
+				if column_index == 3:
+					item.setBackground(QColor(row_background))
+					item.setForeground(QColor(row_foreground))
 				self.table.setItem(row_index, column_index, item)
-			self.table.setRowHeight(row_index, 42)
+			self.table.setRowHeight(row_index, 56)
 
 		self.table.clearSelection()
 		self.selected_card_id = None
 		self.selected_column_id = None
-		self.open_button.setEnabled(False)
 
 	def _update_selection_state(self):
 		row = self.table.currentRow()
 		if row < 0:
 			self.selected_card_id = None
 			self.selected_column_id = None
-			self.open_button.setEnabled(False)
 			return
 		payload = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole) or {}
 		self.selected_card_id = payload.get('card_id')
 		self.selected_column_id = payload.get('column_id')
-		self.open_button.setEnabled(bool(self.selected_card_id))
 
-	def _open_selected_card(self):
-		if not self.selected_card_id:
-			return
-		self.accept()
+	def _edit_selected_card(self):
+		self._activate_selected_row('edit')
 
 
 class BoardDialog(QDialog):
