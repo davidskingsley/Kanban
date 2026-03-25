@@ -27,6 +27,7 @@ from kanban.gui.pyside_app import (
     create_drag_preview,
     priority_label,
 )
+from kanban.gui.board_statistics import BoardStatisticsDialog
 from kanban.models import Priority
 from gui_test_case import GuiTestCase
 
@@ -203,6 +204,27 @@ class GuiDialogRegressionTests(GuiTestCase):
 
         self.assertFalse(hasattr(self.gui, 'summary_label'))
         self.assertEqual(self.gui.window.windowTitle(), 'Multi-Board Kanban Manager - Title Summary Board | 0 cards | 0 completed')
+
+    def test_board_statistics_dialog_shows_current_board_breakdown(self):
+        self.board_manager.create_board('Statistics Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        columns = board.get_columns_ordered()
+        todo_column = columns[0].id
+        done_column = columns[-1].id
+        urgent = board.create_card('Urgent Fix', 'Patch issue', Priority.CRITICAL, todo_column)
+        board.create_card('Review Work', 'Check flow', Priority.MEDIUM, columns[1].id)
+        board.create_card('Completed Task', 'Finished', Priority.LOW, done_column)
+        board.move_card(urgent.id, done_column)
+
+        dialog = BoardStatisticsDialog(self.board_manager.get_board_list(), self.board_manager.boards, self.gui.window)
+
+        self.assertEqual(dialog.boards_table.rowCount(), 1)
+        self.assertEqual(dialog.columns_table.rowCount(), len(columns))
+        self.assertEqual(dialog.priority_table.rowCount(), 4)
+        self.assertGreaterEqual(dialog.due_state_table.rowCount(), 1)
+        self.assertEqual(dialog.stat_cards['cards']['value'].text(), '3')
+        self.assertEqual(dialog.stat_cards['completed']['value'].text(), '2')
 
     def test_card_dialog_restores_subcard_management_for_top_level_cards(self):
         self.board_manager.create_board('Subcard Dialog Board')

@@ -77,6 +77,7 @@ from .common import (
     resolve_column_target,
     resolve_hex_color,
 )
+from .board_statistics import BoardStatisticsDialog
 from .dialogs import (
     BoardDialog,
     CardDialog,
@@ -1069,22 +1070,8 @@ class MultiBoardGUI:
         if not boards:
             QMessageBox.information(self.window, 'Statistics', 'No boards available.')
             return
-        total_cards = 0
-        lines = []
-        for board_info in boards:
-            board = self.board_manager.boards.get(board_info['id'])
-            if board is None and board_info['is_current']:
-                board = self.board_manager.get_current_board()
-            if board is not None:
-                stats = board.get_board_stats()
-                total_cards += stats['total_cards']
-                lines.append(f"{board_info['name']}: {stats['total_cards']} cards")
-            else:
-                lines.append(f"{board_info['name']}: not loaded")
-        lines.append('')
-        lines.append(f'Total boards: {len(boards)}')
-        lines.append(f'Total cards: {total_cards}')
-        QMessageBox.information(self.window, 'Board Statistics', '\n'.join(lines))
+        dialog = BoardStatisticsDialog(boards, self.board_manager.boards, self.window)
+        dialog.exec()
 
     def _choose_card_type(self, board: KanbanBoard, title: str, prompt: str,
                           exclude_default: bool = False, exclude_ids: Optional[set[str]] = None) -> Optional[CardType]:
