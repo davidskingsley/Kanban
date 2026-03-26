@@ -449,13 +449,53 @@ class CardListWidget(QListWidget):
 
 
 class ColumnTitleButton(QPushButton):
-	def __init__(self, text: str, click_callback=None, double_click_callback=None, parent: Optional[QWidget] = None):
+	def __init__(
+		self,
+		text: str,
+		click_callback=None,
+		double_click_callback=None,
+		drag_callback=None,
+		drag_target: Optional[QWidget] = None,
+		parent: Optional[QWidget] = None,
+	):
 		super().__init__(text, parent)
 		self._double_click_callback = double_click_callback
+		self._drag_callback = drag_callback
+		self._drag_target = drag_target
+		self._press_pos = None
 		self.setCursor(Qt.CursorShape.PointingHandCursor)
 		self.setFlat(True)
 		if click_callback is not None:
 			self.clicked.connect(click_callback)
+
+	def mousePressEvent(self, event):
+		if event.button() == Qt.MouseButton.LeftButton:
+			self._press_pos = event.position().toPoint()
+		super().mousePressEvent(event)
+
+	def _maybe_start_drag(self, current_pos: QPoint, buttons: Qt.MouseButtons) -> bool:
+		if self._press_pos is None or self._drag_callback is None:
+			return False
+		if not (buttons & Qt.MouseButton.LeftButton):
+			return False
+		if (current_pos - self._press_pos).manhattanLength() < QApplication.startDragDistance():
+			return False
+		drag_origin = self._press_pos
+		if self._drag_target is not None:
+			drag_origin = self.mapTo(self._drag_target, self._press_pos)
+		self._press_pos = None
+		self._drag_callback(drag_origin)
+		return True
+
+	def mouseMoveEvent(self, event):
+		if self._maybe_start_drag(event.position().toPoint(), event.buttons()):
+			event.accept()
+			return
+		super().mouseMoveEvent(event)
+
+	def mouseReleaseEvent(self, event):
+		self._press_pos = None
+		super().mouseReleaseEvent(event)
 
 	def mouseDoubleClickEvent(self, event):
 		if event.button() == Qt.MouseButton.LeftButton and self._double_click_callback is not None:
@@ -544,16 +584,19 @@ class ColumnGroupBox(QGroupBox):
 		if (event.position().toPoint() - self._press_pos).manhattanLength() < QApplication.startDragDistance():
 			super().mouseMoveEvent(event)
 			return
+		self.start_drag_from_hotspot(self._press_pos)
+		super().mouseMoveEvent(event)
+
+	def start_drag_from_hotspot(self, hot_spot: QPoint):
 		mime_data = QMimeData()
 		mime_data.setData(self.COLUMN_MIME_TYPE, self.column_id.encode('utf-8'))
 		drag = QDrag(self)
 		drag.setMimeData(mime_data)
 		preview = create_drag_preview(self.grab())
 		drag.setPixmap(preview)
-		drag.setHotSpot(clamp_drag_hotspot(self._press_pos, preview.size()))
+		drag.setHotSpot(clamp_drag_hotspot(hot_spot, preview.size()))
 		self._press_pos = None
 		drag.exec(Qt.DropAction.MoveAction)
-		super().mouseMoveEvent(event)
 
 	def mouseReleaseEvent(self, event):
 		self._press_pos = None

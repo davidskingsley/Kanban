@@ -8,12 +8,27 @@ from PySide6.QtCore import QPoint, QPointF, Qt
 from PySide6.QtGui import QWheelEvent
 from PySide6.QtWidgets import QMessageBox, QWidget, QVBoxLayout
 
-from kanban.gui.pyside_app import CardDialog, CardListWidget, ColumnDialog, MultiBoardGUI, PropagatingListWidget, PropagatingScrollArea
+from kanban.gui.pyside_app import CardDialog, CardListWidget, ColumnDialog, ColumnTitleButton, MultiBoardGUI, PropagatingListWidget, PropagatingScrollArea
 from kanban.models import Priority
 from gui_test_case import GuiTestCase
 
 
 class GuiBoardRegressionTests(GuiTestCase):
+    def test_column_title_button_can_trigger_drag_callback(self):
+        drag_calls = []
+        drag_target = QWidget()
+        button = ColumnTitleButton('Backlog', drag_callback=drag_calls.append, drag_target=drag_target, parent=drag_target)
+        button._press_pos = QPoint(8, 9)
+
+        did_start_drag = button._maybe_start_drag(
+            QPoint(8 + self.app.startDragDistance(), 9),
+            Qt.MouseButton.LeftButton,
+        )
+
+        self.assertTrue(did_start_drag)
+        self.assertEqual(drag_calls, [button.mapTo(drag_target, QPoint(8, 9))])
+        self.assertIsNone(button._press_pos)
+
     def test_file_menu_exposes_exit_action(self):
         self.board_manager.create_board('File Menu Board')
         self.gui = MultiBoardGUI(self.board_manager)

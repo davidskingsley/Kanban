@@ -773,6 +773,8 @@ class MultiBoardGUI:
             column_label(column),
             click_callback=lambda _checked=False, cid=column_id: self.select_column(cid),
             double_click_callback=lambda cid=column_id: self.handle_column_double_click(cid),
+            drag_callback=column_box.start_drag_from_hotspot,
+            drag_target=column_box,
         )
         title_button.setStyleSheet(
             "QPushButton { text-align: left; background: rgba(98, 76, 58, 0.08); color: #3f2f21; border: none; border-radius: 10px; padding: 6px 10px; font-weight: 700; }"
