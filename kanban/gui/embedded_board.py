@@ -17,11 +17,10 @@ from PySide6.QtWidgets import (
 	QHBoxLayout,
 	QLabel,
 	QListWidget,
-	QListWidgetItem,
+	QMenu,
 	QPushButton,
 	QVBoxLayout,
 	QWidget,
-	QMenu,
 )
 
 from ..board import KanbanBoard
@@ -29,7 +28,7 @@ from .common import (
 	clamp_drag_hotspot,
 	clipped_description,
 	clipped_title,
-	column_label,
+	contrasting_text_color,
 	create_drag_preview,
 	file_paths_from_mime_data,
 	format_card_text,
@@ -40,7 +39,6 @@ from .common import (
 	rgba_color,
 	schedule_summary,
 	secondary_text_color,
-	contrasting_text_color,
 )
 
 
@@ -59,22 +57,20 @@ class CardTile(QFrame):
 		self.select_callback = select_callback
 		self.edit_callback = edit_callback
 		self.context_action_callback = context_action_callback
+		self.compact_text = False
 		self._drop_highlight = False
 
 		self.background = resolve_hex_color(card.color, '#fffaf3')
 		self.foreground = contrasting_text_color(self.background)
 		self.muted = secondary_text_color(self.background)
 		self.priority_color = priority_accent(card.priority)
-		self.border_color = '#7d3b14' if selected else ('#a63c30' if card.has_past_end_date() and not board.is_card_done(card) else '#d7c4aa')
+		self.selection_color = self._selection_color_for_background()
+		self.border_color = self.selection_color if selected else ('#a63c30' if card.has_past_end_date() and not board.is_card_done(card) else '#d7c4aa')
 
 		self.setObjectName('CardTile')
 		self.setAcceptDrops(True)
 		self._build_ui()
-		shadow = QGraphicsDropShadowEffect(self)
-		shadow.setBlurRadius(24)
-		shadow.setOffset(0, 5)
-		shadow.setColor(QColor(64, 39, 21, 38))
-		self.setGraphicsEffect(shadow)
+		self._apply_shadow()
 		self._apply_style()
 
 	def _create_badge(self, text: str, background: str, foreground: str, border: Optional[str] = None) -> QLabel:
@@ -93,6 +89,21 @@ class CardTile(QFrame):
 			"""
 		)
 		return label
+
+	def _selection_color_for_background(self) -> str:
+		background = QColor(self.background)
+		if self.foreground == '#ffffff':
+			selection = background.lighter(170)
+		else:
+			selection = background.darker(230)
+		return selection.name()
+
+	def set_compact_text(self, compact_text: bool):
+		if self.compact_text == compact_text:
+			return
+		self.compact_text = compact_text
+		self._apply_text_styles()
+		self.updateGeometry()
 
 	def _build_ui(self):
 		layout = QVBoxLayout(self)
@@ -134,6 +145,15 @@ class CardTile(QFrame):
 			header_layout.addWidget(
 				self._create_badge('LATE', 'rgba(166, 60, 48, 0.14)', '#a63c30', 'rgba(166, 60, 48, 0.28)')
 			)
+		if self.selected:
+			header_layout.addWidget(
+				self._create_badge(
+					'SELECTED',
+					rgba_color(self.selection_color, 0.18),
+					self.selection_color,
+					rgba_color(self.selection_color, 0.40),
+				)
+			)
 		header_layout.addStretch(1)
 		if self.card.assignee:
 			header_layout.addWidget(
@@ -146,10 +166,9 @@ class CardTile(QFrame):
 			)
 		layout.addWidget(header_row)
 
-		title_label = QLabel(clipped_title(self.card.title))
-		title_label.setWordWrap(True)
-		title_label.setStyleSheet(f'font-size: 9pt; font-weight: 700; color: {self.foreground}; background: transparent;')
-		layout.addWidget(title_label)
+		self.title_label = QLabel(clipped_title(self.card.title))
+		self.title_label.setWordWrap(True)
+		layout.addWidget(self.title_label)
 
 		meta_parts = []
 		if self.card.project:
@@ -158,17 +177,19 @@ class CardTile(QFrame):
 		if parent_card is not None:
 			meta_parts.append(f'Subcard of {parent_card.title}')
 		if meta_parts:
-			meta_label = QLabel(' | '.join(meta_parts))
-			meta_label.setWordWrap(True)
-			meta_label.setStyleSheet(f'color: {self.muted}; background: transparent; font-size: 7pt; font-weight: 600;')
-			layout.addWidget(meta_label)
+			self.meta_label = QLabel(' | '.join(meta_parts))
+			self.meta_label.setWordWrap(True)
+			layout.addWidget(self.meta_label)
+		else:
+			self.meta_label = None
 
 		description = clipped_description(self.card.description)
 		if description:
-			description_label = QLabel(description)
-			description_label.setWordWrap(True)
-			description_label.setStyleSheet(f'color: {self.muted}; background: transparent; font-size: 7.5pt;')
-			layout.addWidget(description_label)
+			self.description_label = QLabel(description)
+			self.description_label.setWordWrap(True)
+			layout.addWidget(self.description_label)
+		else:
+			self.description_label = None
 
 		schedule_parts = []
 		schedule_text = schedule_summary(self.card)
@@ -181,22 +202,18 @@ class CardTile(QFrame):
 			if total:
 				schedule_parts.append(f'Subcards {completed}/{total}')
 		if schedule_parts:
-			schedule_label = QLabel(' | '.join(schedule_parts))
-			schedule_label.setWordWrap(True)
-			schedule_label.setStyleSheet(
-				f'color: {self.foreground}; background: {rgba_color(self.foreground, 0.055)}; '
-				f'border: 1px solid {rgba_color(self.foreground, 0.08)}; border-radius: 10px; padding: 7px 9px; font-size: 7.5pt;'
-			)
-			layout.addWidget(schedule_label)
+			self.schedule_label = QLabel(' | '.join(schedule_parts))
+			self.schedule_label.setWordWrap(True)
+			layout.addWidget(self.schedule_label)
+		else:
+			self.schedule_label = None
 
 		if self.card.tags:
-			tags_label = QLabel(' '.join(f'#{tag}' for tag in self.card.tags))
-			tags_label.setWordWrap(True)
-			tags_label.setStyleSheet(
-				f'color: {self.foreground}; background: {rgba_color(self.priority_color, 0.08)}; '
-				f'border-radius: 10px; padding: 6px 8px; font-weight: 600; font-size: 8pt;'
-			)
-			layout.addWidget(tags_label)
+			self.tags_label = QLabel(' '.join(f'#{tag}' for tag in self.card.tags))
+			self.tags_label.setWordWrap(True)
+			layout.addWidget(self.tags_label)
+		else:
+			self.tags_label = None
 
 		footer_badges = []
 		if self.card.notes:
@@ -227,16 +244,58 @@ class CardTile(QFrame):
 			footer_layout.addStretch(1)
 			layout.addWidget(footer_row)
 
+		self._apply_text_styles()
+
+	def _apply_text_styles(self):
+		title_size = '8.5pt' if self.compact_text else '9pt'
+		meta_size = '6.5pt' if self.compact_text else '7pt'
+		body_size = '7pt' if self.compact_text else '7.5pt'
+		tag_size = '7.5pt' if self.compact_text else '8pt'
+		schedule_padding = '6px 8px' if self.compact_text else '7px 9px'
+
+		self.title_label.setStyleSheet(
+			f'font-size: {title_size}; font-weight: 700; color: {self.foreground}; background: transparent;'
+		)
+		if self.meta_label is not None:
+			self.meta_label.setStyleSheet(
+				f'color: {self.muted}; background: transparent; font-size: {meta_size}; font-weight: 600;'
+			)
+		if self.description_label is not None:
+			self.description_label.setStyleSheet(
+				f'color: {self.muted}; background: transparent; font-size: {body_size};'
+			)
+		if self.schedule_label is not None:
+			self.schedule_label.setStyleSheet(
+				f'color: {self.foreground}; background: {rgba_color(self.foreground, 0.055)}; '
+				f'border: 1px solid {rgba_color(self.foreground, 0.08)}; border-radius: 10px; padding: {schedule_padding}; font-size: {body_size};'
+			)
+		if self.tags_label is not None:
+			self.tags_label.setStyleSheet(
+				f'color: {self.foreground}; background: {rgba_color(self.priority_color, 0.08)}; '
+				f'border-radius: 10px; padding: 6px 8px; font-weight: 600; font-size: {tag_size};'
+			)
+
+	def _apply_shadow(self):
+		shadow = QGraphicsDropShadowEffect(self)
+		shadow.setBlurRadius(30 if self.selected else 24)
+		shadow.setOffset(0, 7 if self.selected else 5)
+		shadow_color = QColor(self.selection_color) if self.selected else QColor(64, 39, 21, 38)
+		if self.selected:
+			shadow_color.setAlpha(84)
+		shadow.setColor(shadow_color)
+		self.setGraphicsEffect(shadow)
+
 	def _apply_style(self):
 		active_border = '#3e7a5e' if self._drop_highlight else self.border_color
-		soft_top = QColor(self.background).lighter(104).name()
-		soft_bottom = QColor(self.background).darker(102).name()
+		soft_top = QColor(self.background).lighter(108 if self.selected else 104).name()
+		soft_bottom = QColor(self.background).darker(100 if self.selected else 102).name()
+		border_width = 3 if self.selected and not self._drop_highlight else 2
 		self.setStyleSheet(
 			f"""
 			QFrame#CardTile {{
 				background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-					stop:0 {soft_top}, stop:1 {soft_bottom});
-				border: 2px solid {active_border};
+					stop:0 {soft_top}, stop:0.62 {self.background}, stop:1 {soft_bottom});
+				border: {border_width}px solid {active_border};
 				border-radius: 14px;
 			}}
 			"""
@@ -322,11 +381,38 @@ class CardTile(QFrame):
 		return max(layout.totalHeightForWidth(constrained_width), 156)
 
 
+class CardListItemContainer(QWidget):
+	"""Full-width row container that keeps card clearance on the scrollbar side only."""
+	BOTTOM_SPACING = 14
+
+	def __init__(self, card_widget: CardTile, parent: Optional[QWidget] = None):
+		super().__init__(parent)
+		self.card_widget = card_widget
+		self._layout = QHBoxLayout(self)
+		self._layout.setContentsMargins(0, 0, 0, self.BOTTOM_SPACING)
+		self._layout.setSpacing(0)
+		self._layout.addWidget(card_widget)
+		self._layout.addStretch(1)
+
+	def apply_widths(self, row_width: int, card_width: int, right_clearance: int):
+		self.setFixedWidth(row_width)
+		self._layout.setContentsMargins(0, 0, right_clearance, self.BOTTOM_SPACING)
+		self.card_widget.setFixedWidth(card_width)
+		self.card_widget.updateGeometry()
+
+	def heightForWidth(self, width: int) -> int:
+		margins = self._layout.contentsMargins()
+		card_width = max(120, width - margins.right())
+		return self.card_widget.heightForWidth(card_width) + margins.bottom()
+
+
 class CardListWidget(QListWidget):
 	CARD_MIME_TYPE = 'application/x-kanban-card'
 	DROP_INDICATOR_MARGIN = 10
 	DROP_INDICATOR_SPACING = 5
 	DROP_INDICATOR_THICKNESS = 4
+	BASE_CONTENT_GUTTER = 6
+	SCROLLBAR_CLEARANCE = 14
 
 	def __init__(self, column_id: Optional[str] = None, board_view=None, parent: Optional[QWidget] = None):
 		super().__init__(parent)
@@ -344,27 +430,31 @@ class CardListWidget(QListWidget):
 		self.setAcceptDrops(True)
 		self.viewport().setAcceptDrops(True)
 		self.setDropIndicatorShown(False)
+		self.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
+		self.verticalScrollBar().setSingleStep(24)
+		self.setSpacing(0)
+		self.verticalScrollBar().rangeChanged.connect(lambda _minimum, _maximum: self.refresh_card_sizes())
 
 	def _apply_drop_style(self):
 		self.setStyleSheet(
-			f"""
-			QListWidget {{
+			"""
+			QListWidget {
 				background: transparent;
 				border: none;
 				border-radius: 14px;
 				padding: 0;
 				outline: 0;
-			}}
-			QListWidget::item {{
+			}
+			QListWidget::item {
 				background: transparent;
 				border: none;
 				padding: 0;
-				margin: 0 0 10px 0;
-			}}
-			QListWidget::item:selected {{
+				margin: 0;
+			}
+			QListWidget::item:selected {
 				background: transparent;
 				border: none;
-			}}
+			}
 			"""
 		)
 
@@ -384,9 +474,10 @@ class CardListWidget(QListWidget):
 		drag.setMimeData(mime_data)
 		widget = self.itemWidget(item)
 		if widget is not None:
-			preview = create_drag_preview(widget.grab())
+			preview_widget = widget.card_widget if isinstance(widget, CardListItemContainer) else widget
+			preview = create_drag_preview(preview_widget.grab())
 			drag.setPixmap(preview)
-			drag.setHotSpot(clamp_drag_hotspot(widget.mapFromGlobal(QCursor.pos()), preview.size()))
+			drag.setHotSpot(clamp_drag_hotspot(preview_widget.mapFromGlobal(QCursor.pos()), preview.size()))
 		drag.exec(Qt.DropAction.MoveAction)
 
 	def dragEnterEvent(self, event):
@@ -478,20 +569,35 @@ class CardListWidget(QListWidget):
 	def wheelEvent(self, event):
 		handle_scrollable_wheel_event(self, event, lambda: super(CardListWidget, self).wheelEvent(event))
 
+	def _card_content_clearance_width(self) -> int:
+		scroll_bar = self.verticalScrollBar()
+		if scroll_bar.maximum() <= 0 and not scroll_bar.isVisible():
+			return self.BASE_CONTENT_GUTTER
+		return self.SCROLLBAR_CLEARANCE
+
 	def refresh_card_sizes(self):
-		available_width = self.viewport().width() - 12
-		if available_width <= 0:
+		row_width = self.viewport().width()
+		right_clearance = self._card_content_clearance_width()
+		card_width = row_width - 2 - right_clearance
+		if card_width <= 0:
 			return
 		for index in range(self.count()):
 			item = self.item(index)
 			widget = self.itemWidget(item)
 			if widget is None:
 				continue
-			widget.setFixedWidth(available_width)
+			if isinstance(widget, CardListItemContainer):
+				widget.card_widget.set_compact_text(right_clearance >= self.SCROLLBAR_CLEARANCE)
+				widget.apply_widths(row_width, card_width, right_clearance)
+				height = widget.heightForWidth(row_width)
+				widget.setMinimumHeight(height)
+				item.setSizeHint(QSize(row_width, height))
+				continue
+			widget.setFixedWidth(card_width)
 			widget.updateGeometry()
-			height = widget.heightForWidth(available_width) if widget.hasHeightForWidth() else widget.sizeHint().height()
+			height = widget.heightForWidth(card_width) if widget.hasHeightForWidth() else widget.sizeHint().height()
 			widget.setMinimumHeight(height)
-			item.setSizeHint(QSize(available_width, height))
+			item.setSizeHint(QSize(card_width, height))
 
 
 class ColumnTitleButton(QPushButton):

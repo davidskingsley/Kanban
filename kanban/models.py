@@ -2,11 +2,10 @@
 #  @brief Shared enums and data objects for boards, cards, and columns.
 """Data models for the Kanban board application."""
 
-from datetime import date, datetime
-from typing import List, Optional, Union
-from enum import Enum
 import uuid
-
+from datetime import date, datetime
+from enum import Enum
+from typing import List, Optional, Union
 
 UNSET = object()
 

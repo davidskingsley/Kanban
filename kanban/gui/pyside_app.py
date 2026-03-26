@@ -6,45 +6,25 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import sys
-from datetime import date
 from typing import Dict, List, Optional
 
-from PySide6.QtCore import QDate, QMimeData, QPoint, QPointF, QSize, Qt, QTimer
-from PySide6.QtGui import QAction, QColor, QCursor, QDrag, QKeySequence, QPainter, QPen, QPixmap, QWheelEvent
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QAction, QColor, QKeySequence
 from PySide6.QtWidgets import (
-    QAbstractItemView,
-    QAbstractScrollArea,
     QApplication,
-    QCheckBox,
-    QColorDialog,
     QComboBox,
-    QDateEdit,
     QDialog,
-    QDialogButtonBox,
-    QFileDialog,
-    QFormLayout,
     QFrame,
-    QGraphicsDropShadowEffect,
-    QGridLayout,
-    QGroupBox,
-    QHeaderView,
     QHBoxLayout,
     QInputDialog,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
-    QLineEdit,
     QMainWindow,
-    QMenu,
     QMessageBox,
     QPushButton,
-    QScrollArea,
-    QSplitter,
-    QTableWidget,
-    QTableWidgetItem,
-    QTextEdit,
     QToolBar,
     QVBoxLayout,
     QWidget,
@@ -53,31 +33,29 @@ from shiboken6 import isValid
 
 from ..board import KanbanBoard
 from ..board_manager import BoardManager
-from ..models import CardType, CustomColumn, Priority, Project, Status
-
-
+from ..models import CardType, CustomColumn, Priority, Project
+from .board_statistics import BoardStatisticsDialog
 from .common import (
     WINDOW_STYLE,
-    PropagatingListWidget,
+    PropagatingListWidget,  # noqa: F401
     PropagatingScrollArea,
-    clamp_drag_hotspot,
     choose_existing_directory_dialog,
     choose_open_file_dialog,
     choose_save_file_dialog,
-    clipped_description,
-    clipped_title,
+    clamp_drag_hotspot,  # noqa: F401
+    clipped_description,  # noqa: F401
+    clipped_title,  # noqa: F401
     column_can_add_card,
     column_color,
     column_identifier,
     column_label,
     column_target_value,
-    create_drag_preview,
+    create_drag_preview,  # noqa: F401
     due_state_label,
     priority_label,
     resolve_column_target,
     resolve_hex_color,
 )
-from .board_statistics import BoardStatisticsDialog
 from .dialogs import (
     BoardDialog,
     CardDialog,
@@ -85,18 +63,20 @@ from .dialogs import (
     CardTypesBrowserDialog,
     ColumnDialog,
     DueDateViewDialog,
-    OptionalDateField,
+    OptionalDateField,  # noqa: F401
     ProjectDialog,
     ProjectsBrowserDialog,
     ReorderColumnsDialog,
 )
 from .embedded_board import (
+    CardListItemContainer,
     CardListWidget,
     CardTile,
     ColumnAddButton,
     ColumnGroupBox,
     ColumnTitleButton,
 )
+
 
 class MultiBoardGUI:
     """PySide6 multi-board GUI wrapper."""
@@ -761,7 +741,7 @@ class MultiBoardGUI:
             selected=column_id == self.selected_column_id,
         )
         layout = QVBoxLayout(column_box)
-        layout.setContentsMargins(12, 18, 12, 12)
+        layout.setContentsMargins(6, 18, 6, 12)
         layout.setSpacing(10)
 
         title_row = QWidget()
@@ -843,9 +823,10 @@ class MultiBoardGUI:
                     edit_callback=lambda card_id, cid=column_id: self.edit_card_from_tile(cid, card_id),
                     context_action_callback=lambda card_id, action, cid=column_id: self.handle_card_tile_action(cid, card_id, action),
                 )
-                item.setSizeHint(card_widget.sizeHint())
+                row_widget = CardListItemContainer(card_widget)
+                item.setSizeHint(row_widget.sizeHint())
                 list_widget.addItem(item)
-                list_widget.setItemWidget(item, card_widget)
+                list_widget.setItemWidget(item, row_widget)
                 if card.id == self.selected_card_id:
                     item.setSelected(True)
             count_text = f"{len(filtered_cards)} card" + ('' if len(filtered_cards) == 1 else 's')
@@ -1594,7 +1575,7 @@ class MultiBoardGUI:
 
         dialog = CardDialog(
             board,
-            target_column_id=parent_card.column_id,
+            target_column_id=board.get_subcard_target(parent_card),
             parent_card=parent_card,
             parent=self.window,
         )

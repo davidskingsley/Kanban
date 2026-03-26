@@ -1,19 +1,78 @@
-import os
 import json
+import os
 from unittest.mock import patch
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 from PySide6.QtCore import QPoint, QPointF, QSize, Qt
-from PySide6.QtGui import QWheelEvent
-from PySide6.QtWidgets import QListWidgetItem, QMessageBox, QWidget, QVBoxLayout
+from PySide6.QtGui import QPixmap, QWheelEvent
+from PySide6.QtWidgets import QListWidgetItem, QVBoxLayout, QWidget
 
-from kanban.gui.pyside_app import CardDialog, CardListWidget, CardTile, ColumnDialog, ColumnGroupBox, ColumnTitleButton, MultiBoardGUI, PropagatingListWidget, PropagatingScrollArea
-from kanban.models import Priority
 from gui_test_case import GuiTestCase
+from kanban.gui.pyside_app import (
+    CardDialog,
+    CardListItemContainer,
+    CardListWidget,
+    CardTile,
+    ColumnDialog,
+    ColumnGroupBox,
+    ColumnTitleButton,
+    MultiBoardGUI,
+    PropagatingListWidget,
+    PropagatingScrollArea,
+)
+from kanban.models import Priority
 
 
 class GuiBoardRegressionTests(GuiTestCase):
+    def test_card_list_drag_preview_uses_card_widget_not_row_container(self):
+        self.board_manager.create_board('Drag Preview Board')
+        board = self.board_manager.get_current_board()
+        column_id = board.get_columns_ordered()[0].id
+        card = board.create_card('Drag Card', 'desc', Priority.MEDIUM, column_id)
+
+        list_widget = CardListWidget(column_id=column_id)
+        list_widget.resize(320, 240)
+        item = QListWidgetItem()
+        item.setData(Qt.ItemDataRole.UserRole, {'card_id': card.id, 'column_id': column_id})
+        card_widget = CardTile(board, card)
+        row_widget = CardListItemContainer(card_widget)
+        list_widget.addItem(item)
+        list_widget.setItemWidget(item, row_widget)
+        list_widget.setCurrentItem(item)
+        list_widget.show()
+        self.app.processEvents()
+        list_widget.refresh_card_sizes()
+
+        captured = {}
+
+        class FakeDrag:
+            def __init__(self, _source):
+                self.mime_data = None
+
+            def setMimeData(self, mime_data):
+                self.mime_data = mime_data
+
+            def setPixmap(self, pixmap):
+                captured['pixmap_size'] = pixmap.size()
+
+            def setHotSpot(self, hotspot):
+                captured['hotspot'] = hotspot
+
+            def exec(self, _action):
+                captured['exec_called'] = True
+
+        def fake_create_drag_preview(pixmap):
+            captured['grabbed_size'] = pixmap.size()
+            return QPixmap(pixmap)
+
+        with patch('kanban.gui.embedded_board.QDrag', FakeDrag), patch('kanban.gui.embedded_board.create_drag_preview', fake_create_drag_preview):
+            list_widget.startDrag(Qt.DropAction.MoveAction)
+
+        self.assertEqual(captured['grabbed_size'], card_widget.size())
+        self.assertEqual(captured['pixmap_size'], card_widget.size())
+        self.assertTrue(captured['exec_called'])
+
     def test_dismissing_subcard_context_menu_does_not_trigger_add_subcard(self):
         self.board_manager.create_board('Subcard Context Menu Board')
         board = self.board_manager.get_current_board()

@@ -2,9 +2,9 @@
 #  @brief Multi-board registry and metadata management for the Kanban application.
 """Board Manager for handling multiple Kanban boards."""
 
-from copy import deepcopy
 import json
 import os
+from copy import deepcopy
 from datetime import datetime
 from typing import Dict, List, Optional
 

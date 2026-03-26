@@ -5,8 +5,9 @@
 
 import argparse
 import sys
-from kanban.multi_board_cli import MultiBoardCLI
+
 from kanban.board_manager import BoardManager
+from kanban.multi_board_cli import MultiBoardCLI
 
 
 ## @brief Parse command-line options and launch the requested Kanban mode.

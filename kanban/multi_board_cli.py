@@ -307,7 +307,7 @@ class MultiBoardCLI:
             else:
                 print("   📊 (Board not loaded)")
         
-        print(f"\n🌟 OVERALL STATISTICS:")
+        print("\n🌟 OVERALL STATISTICS:")
         print(f"   📋 Total boards: {len(boards)}")
         print(f"   📊 Total cards: {total_cards}")
         print(f"   📝 Total To Do: {total_todos}")

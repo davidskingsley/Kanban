@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
@@ -15,11 +15,11 @@ from PySide6.QtWidgets import (
 	QFrame,
 	QGridLayout,
 	QHBoxLayout,
+	QHeaderView,
 	QLabel,
 	QTableWidgetItem,
 	QVBoxLayout,
 	QWidget,
-	QHeaderView,
 )
 
 from ..board import KanbanBoard
@@ -175,7 +175,6 @@ class BoardStatisticsDialog(QDialog):
 		return f'{(count / total) * 100:.0f}%'
 
 	def _populate(self):
-		loaded_infos = [board_info for board_info in self.boards if board_info['id'] in self.loaded_boards]
 		total_cards = 0
 		total_completed = 0
 		total_overdue = 0

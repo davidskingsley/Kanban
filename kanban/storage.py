@@ -10,7 +10,6 @@ import socket
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
-
 LockHandler = Callable[[str, Dict[str, Any]], str]
 
 

@@ -2,13 +2,14 @@
 #  @brief Board domain logic for cards, columns, persistence, and read-only guards.
 """Main Kanban board implementation with custom column support."""
 
+import os
+import uuid
 from copy import deepcopy
 from datetime import date, datetime
 from typing import Dict, List, Optional, Set, Union
-from .models import Card, Column, CustomColumn, Status, Priority, CardType, CardAttachment, Project, UNSET
+
+from .models import UNSET, Card, CardAttachment, CardType, Column, CustomColumn, Priority, Project, Status
 from .storage import DataStorage, LockHandler, get_default_single_board_file
-import os
-import uuid
 
 
 ## @brief Encapsulates the state and operations of a single Kanban board.
@@ -294,6 +295,17 @@ class KanbanBoard:
             if column.can_add_card:
                 return column.id
         return ordered_columns[0].id if ordered_columns else None
+
+    def get_subcard_target(self, parent_card: Card):
+        """Return the column or status where a new subcard should be created."""
+        if not self.use_custom_columns:
+            return parent_card.status
+
+        parent_column = self.get_column_by_id(parent_card.column_id)
+        if parent_column is not None and parent_column.can_add_card:
+            return parent_column.id
+
+        return self._get_first_column_id() or parent_card.column_id
 
     def _ensure_default_card_type(self):
         """Ensure the board always has a non-deletable default card type."""
@@ -910,7 +922,7 @@ class KanbanBoard:
         if parent_card.parent_id:
             raise ValueError("Nested subcards are not supported")
 
-        target = parent_card.column_id if self.use_custom_columns else parent_card.status
+        target = self.get_subcard_target(parent_card)
         return self.create_card(
             title,
             description,

@@ -600,7 +600,7 @@ class BoardCLI:
             print("Card not found!")
             return
         
-        print(f"\n📋 Card Details:")
+        print("\n📋 Card Details:")
         print(f"ID: {card.id}")
         print(f"Title: {card.title}")
         print(f"Description: {card.description or '(no description)'}")
@@ -918,7 +918,7 @@ class BoardCLI:
         except ValueError:
             position = None
         
-        column_id = self.board.create_column(name, position, color, is_completed, can_add_card)
+        self.board.create_column(name, position, color, is_completed, can_add_card)
         print(f"✅ Column '{name}' created successfully!")
     
     def rename_column(self):
@@ -1026,7 +1026,7 @@ class BoardCLI:
             print(f"{i}. {column.name}")
         
         print("\nEnter new order by typing column numbers separated by commas.")
-        print(f"Example: 2,1,3 (to move column 2 to first position)")
+        print("Example: 2,1,3 (to move column 2 to first position)")
         
         try:
             order_input = input("New order: ").strip()

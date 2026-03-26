@@ -8,7 +8,7 @@ import os
 from datetime import date, timedelta
 from typing import Dict, List, Optional
 
-from PySide6.QtCore import QDate, QRectF, Qt
+from PySide6.QtCore import QDate, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
 	QAbstractItemView,
@@ -20,17 +20,18 @@ from PySide6.QtWidgets import (
 	QFormLayout,
 	QFrame,
 	QHBoxLayout,
+	QHeaderView,
 	QLabel,
-	QListWidgetItem,
 	QLineEdit,
+	QListWidgetItem,
 	QMessageBox,
 	QPushButton,
-	QStyledItemDelegate,
+	QSizePolicy,
 	QStyle,
+	QStyledItemDelegate,
 	QTableWidgetItem,
 	QVBoxLayout,
 	QWidget,
-	QHeaderView,
 )
 
 from ..board import KanbanBoard
@@ -156,6 +157,99 @@ class DueTimelineDelegate(QStyledItemDelegate):
 			painter.drawText(trailing_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, label)
 
 		painter.restore()
+
+
+class SubcardsListWidget(PropagatingListWidget):
+	"""List widget that keeps custom subcard rows sized to the current viewport width."""
+
+	def __init__(self, parent: Optional[QWidget] = None):
+		super().__init__(parent)
+		self.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+		self.verticalScrollBar().setSingleStep(20)
+		self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+	def resizeEvent(self, event):
+		super().resizeEvent(event)
+		self.refresh_item_sizes()
+
+	def refresh_item_sizes(self):
+		available_width = self.viewport().width() - 12
+		if available_width <= 0:
+			return
+		for index in range(self.count()):
+			item = self.item(index)
+			widget = self.itemWidget(item)
+			if widget is None:
+				continue
+			if isinstance(widget, SubcardListItemContainer):
+				widget.apply_width(available_width)
+				widget.updateGeometry()
+				height = widget.heightForWidth(available_width)
+			else:
+				widget.setFixedWidth(available_width)
+				widget.updateGeometry()
+				height = widget.heightForWidth(available_width) if widget.hasHeightForWidth() else widget.sizeHint().height()
+			widget.setMinimumHeight(height)
+			item.setSizeHint(QSize(available_width, height))
+
+
+class SubcardListItemContainer(QWidget):
+	"""Full-width row container that adds bottom-only spacing for subcards."""
+
+	BOTTOM_SPACING = 5
+
+	def __init__(self, row_widget: SubcardRowWidget, parent: Optional[QWidget] = None):
+		super().__init__(parent)
+		self.row_widget = row_widget
+		self._layout = QHBoxLayout(self)
+		self._layout.setContentsMargins(0, 0, 0, self.BOTTOM_SPACING)
+		self._layout.setSpacing(0)
+		self._layout.addWidget(row_widget)
+
+	def apply_width(self, row_width: int):
+		margins = self._layout.contentsMargins()
+		content_width = max(120, row_width - margins.left() - margins.right())
+		self.setFixedWidth(row_width)
+		self.row_widget.setFixedWidth(content_width)
+		self.row_widget.updateGeometry()
+
+	def hasHeightForWidth(self) -> bool:
+		return True
+
+	def heightForWidth(self, width: int) -> int:
+		margins = self._layout.contentsMargins()
+		content_width = max(120, width - margins.left() - margins.right())
+		row_height = self.row_widget.heightForWidth(content_width) if self.row_widget.hasHeightForWidth() else self.row_widget.sizeHint().height()
+		return row_height + margins.top() + margins.bottom()
+
+	def sizeHint(self) -> QSize:
+		width = self.width() if self.width() > 0 else self.row_widget.sizeHint().width()
+		return QSize(width, self.heightForWidth(width))
+
+	def minimumSizeHint(self) -> QSize:
+		width = self.width() if self.width() > 0 else self.row_widget.minimumSizeHint().width()
+		return QSize(width, self.heightForWidth(width))
+
+
+class SubcardRowWidget(QFrame):
+	"""Custom row widget for the subcards panel that supports proper height-for-width sizing."""
+
+	def hasHeightForWidth(self) -> bool:
+		return True
+
+	def heightForWidth(self, width: int) -> int:
+		layout = self.layout()
+		if layout is None:
+			return super().sizeHint().height()
+		return max(layout.totalHeightForWidth(max(width, 180)), super().minimumSizeHint().height())
+
+	def sizeHint(self) -> QSize:
+		width = self.width() if self.width() > 0 else super().sizeHint().width()
+		return QSize(width, self.heightForWidth(width))
+
+	def minimumSizeHint(self) -> QSize:
+		width = self.width() if self.width() > 0 else super().minimumSizeHint().width()
+		return QSize(width, self.heightForWidth(width))
 
 
 class OptionalDateField(QWidget):
@@ -1111,7 +1205,7 @@ class CardDialog(QDialog):
 		if desired_column is None and card:
 			desired_column = card.column_id
 		if desired_column is None and parent_card is not None:
-			desired_column = parent_card.column_id
+			desired_column = board.get_subcard_target(parent_card)
 		if desired_column is None:
 			desired_column = board.get_default_add_card_column_id()
 		if desired_column:
@@ -1188,7 +1282,11 @@ class CardDialog(QDialog):
 		shell_subtitle = 'Set the core metadata, scheduling, and reusable preset values for this card.'
 		if parent_card is not None:
 			shell_title = 'Subcard Details'
-			shell_subtitle = f"Create a child card under '{parent_card.title}'. Subcards inherit the parent column and cannot contain nested subcards."
+			shell_subtitle = (
+				f"Create a child card under '{parent_card.title}'. Subcards stay in the parent column "
+				"when that column allows adding cards; otherwise they start in the left-most column. "
+				"Nested subcards are not supported."
+			)
 
 		content_layout = build_dialog_shell(
 			self,
@@ -1219,13 +1317,103 @@ class CardDialog(QDialog):
 			content_layout.addWidget(create_dialog_section_label('Subcards'))
 			subcards_frame = QFrame()
 			subcards_frame.setObjectName('DialogCard')
+			subcards_frame.setStyleSheet(
+				"""
+				QFrame#DialogCard {
+					background: #fff9f0;
+					border: 1px solid #dcc7a7;
+					border-radius: 14px;
+				}
+				QLabel#SubcardsPanelTitle {
+					color: #3d2d20;
+					font-size: 11pt;
+					font-weight: 700;
+				}
+				QLabel#SubcardsSummary {
+					background: rgba(125, 59, 20, 0.10);
+					color: #6f3d1c;
+					border: 1px solid rgba(125, 59, 20, 0.18);
+					border-radius: 11px;
+					padding: 4px 10px;
+					font-weight: 700;
+				}
+				QLabel#SubcardsProgress {
+					background: rgba(62, 122, 94, 0.10);
+					color: #2f654b;
+					border: 1px solid rgba(62, 122, 94, 0.18);
+					border-radius: 11px;
+					padding: 4px 10px;
+					font-weight: 700;
+				}
+				QListWidget#SubcardsList {
+					background: #fcf6ec;
+					border: 1px solid #d9c4a2;
+					border-radius: 12px;
+					padding: 6px;
+					outline: 0;
+				}
+				QListWidget#SubcardsList::item {
+					padding: 9px 10px;
+					margin: 2px 0;
+					border-radius: 10px;
+				}
+				QListWidget#SubcardsList::item:selected {
+					background: #ead7bb;
+					color: #2d241c;
+					border: 1px solid #d2af7f;
+				}
+				QPushButton#SubcardSecondaryButton {
+					background: #f5ecdf;
+					color: #5c4633;
+					border: 1px solid #d2be9d;
+				}
+				QPushButton#SubcardSecondaryButton:hover {
+					background: #eadfce;
+				}
+				QPushButton#SubcardSecondaryButton:pressed {
+					background: #dcccb6;
+				}
+				"""
+			)
 			subcards_layout = QVBoxLayout(subcards_frame)
 			subcards_layout.setContentsMargins(14, 14, 14, 14)
-			subcards_layout.setSpacing(10)
-			self.subcards_list = PropagatingListWidget()
+			subcards_layout.setSpacing(12)
+
+			subcards_header = QWidget()
+			subcards_header_layout = QHBoxLayout(subcards_header)
+			subcards_header_layout.setContentsMargins(0, 0, 0, 0)
+			subcards_header_layout.setSpacing(10)
+			subcards_header_text = QWidget()
+			subcards_header_text_layout = QVBoxLayout(subcards_header_text)
+			subcards_header_text_layout.setContentsMargins(0, 0, 0, 0)
+			subcards_header_text_layout.setSpacing(3)
+			self.subcards_panel_title = QLabel('Child Cards')
+			self.subcards_panel_title.setObjectName('SubcardsPanelTitle')
+			subcards_header_text_layout.addWidget(self.subcards_panel_title)
+			self.subcards_hint_label = create_dialog_hint_label('Double-click a subcard to edit it. Child cards stay linked to the parent card and share its board history.')
+			subcards_header_text_layout.addWidget(self.subcards_hint_label)
+			subcards_header_layout.addWidget(subcards_header_text, 1)
+			badge_stack = QWidget()
+			badge_stack_layout = QVBoxLayout(badge_stack)
+			badge_stack_layout.setContentsMargins(0, 0, 0, 0)
+			badge_stack_layout.setSpacing(6)
+			self.subcards_summary_label = QLabel()
+			self.subcards_summary_label.setObjectName('SubcardsSummary')
+			self.subcards_summary_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+			badge_stack_layout.addWidget(self.subcards_summary_label)
+			self.subcards_progress_label = QLabel()
+			self.subcards_progress_label.setObjectName('SubcardsProgress')
+			self.subcards_progress_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+			badge_stack_layout.addWidget(self.subcards_progress_label)
+			subcards_header_layout.addWidget(badge_stack)
+			subcards_layout.addWidget(subcards_header)
+
+			self.subcards_list = SubcardsListWidget()
+			self.subcards_list.setObjectName('SubcardsList')
 			self.subcards_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-			self.subcards_list.setMinimumHeight(150)
+			self.subcards_list.setMinimumHeight(170)
 			self.subcards_list.itemDoubleClicked.connect(lambda _item: self.edit_selected_subcard())
+			self.subcards_list.itemSelectionChanged.connect(self._refresh_subcard_row_styles)
 			subcards_layout.addWidget(self.subcards_list)
 
 			subcard_buttons = QWidget()
@@ -1235,7 +1423,12 @@ class CardDialog(QDialog):
 			self.add_subcard_button = QPushButton('Add Subcard')
 			self.add_subcard_button.clicked.connect(self.add_subcard)
 			subcard_button_layout.addWidget(self.add_subcard_button)
+			self.edit_subcard_button = QPushButton('Edit Selected')
+			self.edit_subcard_button.setObjectName('SubcardSecondaryButton')
+			self.edit_subcard_button.clicked.connect(self.edit_selected_subcard)
+			subcard_button_layout.addWidget(self.edit_subcard_button)
 			self.delete_subcard_button = QPushButton('Delete Selected')
+			self.delete_subcard_button.setObjectName('SubcardSecondaryButton')
 			self.delete_subcard_button.clicked.connect(self.delete_selected_subcard)
 			subcard_button_layout.addWidget(self.delete_subcard_button)
 			subcard_button_layout.addStretch(1)
@@ -1395,10 +1588,17 @@ class CardDialog(QDialog):
 		self.subcards_list.clear()
 		editable = not self.board.is_read_only()
 		self.add_subcard_button.setEnabled(editable)
+		self.edit_subcard_button.setEnabled(editable and bool(self.subcards))
 		self.delete_subcard_button.setEnabled(editable and bool(self.subcards))
+		if hasattr(self, 'subcards_summary_label'):
+			count = len(self.subcards)
+			self.subcards_summary_label.setText(f'{count} subcard' + ('' if count == 1 else 's'))
+			completed = sum(1 for subcard in self.subcards if self.board.is_card_done(subcard))
+			self.subcards_progress_label.setText(f'{completed} done' + ('' if completed == 1 else ''))
 		if not self.subcards:
 			placeholder = QListWidgetItem('No subcards yet.')
 			placeholder.setFlags(Qt.ItemFlag.NoItemFlags)
+			placeholder.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 			self.subcards_list.addItem(placeholder)
 			return
 		for subcard in self.subcards:
@@ -1406,7 +1606,102 @@ class CardDialog(QDialog):
 			location = self.board.get_card_location_label(subcard)
 			item = QListWidgetItem(f'{tick} {subcard.title} ({location})')
 			item.setData(Qt.ItemDataRole.UserRole, subcard.id)
+			row_widget = self._create_subcard_row_widget(subcard)
+			row_container = SubcardListItemContainer(row_widget)
+			item.setSizeHint(row_container.sizeHint())
 			self.subcards_list.addItem(item)
+			self.subcards_list.setItemWidget(item, row_container)
+		self._refresh_subcard_row_styles()
+		QTimer.singleShot(0, self.subcards_list.refresh_item_sizes)
+
+	def _subcard_priority_color(self, priority: Priority) -> str:
+		palette = {
+			Priority.LOW: '#6a8c63',
+			Priority.MEDIUM: '#8f6b2a',
+			Priority.HIGH: '#b8612a',
+			Priority.CRITICAL: '#a63c30',
+		}
+		return palette.get(priority, '#7d5b3d')
+
+	def _create_subcard_row_widget(self, subcard) -> QWidget:
+		row = SubcardRowWidget()
+		row.setObjectName('SubcardRow')
+		row.setProperty('accentColor', self._subcard_priority_color(subcard.priority))
+		layout = QVBoxLayout(row)
+		layout.setContentsMargins(12, 10, 12, 10)
+		layout.setSpacing(6)
+
+		header = QWidget()
+		header_layout = QVBoxLayout(header)
+		header_layout.setContentsMargins(0, 1, 0, 3)
+		header_layout.setSpacing(6)
+
+		badge_row = QWidget()
+		badge_row_layout = QHBoxLayout(badge_row)
+		badge_row_layout.setContentsMargins(0, 0, 0, 0)
+		badge_row_layout.setSpacing(8)
+
+		status_badge = QLabel('Done' if self.board.is_card_done(subcard) else 'Open')
+		status_badge.setObjectName('SubcardStatusBadge')
+		status_color = '#3e7a5e' if self.board.is_card_done(subcard) else self._subcard_priority_color(subcard.priority)
+		status_badge.setStyleSheet(
+			f'background: {resolve_hex_color(status_color, "#7d5b3d")}20; color: {status_color}; border: 1px solid {status_color}33; border-radius: 9px; padding: 3px 8px; font-size: 7pt; font-weight: 700;'
+		)
+		badge_row_layout.addWidget(status_badge)
+		badge_row_layout.addStretch(1)
+
+		priority_badge = QLabel(priority_label(subcard.priority).title())
+		priority_badge.setStyleSheet(
+			f'background: rgba(79, 65, 52, 0.06); color: {self._subcard_priority_color(subcard.priority)}; border: 1px solid rgba(79, 65, 52, 0.10); border-radius: 9px; padding: 3px 8px; font-size: 7pt; font-weight: 700;'
+		)
+		badge_row_layout.addWidget(priority_badge)
+		header_layout.addWidget(badge_row)
+
+		title_label = QLabel(subcard.title)
+		title_label.setObjectName('SubcardRowTitle')
+		title_label.setWordWrap(True)
+		title_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+		title_label.setStyleSheet('color: #2d241c; font-size: 9pt; font-weight: 700;')
+		header_layout.addWidget(title_label)
+		layout.addWidget(header)
+
+		meta_parts = [self.board.get_card_location_label(subcard)]
+		if subcard.assignee:
+			meta_parts.append(f'@{subcard.assignee}')
+		if subcard.project:
+			meta_parts.append(subcard.project)
+		meta_label = QLabel('  •  '.join(meta_parts))
+		meta_label.setObjectName('SubcardRowMeta')
+		meta_label.setWordWrap(True)
+		meta_label.setStyleSheet('color: #6b5a4a; font-size: 7.5pt; font-weight: 600;')
+		layout.addWidget(meta_label)
+
+		if subcard.description:
+			description_label = QLabel(subcard.description[:120] + ('...' if len(subcard.description) > 120 else ''))
+			description_label.setWordWrap(True)
+			description_label.setStyleSheet('color: #756658; font-size: 7.5pt;')
+			layout.addWidget(description_label)
+
+		return row
+
+	def _apply_subcard_row_style(self, row_widget: QWidget, selected: bool):
+		accent = row_widget.property('accentColor') or '#7d5b3d'
+		background = '#f5e4cb' if selected else '#fffdf9'
+		border = accent if selected else '#dec7a5'
+		row_widget.setStyleSheet(
+			f'QFrame#SubcardRow {{ background: {background}; border: 1px solid {border}; border-left: 4px solid {accent}; border-radius: 12px; }}'
+		)
+
+	def _refresh_subcard_row_styles(self):
+		if not hasattr(self, 'subcards_list'):
+			return
+		for index in range(self.subcards_list.count()):
+			item = self.subcards_list.item(index)
+			widget = self.subcards_list.itemWidget(item)
+			if widget is None:
+				continue
+			row_widget = widget.row_widget if isinstance(widget, SubcardListItemContainer) else widget
+			self._apply_subcard_row_style(row_widget, item.isSelected())
 
 	def _selected_subcard(self):
 		if not hasattr(self, 'subcards_list'):

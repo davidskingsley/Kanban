@@ -8,8 +8,10 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 from PySide6.QtCore import QPoint, QPointF, QSize, Qt
 from PySide6.QtGui import QColor, QContextMenuEvent, QMouseEvent, QPixmap
-from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton, QScrollArea, QToolBar
+from PySide6.QtWidgets import QAbstractItemView, QLabel, QListWidget, QMessageBox, QPushButton, QScrollArea, QToolBar
 
+from gui_test_case import GuiTestCase
+from kanban.gui.board_statistics import BoardStatisticsDialog
 from kanban.gui.pyside_app import (
     BoardDialog,
     CardDialog,
@@ -17,7 +19,6 @@ from kanban.gui.pyside_app import (
     CardTypeDialog,
     CardTypesBrowserDialog,
     ColumnAddButton,
-    ColumnDialog,
     ColumnTitleButton,
     DueDateViewDialog,
     MultiBoardGUI,
@@ -29,9 +30,7 @@ from kanban.gui.pyside_app import (
     create_drag_preview,
     priority_label,
 )
-from kanban.gui.board_statistics import BoardStatisticsDialog
 from kanban.models import Priority
-from gui_test_case import GuiTestCase
 
 
 class GuiDialogRegressionTests(GuiTestCase):
@@ -313,8 +312,31 @@ class GuiDialogRegressionTests(GuiTestCase):
         dialog = CardDialog(board, card=parent_card)
 
         self.assertTrue(hasattr(dialog, 'subcards_list'))
+        self.assertEqual(dialog.subcards_list.verticalScrollMode(), QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.assertEqual(dialog.subcards_list.verticalScrollBar().singleStep(), 20)
+        self.assertEqual(dialog.subcards_list.horizontalScrollBarPolicy(), Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.assertEqual(dialog.subcards_summary_label.text(), '1 subcard')
+        self.assertEqual(dialog.subcards_progress_label.text(), '0 done')
         self.assertEqual(dialog.subcards_list.count(), 1)
         self.assertIn('Child', dialog.subcards_list.item(0).text())
+        row_container = dialog.subcards_list.itemWidget(dialog.subcards_list.item(0))
+        self.assertIsNotNone(row_container)
+        self.assertEqual(row_container.layout().contentsMargins().bottom(), 5)
+        row_widget = row_container.row_widget
+        title_label = row_widget.findChild(QLabel, 'SubcardRowTitle')
+        self.assertIsNotNone(title_label)
+        self.assertNotIn('padding:', title_label.styleSheet())
+        header_widget = row_widget.layout().itemAt(0).widget()
+        self.assertIsNotNone(header_widget)
+        self.assertEqual(header_widget.layout().contentsMargins().bottom(), 3)
+        badge_row = header_widget.layout().itemAt(0).widget()
+        self.assertIsNotNone(badge_row)
+        self.assertGreaterEqual(header_widget.layout().count(), 2)
+        self.assertTrue(row_widget.hasHeightForWidth())
+        self.assertTrue(row_container.hasHeightForWidth())
+        dialog.subcards_list.resize(320, 220)
+        dialog.subcards_list.refresh_item_sizes()
+        self.assertEqual(dialog.subcards_list.item(0).sizeHint().height(), row_container.heightForWidth(row_container.width()))
 
         dialog.subcards_list.setCurrentRow(0)
         with patch.object(QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes):
@@ -322,8 +344,30 @@ class GuiDialogRegressionTests(GuiTestCase):
 
         self.assertIsNone(board.find_card(subcard.id))
         self.assertTrue(dialog.did_mutate_board)
+        self.assertEqual(dialog.subcards_summary_label.text(), '0 subcards')
+        self.assertEqual(dialog.subcards_progress_label.text(), '0 done')
         self.assertEqual(dialog.subcards_list.count(), 1)
         self.assertEqual(dialog.subcards_list.item(0).text(), 'No subcards yet.')
+
+    def test_add_subcard_uses_leftmost_column_when_parent_column_disables_add_card(self):
+        self.board_manager.create_board('Subcard Target Board')
+        board = self.board_manager.get_current_board()
+        ordered_columns = board.get_columns_ordered()
+        leftmost_column = ordered_columns[0]
+        parent_column = ordered_columns[1]
+        board.update_column(leftmost_column.id, can_add_card=False)
+        board.update_column(parent_column.id, can_add_card=False)
+        parent_card = board.create_card('Parent', 'desc', Priority.MEDIUM, parent_column.id)
+
+        dialog = CardDialog(board, parent_card=parent_card)
+
+        self.assertFalse(dialog.column_combo.isEnabled())
+        self.assertEqual(dialog.column_combo.currentData(), leftmost_column.id)
+        self.assertIn('left-most column', dialog.findChild(QLabel, 'DialogSubtitle').text())
+
+        subcard = board.create_subcard(parent_card.id, 'Child', 'subcard desc')
+
+        self.assertEqual(subcard.column_id, leftmost_column.id)
 
     def test_subcard_list_double_click_edit_updates_selected_subcard(self):
         self.board_manager.create_board('Subcard Double Click Board')
@@ -497,6 +541,19 @@ class GuiDialogRegressionTests(GuiTestCase):
         for badge in badges:
             self.assertEqual(badge.height(), 24)
 
+    def test_selected_card_tile_uses_more_obvious_selected_styling(self):
+        self.board_manager.create_board('Selected Card Tile Board')
+        board = self.board_manager.get_current_board()
+        card = board.create_card('Tile Card', 'desc', Priority.MEDIUM, board.get_columns_ordered()[0].id)
+        card.color = '#4f7ec9'
+
+        tile = CardTile(board, card, selected=True)
+        labels = [label.text() for label in tile.findChildren(QLabel)]
+
+        self.assertIn('SELECTED', labels)
+        self.assertNotEqual(tile.selection_color, '#7d3b14')
+        self.assertIn(f'border: 3px solid {tile.selection_color};', tile.styleSheet())
+
     def test_column_header_uses_title_selection_and_plus_add_button(self):
         self.board_manager.create_board('Column Header Board')
         self.gui = MultiBoardGUI(self.board_manager)
@@ -513,3 +570,98 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(self.gui.selected_column_id, column.id)
         self.assertTrue(plus_buttons)
         self.assertFalse(legacy_buttons)
+
+    def test_column_cards_use_more_of_column_width(self):
+        self.board_manager.create_board('Column Card Width Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        column = board.get_columns_ordered()[0]
+        board.create_card('Width Test Card', 'desc', Priority.MEDIUM, column.id)
+
+        widget = self.gui._create_column_widget(board, column)
+        margins = widget.layout().contentsMargins()
+        list_widget = widget.findChild(QListWidget)
+
+        self.assertEqual(margins.left(), 6)
+        self.assertEqual(margins.right(), 6)
+
+        list_widget.resize(320, 400)
+        list_widget.refresh_card_sizes()
+
+        item = list_widget.item(0)
+        row_widget = list_widget.itemWidget(item)
+        card_widget = row_widget.card_widget
+        self.assertEqual(row_widget.width(), list_widget.viewport().width())
+        self.assertEqual(row_widget.layout().contentsMargins().left(), 0)
+        self.assertEqual(card_widget.width(), list_widget.viewport().width() - 2 - list_widget._card_content_clearance_width())
+
+    def test_column_card_list_uses_larger_vertical_spacing(self):
+        self.board_manager.create_board('Column Card Spacing Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        column = board.get_columns_ordered()[0]
+
+        widget = self.gui._create_column_widget(board, column)
+        list_widget = widget.findChild(QListWidget)
+
+        self.assertEqual(list_widget.spacing(), 0)
+
+        board.create_card('Spacing Card', 'desc', Priority.MEDIUM, column.id)
+        widget = self.gui._create_column_widget(board, column)
+        list_widget = widget.findChild(QListWidget)
+        row_widget = list_widget.itemWidget(list_widget.item(0))
+        self.assertEqual(row_widget.layout().contentsMargins().bottom(), 14)
+
+    def test_column_card_list_uses_per_pixel_scrolling(self):
+        self.board_manager.create_board('Column Smooth Scrolling Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        column = board.get_columns_ordered()[0]
+
+        widget = self.gui._create_column_widget(board, column)
+        list_widget = widget.findChild(QListWidget)
+
+        self.assertEqual(list_widget.verticalScrollMode(), QListWidget.ScrollMode.ScrollPerPixel)
+        self.assertEqual(list_widget.verticalScrollBar().singleStep(), 24)
+
+    def test_column_card_list_reserves_scrollbar_clearance(self):
+        self.board_manager.create_board('Column Scrollbar Clearance Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        column = board.get_columns_ordered()[0]
+
+        widget = self.gui._create_column_widget(board, column)
+        list_widget = widget.findChild(QListWidget)
+
+        self.assertEqual(list_widget.viewportMargins().right(), 0)
+        self.assertEqual(list_widget._card_content_clearance_width(), 6)
+
+        for index in range(12):
+            board.create_card(f'Card {index}', 'desc', Priority.MEDIUM, column.id)
+
+        widget = self.gui._create_column_widget(board, column)
+        list_widget = widget.findChild(QListWidget)
+        list_widget.resize(320, 220)
+        list_widget.refresh_card_sizes()
+
+        self.assertEqual(list_widget._card_content_clearance_width(), 14)
+
+    def test_scrollable_column_cards_use_compact_text_sizes(self):
+        self.board_manager.create_board('Compact Scroll Text Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        column = board.get_columns_ordered()[0]
+
+        for index in range(12):
+            board.create_card('Long title ' * 4, 'Long description ' * 12, Priority.MEDIUM, column.id)
+
+        widget = self.gui._create_column_widget(board, column)
+        list_widget = widget.findChild(QListWidget)
+        list_widget.resize(320, 220)
+        list_widget.refresh_card_sizes()
+
+        row_widget = list_widget.itemWidget(list_widget.item(0))
+        card_widget = row_widget.card_widget
+
+        self.assertTrue(card_widget.compact_text)
+        self.assertIn('font-size: 8.5pt;', card_widget.title_label.styleSheet())

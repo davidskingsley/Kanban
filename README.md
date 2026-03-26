@@ -13,13 +13,35 @@ A Python Kanban application focused on multi-board management with a PySide6 GUI
 
 ## Installation
 
-1. Install Python 3.8 or newer.
-2. Change into the project directory.
-3. Install the Python dependencies.
+1. Install Python 3.9 through 3.14.
+2. Install `uv`.
+3. Change into the project directory.
+4. Sync the project environment.
 
 ```bash
 cd Kanban
-pip install -r requirements.txt
+uv sync
+```
+
+On Windows, `winget install astral-sh.uv` is the simplest way to install `uv`.
+
+## Development Tools
+
+This project uses:
+
+- `uv` for dependency and environment management
+- `ruff` for linting
+
+Run the linter with:
+
+```bash
+uv run ruff check .
+```
+
+Auto-fix safe issues with:
+
+```bash
+uv run ruff check . --fix
 ```
 
 ## Usage
@@ -27,7 +49,7 @@ pip install -r requirements.txt
 ### Multi-Board GUI
 
 ```bash
-python main.py
+uv run python main.py
 ```
 
 This is the default mode and the primary GUI workflow.
@@ -35,14 +57,14 @@ This is the default mode and the primary GUI workflow.
 ### Multi-Board CLI
 
 ```bash
-python main.py --cli
+uv run python main.py --cli
 ```
 
 ### Demo Scripts
 
 ```bash
-python demo_multiboard.py
-python example_usage.py
+uv run python demo_multiboard.py
+uv run python example_usage.py
 ```
 
 ## Testing
@@ -50,13 +72,13 @@ python example_usage.py
 Run the regression suite with the workspace virtual environment:
 
 ```bash
-python -m unittest discover -s tests
+uv run python -m unittest discover -s tests
 ```
 
 ## Command Options
 
 ```bash
-python main.py [options]
+uv run python main.py [options]
 
 Options:
   --cli              Use the multi-board command-line interface
@@ -145,7 +167,8 @@ Kanban/
 ├── demo_multiboard.py
 ├── example_usage.py
 ├── README.md
-├── requirements.txt
+├── pyproject.toml
+├── uv.lock
 ├── demo_kanban.json
 ├── example_kanban.json
 ├── kanban_data.json
@@ -163,7 +186,7 @@ Kanban/
 ## Troubleshooting
 
 1. GUI will not start:
-   Verify `PySide6` is installed from `requirements.txt`, or run `python main.py --cli`.
+   Verify dependencies were installed with `uv sync`, or run `uv run python main.py --cli`.
 2. Permission errors:
    Check write access to `$HOME/.kanban-ds` or the external board folder, and verify the board file and adjacent `.lock` file are writable.
 3. Board opens read-only:
@@ -171,7 +194,7 @@ Kanban/
 4. Backup or import problems:
    Verify the target path exists and that the JSON files are not corrupted.
 5. Need advanced maintenance operations:
-   Use `python main.py --cli` for attachment, note, and other advanced board-management commands.
+   Use `uv run python main.py --cli` for attachment, note, and other advanced board-management commands.
 
 ## License
 

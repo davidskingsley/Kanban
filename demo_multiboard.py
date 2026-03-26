@@ -24,7 +24,7 @@ def create_demo_boards():
     
     # Create Personal Tasks board
     print("\n📋 Creating 'Personal Tasks' board...")
-    personal_id = board_manager.create_board("Personal Tasks", "Daily life management")
+    board_manager.create_board("Personal Tasks", "Daily life management")
     personal_board = board_manager.get_current_board()
     
     # Add personal tasks

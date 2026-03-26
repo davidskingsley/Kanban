@@ -8,7 +8,7 @@ import os
 import subprocess
 import sys
 from datetime import date
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from PySide6.QtCore import QMimeData, QPoint, QPointF, QSize, Qt
 from PySide6.QtGui import QColor, QPainter, QPixmap, QWheelEvent
@@ -25,17 +25,16 @@ from PySide6.QtWidgets import (
 	QHBoxLayout,
 	QLabel,
 	QListWidget,
+	QPushButton,
 	QScrollArea,
 	QTableWidget,
 	QTextEdit,
 	QVBoxLayout,
 	QWidget,
-	QPushButton,
 )
 
 from ..board import KanbanBoard
 from ..models import Priority, Status
-
 
 WINDOW_STYLE = """
 QMainWindow {
