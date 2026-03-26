@@ -229,17 +229,6 @@ class MultiBoardGUI:
         self.board_menu.addAction(self._action('Due Date View', self.show_due_date_view, 'Ctrl+Shift+T'))
         self.board_menu.addAction(self._action('Board Statistics', self.show_board_statistics, 'Ctrl+I'))
 
-        self.filters_menu = menu_bar.addMenu('Filters')
-        self.filters_menu.addSection('Toolbar Filters')
-        self.filters_menu.addAction(self._action('Search Cards', self.focus_search_filter, 'Ctrl+F'))
-        self.filters_menu.addAction(self._action('Filter by Priority', self.show_priority_filter_popup, 'Ctrl+Shift+P'))
-        self.filters_menu.addAction(self._action('Filter by Assignee', self.show_assignee_filter_popup, 'Ctrl+Shift+A'))
-        self.filters_menu.addAction(self._action('Filter by Due State', self.show_due_state_filter_popup, 'Ctrl+Shift+L'))
-        self.filters_menu.addAction(self._action('Filter by Card Type', self.show_card_type_filter_popup, 'Ctrl+Shift+Y'))
-        self.filters_menu.addAction(self._action('Filter by Tag', self.show_tag_filter_popup, 'Ctrl+Shift+G'))
-        self.filters_menu.addSeparator()
-        self.filters_menu.addAction(self._action('Clear Filters', self.clear_toolbar_filters, 'Ctrl+Shift+F'))
-
         card_menu = menu_bar.addMenu('Cards')
         card_menu.addSection('Selected Card')
         card_menu.addAction(self._action('New Card', self.create_card, 'Ctrl+Shift+N'))
@@ -550,36 +539,6 @@ class MultiBoardGUI:
         self.board_filter_states[self.board_manager.current_board_id] = self._default_filter_state()
         self.selected_card_id = None
         self.refresh_ui()
-
-    def focus_search_filter(self):
-        """Focus the search control in the filter toolbar."""
-        self.toolbar_search_entry.setFocus()
-        self.toolbar_search_entry.selectAll()
-
-    def show_priority_filter_popup(self):
-        """Open the priority filter dropdown."""
-        self.toolbar_priority_combo.setFocus()
-        self.toolbar_priority_combo.showPopup()
-
-    def show_assignee_filter_popup(self):
-        """Open the assignee filter dropdown."""
-        self.toolbar_assignee_combo.setFocus()
-        self.toolbar_assignee_combo.showPopup()
-
-    def show_card_type_filter_popup(self):
-        """Open the card-type filter dropdown."""
-        self.toolbar_card_type_combo.setFocus()
-        self.toolbar_card_type_combo.showPopup()
-
-    def show_tag_filter_popup(self):
-        """Open the tag filter dropdown."""
-        self.toolbar_tag_combo.setFocus()
-        self.toolbar_tag_combo.showPopup()
-
-    def show_due_state_filter_popup(self):
-        """Open the due-state filter dropdown."""
-        self.toolbar_due_state_combo.setFocus()
-        self.toolbar_due_state_combo.showPopup()
 
     def _card_matches_filters(self, board: KanbanBoard, card) -> bool:
         """Return whether a card matches the active board filters."""
