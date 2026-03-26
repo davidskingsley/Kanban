@@ -289,6 +289,9 @@ class CardTile(QFrame):
 		if self.context_action_callback is not None and not self.card.parent_id:
 			add_subcard_action = menu.addAction('Add Subcard')
 		chosen_action = menu.exec(event.globalPos())
+		if chosen_action is None:
+			event.ignore()
+			return
 		if chosen_action == edit_action and self.edit_callback is not None:
 			self.edit_callback(self.card.id)
 			event.accept()

@@ -8,12 +8,49 @@ from PySide6.QtCore import QPoint, QPointF, QSize, Qt
 from PySide6.QtGui import QWheelEvent
 from PySide6.QtWidgets import QListWidgetItem, QMessageBox, QWidget, QVBoxLayout
 
-from kanban.gui.pyside_app import CardDialog, CardListWidget, ColumnDialog, ColumnGroupBox, ColumnTitleButton, MultiBoardGUI, PropagatingListWidget, PropagatingScrollArea
+from kanban.gui.pyside_app import CardDialog, CardListWidget, CardTile, ColumnDialog, ColumnGroupBox, ColumnTitleButton, MultiBoardGUI, PropagatingListWidget, PropagatingScrollArea
 from kanban.models import Priority
 from gui_test_case import GuiTestCase
 
 
 class GuiBoardRegressionTests(GuiTestCase):
+    def test_dismissing_subcard_context_menu_does_not_trigger_add_subcard(self):
+        self.board_manager.create_board('Subcard Context Menu Board')
+        board = self.board_manager.get_current_board()
+        column_id = board.get_columns_ordered()[0].id
+        parent_card = board.create_card('Parent', 'parent card', Priority.MEDIUM, column_id)
+        subcard = board.create_subcard(parent_card.id, 'Child', 'subcard card', Priority.LOW, column_id)
+        callback_calls = []
+        tile = CardTile(board, subcard, context_action_callback=lambda card_id, action: callback_calls.append((card_id, action)))
+
+        class FakeContextEvent:
+            def __init__(self):
+                self.ignored = False
+
+            def globalPos(self):
+                return QPoint(5, 5)
+
+            def ignore(self):
+                self.ignored = True
+
+        class FakeMenu:
+            def __init__(self, _parent=None):
+                self.actions = []
+
+            def addAction(self, label):
+                self.actions.append(label)
+                return label
+
+            def exec(self, _global_pos):
+                return None
+
+        with patch('kanban.gui.embedded_board.QMenu', FakeMenu):
+            event = FakeContextEvent()
+            tile.contextMenuEvent(event)
+
+        self.assertEqual(callback_calls, [])
+        self.assertTrue(event.ignored)
+
     def test_card_list_drop_indicator_tracks_item_insertion_position(self):
         list_widget = CardListWidget()
         list_widget.resize(220, 240)
