@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 from typing import Optional
 
-from PySide6.QtCore import QMimeData, QPointF, QSize, Qt
+from PySide6.QtCore import QMimeData, QPoint, QPointF, QSize, Qt
 from PySide6.QtGui import QColor, QCursor, QDrag, QPainter, QPen
 from PySide6.QtWidgets import (
 	QApplication,
@@ -321,12 +321,21 @@ class CardTile(QFrame):
 
 class CardListWidget(QListWidget):
 	CARD_MIME_TYPE = 'application/x-kanban-card'
+	DROP_INDICATOR_MARGIN = 10
+	DROP_INDICATOR_SPACING = 5
+	DROP_INDICATOR_THICKNESS = 4
 
 	def __init__(self, column_id: Optional[str] = None, board_view=None, parent: Optional[QWidget] = None):
 		super().__init__(parent)
 		self.column_id = column_id
 		self.board_view = board_view
 		self._drop_highlight = False
+		self._drop_indicator_y: Optional[int] = None
+		self._drop_indicator_line = QFrame(self.viewport())
+		self._drop_indicator_line.setObjectName('CardDropIndicatorLine')
+		self._drop_indicator_line.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+		self._drop_indicator_line.setStyleSheet('background: #3e7a5e; border-radius: 2px;')
+		self._drop_indicator_line.hide()
 		self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 		self.setDragEnabled(True)
 		self.setAcceptDrops(True)
@@ -334,16 +343,13 @@ class CardListWidget(QListWidget):
 		self.setDropIndicatorShown(False)
 
 	def _apply_drop_style(self):
-		border_style = '2px solid #3e7a5e' if self._drop_highlight else 'none'
-		background = '#eef7f0' if self._drop_highlight else 'transparent'
-		padding = '8px' if self._drop_highlight else '0'
 		self.setStyleSheet(
 			f"""
 			QListWidget {{
-				background: {background};
-				border: {border_style};
+				background: transparent;
+				border: none;
 				border-radius: 14px;
-				padding: {padding};
+				padding: 0;
 				outline: 0;
 			}}
 			QListWidget::item {{
@@ -384,15 +390,49 @@ class CardListWidget(QListWidget):
 		if event.mimeData().hasFormat(self.CARD_MIME_TYPE):
 			self._drop_highlight = True
 			self._apply_drop_style()
+			self._update_drop_indicator(event.position().toPoint())
 			event.acceptProposedAction()
 			return
 		event.ignore()
 
 	def dragMoveEvent(self, event):
 		if event.mimeData().hasFormat(self.CARD_MIME_TYPE):
+			self._update_drop_indicator(event.position().toPoint())
 			event.acceptProposedAction()
 			return
 		event.ignore()
+
+	def _indicator_y_for_point(self, point: QPoint) -> int:
+		if self.count() == 0:
+			return self.DROP_INDICATOR_MARGIN + 2
+		item = self.itemAt(point)
+		if item is None:
+			last_rect = self.visualItemRect(self.item(self.count() - 1))
+			return last_rect.bottom() + self.DROP_INDICATOR_SPACING
+		item_rect = self.visualItemRect(item)
+		insert_after = point.y() > item_rect.center().y()
+		return item_rect.bottom() + self.DROP_INDICATOR_SPACING if insert_after else item_rect.top() - self.DROP_INDICATOR_SPACING
+
+	def _update_drop_indicator(self, point: QPoint):
+		indicator_y = self._indicator_y_for_point(point)
+		max_y = max(self.DROP_INDICATOR_MARGIN, self.viewport().height() - self.DROP_INDICATOR_MARGIN)
+		self._drop_indicator_y = max(self.DROP_INDICATOR_MARGIN, min(indicator_y, max_y))
+		self._position_drop_indicator_line()
+
+	def _clear_drop_indicator(self):
+		self._drop_indicator_y = None
+		self._drop_indicator_line.hide()
+
+	def _position_drop_indicator_line(self):
+		if self._drop_indicator_y is None:
+			self._drop_indicator_line.hide()
+			return
+		x_start = self.DROP_INDICATOR_MARGIN
+		line_width = max(1, self.viewport().width() - (2 * self.DROP_INDICATOR_MARGIN))
+		y_pos = self._drop_indicator_y - (self.DROP_INDICATOR_THICKNESS // 2)
+		self._drop_indicator_line.setGeometry(x_start, y_pos, line_width, self.DROP_INDICATOR_THICKNESS)
+		self._drop_indicator_line.show()
+		self._drop_indicator_line.raise_()
 
 	def _drop_target_details(self, point):
 		item = self.itemAt(point)
@@ -406,11 +446,13 @@ class CardListWidget(QListWidget):
 	def dragLeaveEvent(self, event):
 		self._drop_highlight = False
 		self._apply_drop_style()
+		self._clear_drop_indicator()
 		super().dragLeaveEvent(event)
 
 	def dropEvent(self, event):
 		self._drop_highlight = False
 		self._apply_drop_style()
+		self._clear_drop_indicator()
 		if not event.mimeData().hasFormat(self.CARD_MIME_TYPE) or self.board_view is None:
 			event.ignore()
 			return
@@ -428,6 +470,7 @@ class CardListWidget(QListWidget):
 	def resizeEvent(self, event):
 		super().resizeEvent(event)
 		self.refresh_card_sizes()
+		self._position_drop_indicator_line()
 
 	def wheelEvent(self, event):
 		handle_scrollable_wheel_event(self, event, lambda: super(CardListWidget, self).wheelEvent(event))
@@ -538,6 +581,8 @@ class ColumnAddButton(QPushButton):
 class ColumnGroupBox(QGroupBox):
 	COLUMN_MIME_TYPE = 'application/x-kanban-column'
 	DRAG_HANDLE_HEIGHT = 56
+	DROP_INDICATOR_MARGIN = 10
+	DROP_INDICATOR_THICKNESS = 5
 
 	def __init__(self, title: str, column_id: str, board_view, selected: bool, parent: Optional[QWidget] = None):
 		super().__init__(title, parent)
@@ -545,6 +590,12 @@ class ColumnGroupBox(QGroupBox):
 		self.board_view = board_view
 		self.selected = selected
 		self._drop_highlight = False
+		self._drop_indicator_x: Optional[int] = None
+		self._drop_indicator_line = QFrame(self)
+		self._drop_indicator_line.setObjectName('ColumnDropIndicatorLine')
+		self._drop_indicator_line.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+		self._drop_indicator_line.setStyleSheet('background: #3e7a5e; border-radius: 2px;')
+		self._drop_indicator_line.hide()
 		self._press_pos = None
 		self.setAcceptDrops(True)
 		shadow = QGraphicsDropShadowEffect(self)
@@ -613,24 +664,47 @@ class ColumnGroupBox(QGroupBox):
 		if event.mimeData().hasFormat(self.COLUMN_MIME_TYPE):
 			self._drop_highlight = True
 			self._apply_style()
+			self._update_drop_indicator(event.position().x())
 			event.acceptProposedAction()
 			return
 		event.ignore()
 
 	def dragMoveEvent(self, event):
 		if event.mimeData().hasFormat(self.COLUMN_MIME_TYPE):
+			self._update_drop_indicator(event.position().x())
 			event.acceptProposedAction()
 			return
 		event.ignore()
 
+	def _update_drop_indicator(self, x_pos: float):
+		insert_after = x_pos > (self.width() / 2)
+		self._drop_indicator_x = self.width() - self.DROP_INDICATOR_MARGIN if insert_after else self.DROP_INDICATOR_MARGIN
+		self._position_drop_indicator_line()
+
+	def _clear_drop_indicator(self):
+		self._drop_indicator_x = None
+		self._drop_indicator_line.hide()
+
+	def _position_drop_indicator_line(self):
+		if self._drop_indicator_x is None:
+			self._drop_indicator_line.hide()
+			return
+		x_pos = self._drop_indicator_x - (self.DROP_INDICATOR_THICKNESS // 2)
+		line_height = max(1, self.height() - 36)
+		self._drop_indicator_line.setGeometry(x_pos, 18, self.DROP_INDICATOR_THICKNESS, line_height)
+		self._drop_indicator_line.show()
+		self._drop_indicator_line.raise_()
+
 	def dragLeaveEvent(self, event):
 		self._drop_highlight = False
 		self._apply_style()
+		self._clear_drop_indicator()
 		super().dragLeaveEvent(event)
 
 	def dropEvent(self, event):
 		self._drop_highlight = False
 		self._apply_style()
+		self._clear_drop_indicator()
 		if not event.mimeData().hasFormat(self.COLUMN_MIME_TYPE):
 			event.ignore()
 			return
@@ -638,6 +712,10 @@ class ColumnGroupBox(QGroupBox):
 		insert_after = event.position().x() > (self.width() / 2)
 		self.board_view.handle_column_drop(dragged_column_id, self.column_id, insert_after)
 		event.acceptProposedAction()
+
+	def resizeEvent(self, event):
+		super().resizeEvent(event)
+		self._position_drop_indicator_line()
 
 
 __all__ = [

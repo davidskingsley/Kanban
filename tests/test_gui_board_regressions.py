@@ -4,16 +4,61 @@ from unittest.mock import patch
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
-from PySide6.QtCore import QPoint, QPointF, Qt
+from PySide6.QtCore import QPoint, QPointF, QSize, Qt
 from PySide6.QtGui import QWheelEvent
-from PySide6.QtWidgets import QMessageBox, QWidget, QVBoxLayout
+from PySide6.QtWidgets import QListWidgetItem, QMessageBox, QWidget, QVBoxLayout
 
-from kanban.gui.pyside_app import CardDialog, CardListWidget, ColumnDialog, ColumnTitleButton, MultiBoardGUI, PropagatingListWidget, PropagatingScrollArea
+from kanban.gui.pyside_app import CardDialog, CardListWidget, ColumnDialog, ColumnGroupBox, ColumnTitleButton, MultiBoardGUI, PropagatingListWidget, PropagatingScrollArea
 from kanban.models import Priority
 from gui_test_case import GuiTestCase
 
 
 class GuiBoardRegressionTests(GuiTestCase):
+    def test_card_list_drop_indicator_tracks_item_insertion_position(self):
+        list_widget = CardListWidget()
+        list_widget.resize(220, 240)
+
+        for label in ('First', 'Second'):
+            item = QListWidgetItem(label)
+            item.setSizeHint(QSize(180, 40))
+            list_widget.addItem(item)
+
+        list_widget.show()
+        self.app.processEvents()
+
+        first_rect = list_widget.visualItemRect(list_widget.item(0))
+        second_rect = list_widget.visualItemRect(list_widget.item(1))
+
+        list_widget._update_drop_indicator(QPoint(first_rect.center().x(), first_rect.center().y() + 1))
+        self.assertEqual(list_widget._drop_indicator_y, first_rect.bottom() + list_widget.DROP_INDICATOR_SPACING)
+        self.assertTrue(list_widget._drop_indicator_line.isVisible())
+        self.assertIs(list_widget._drop_indicator_line.parentWidget(), list_widget.viewport())
+
+        list_widget._update_drop_indicator(QPoint(second_rect.center().x(), second_rect.center().y() - 1))
+        self.assertEqual(list_widget._drop_indicator_y, second_rect.top() - list_widget.DROP_INDICATOR_SPACING)
+
+        list_widget._clear_drop_indicator()
+        self.assertIsNone(list_widget._drop_indicator_y)
+        self.assertFalse(list_widget._drop_indicator_line.isVisible())
+
+    def test_column_group_box_drop_indicator_tracks_left_and_right_edges(self):
+        column_box = ColumnGroupBox('', 'column-1', board_view=None, selected=False)
+        column_box.resize(260, 200)
+        column_box.show()
+        self.app.processEvents()
+
+        column_box._update_drop_indicator(20)
+        self.assertEqual(column_box._drop_indicator_x, column_box.DROP_INDICATOR_MARGIN)
+        self.assertTrue(column_box._drop_indicator_line.isVisible())
+        self.assertIs(column_box._drop_indicator_line.parentWidget(), column_box)
+
+        column_box._update_drop_indicator(240)
+        self.assertEqual(column_box._drop_indicator_x, column_box.width() - column_box.DROP_INDICATOR_MARGIN)
+
+        column_box._clear_drop_indicator()
+        self.assertIsNone(column_box._drop_indicator_x)
+        self.assertFalse(column_box._drop_indicator_line.isVisible())
+
     def test_column_title_button_can_trigger_drag_callback(self):
         drag_calls = []
         drag_target = QWidget()
