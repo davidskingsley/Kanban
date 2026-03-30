@@ -7,6 +7,8 @@ __pycache__/
 .ruff_cache/
 .lock_test_path.txt
 tmp_lock_test_board.json
+build/
+dist/
 
 # Generated demo and runtime data
 demo_multiboard/

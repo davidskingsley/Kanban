@@ -303,6 +303,68 @@ class OptionalDateField(QWidget):
 		return date(selected.year(), selected.month(), selected.day())
 
 
+class AboutDialog(QDialog):
+	"""Application help and version dialog."""
+
+	def __init__(self, parent: Optional[QWidget] = None, version: str = '2.0'):
+		super().__init__(parent)
+		self.setWindowTitle('About Kanban')
+		self.resize(700, 620)
+
+		content_layout = build_dialog_shell(
+			self,
+			'About Kanban',
+			'Multi-board planning for day-to-day work. This dialog covers the current release, the main workflow, and the keyboard shortcuts that matter most.',
+		)
+
+		content_layout.addWidget(create_dialog_section_label('Version'))
+		self.version_label = QLabel(f'Kanban Version {version}')
+		self.version_label.setObjectName('AboutVersion')
+		self.version_label.setStyleSheet(
+			'background: rgba(125, 59, 20, 0.10); color: #6f3d1c; border: 1px solid rgba(125, 59, 20, 0.18); border-radius: 12px; padding: 8px 12px; font-size: 10pt; font-weight: 700;'
+		)
+		content_layout.addWidget(self.version_label)
+
+		content_layout.addWidget(create_dialog_section_label('How To Use'))
+		self.usage_label = QLabel(
+			'<b>1.</b> Create or switch to a board, then shape the workflow with custom columns.<br>'
+			'<b>2.</b> Add cards into active columns and use selection to edit, move, or delete the current card.<br>'
+			'<b>3.</b> Use the toolbar filters and search field to narrow what is visible on the board.<br>'
+			'<b>4.</b> Open card details to manage descriptions, dates, tags, attachments, and subcards.<br>'
+			'<b>5.</b> Use the Due Date View and Board Statistics screens to review progress and deadlines.'
+		)
+		self.usage_label.setObjectName('AboutUsage')
+		self.usage_label.setWordWrap(True)
+		self.usage_label.setTextFormat(Qt.TextFormat.RichText)
+		self.usage_label.setStyleSheet('color: #4f4134;')
+		content_layout.addWidget(self.usage_label)
+
+		content_layout.addWidget(create_dialog_section_label('Keyboard Shortcuts'))
+		self.shortcuts_label = QLabel(
+			'<b>Ctrl+N</b> New board<br>'
+			'<b>Ctrl+O</b> Switch board<br>'
+			'<b>F5</b> Refresh boards<br>'
+			'<b>Ctrl+Shift+N</b> New card<br>'
+			'<b>Ctrl+Shift+J</b> Add subcard to the selected card<br>'
+			'<b>Ctrl+E</b> Edit selected card<br>'
+			'<b>Ctrl+M</b> Move selected card<br>'
+			'<b>Ctrl+D</b> Delete selected card<br>'
+			'<b>Ctrl+Z</b> Undo current board action<br>'
+			'<b>Ctrl+Y</b> Redo current board action'
+		)
+		self.shortcuts_label.setObjectName('AboutShortcuts')
+		self.shortcuts_label.setWordWrap(True)
+		self.shortcuts_label.setTextFormat(Qt.TextFormat.RichText)
+		self.shortcuts_label.setStyleSheet('color: #4f4134;')
+		content_layout.addWidget(self.shortcuts_label)
+
+		content_layout.addWidget(create_dialog_hint_label('Tip: click a column title or card first to make the relevant card and column actions available.'))
+
+		self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+		self.button_box.accepted.connect(self.accept)
+		self.layout().addWidget(self.button_box)
+
+
 class DueDateViewDialog(QDialog):
 	"""Dialog showing due-date status for cards on the active board."""
 

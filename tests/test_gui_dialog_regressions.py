@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QAbstractItemView, QLabel, QListWidget, QMessageBo
 from gui_test_case import GuiTestCase
 from kanban.gui.board_statistics import BoardStatisticsDialog
 from kanban.gui.pyside_app import (
+    AboutDialog,
     BoardDialog,
     CardDialog,
     CardTile,
@@ -206,6 +207,32 @@ class GuiDialogRegressionTests(GuiTestCase):
         menu_titles = [action.text().replace('&', '') for action in self.gui.window.menuBar().actions()]
 
         self.assertNotIn('Filters', menu_titles)
+
+    def test_menu_bar_includes_help_menu_with_about_action(self):
+        self.board_manager.create_board('Help Menu Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+
+        menu_bar = self.gui.window.menuBar()
+        menu_titles = [action.text().replace('&', '') for action in menu_bar.actions()]
+        help_action = next(action for action in menu_bar.actions() if action.text().replace('&', '') == 'Help')
+        help_menu = help_action.menu()
+        help_titles = [action.text().replace('&', '') for action in help_menu.actions() if action.text()]
+
+        self.assertIn('Help', menu_titles)
+        self.assertIn('About Kanban', help_titles)
+
+    def test_about_dialog_shows_version_usage_and_shortcuts(self):
+        dialog = AboutDialog(version='2.0')
+        scroll_area = dialog.findChildren(QScrollArea, 'DialogScrollArea')[0]
+
+        self.assertEqual(dialog.windowTitle(), 'About Kanban')
+        self.assertEqual(dialog.version_label.text(), 'Kanban Version 2.0')
+        self.assertIn('Create or switch to a board', dialog.usage_label.text())
+        self.assertIn('Ctrl+Shift+J', dialog.shortcuts_label.text())
+        self.assertIn('Undo current board action', dialog.shortcuts_label.text())
+        self.assertTrue(dialog.findChildren(QScrollArea, 'DialogScrollArea'))
+        self.assertIs(dialog.button_box.parentWidget(), dialog)
+        self.assertIsNot(dialog.button_box.parentWidget(), scroll_area.widget())
 
     def test_board_summary_moves_to_title_bar(self):
         self.board_manager.create_board('Title Summary Board')

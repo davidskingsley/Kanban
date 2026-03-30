@@ -57,6 +57,7 @@ from .common import (
     resolve_hex_color,
 )
 from .dialogs import (
+    AboutDialog,
     BoardDialog,
     CardDialog,
     CardTypeDialog,
@@ -257,6 +258,9 @@ class MultiBoardGUI:
         column_menu.addSection('Layout')
         column_menu.addAction(self._action('Reorder Columns', self.reorder_columns, 'Ctrl+Alt+O'))
 
+        help_menu = menu_bar.addMenu('Help')
+        help_menu.addAction(self._action('About Kanban', self.show_about_dialog, 'F1'))
+
     def _set_window_title_summary(self, board_name: str, stats_text: str = ''):
         """Update the native window title with board summary details."""
         if board_name == 'No board selected' and not stats_text:
@@ -280,6 +284,11 @@ class MultiBoardGUI:
         if not description:
             return base_title
         return f'{base_title}: {description}'
+
+    def show_about_dialog(self):
+        """Show the application about and help dialog."""
+        dialog = AboutDialog(parent=self.window, version='2.0')
+        dialog.exec()
 
     def _refresh_history_actions(self, board: Optional[KanbanBoard] = None):
         """Sync the history actions with the available undo and redo stacks."""
