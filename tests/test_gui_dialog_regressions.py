@@ -221,6 +221,12 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIn('Help', menu_titles)
         self.assertIn('About Kanban', help_titles)
 
+    def test_main_window_uses_project_icon(self):
+        self.board_manager.create_board('Icon Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+
+        self.assertFalse(self.gui.window.windowIcon().isNull())
+
     def test_about_dialog_shows_version_usage_and_shortcuts(self):
         dialog = AboutDialog(version='2.0')
         scroll_area = dialog.findChildren(QScrollArea, 'DialogScrollArea')[0]

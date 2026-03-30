@@ -10,7 +10,7 @@ import sys
 from typing import Dict, List, Optional
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction, QColor, QKeySequence
+from PySide6.QtGui import QAction, QColor, QIcon, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -79,6 +79,15 @@ from .embedded_board import (
 )
 
 
+def resolve_app_asset_path(*parts: str) -> str:
+    """Return an absolute path to an application asset for source and bundled runs."""
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        base_dir = sys._MEIPASS
+    else:
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    return os.path.join(base_dir, *parts)
+
+
 class MultiBoardGUI:
     """PySide6 multi-board GUI wrapper."""
 
@@ -89,11 +98,16 @@ class MultiBoardGUI:
         self.app.setApplicationName('Kanban')
         self.app.setStyle('Fusion')
         self.app.setStyleSheet(WINDOW_STYLE)
+        app_icon = QIcon(resolve_app_asset_path('assets', 'kanban_icon.png'))
+        if not app_icon.isNull():
+            self.app.setWindowIcon(app_icon)
         self.base_window_title = 'Multi-Board Kanban Manager'
 
         self.window = QMainWindow()
         self.window.setWindowTitle(self.base_window_title)
         self.window.resize(1480, 860)
+        if not self.app.windowIcon().isNull():
+            self.window.setWindowIcon(self.app.windowIcon())
 
         self.selected_card_id: Optional[str] = None
         self.selected_column_id: Optional[str] = None
