@@ -187,13 +187,21 @@ class MultiBoardCLI:
             return
         
         description = input("Description (optional): ").strip()
+        backend_choice = input("Backend [1=Current JSON, 2=SQLite3] (default: 1): ").strip()
+        storage_backend = 'sqlite' if backend_choice == '2' else 'json'
 
         default_dir = self.board_manager.boards_directory
         storage_dir = input(f"Storage folder [{default_dir}]: ").strip() or default_dir
 
-        board_id = self.board_manager.create_board(name, description, target_directory=storage_dir)
+        board_id = self.board_manager.create_board(
+            name,
+            description,
+            target_directory=storage_dir,
+            storage_backend=storage_backend,
+        )
         if board_id:
             print(f"✅ Board '{name}' created successfully!")
+            print(f"🗄️ Backend: {'SQLite3' if storage_backend == 'sqlite' else 'Current JSON'}")
             if os.path.abspath(storage_dir) != os.path.abspath(default_dir):
                 print(f"📁 Stored at: {storage_dir}")
             
@@ -446,11 +454,12 @@ class MultiBoardCLI:
                 return
         else:
             for entry in sorted(os.listdir(folder)):
-                if not entry.endswith('.json') or entry == 'boards_metadata.json' or entry.endswith('.backup.json'):
+                candidate_path = os.path.join(folder, entry)
+                if entry == 'boards_metadata.json' or os.path.isdir(candidate_path) or '.backup.' in entry.lower():
                     continue
 
                 try:
-                    inspected = self.board_manager.inspect_board_file(os.path.join(folder, entry))
+                    inspected = self.board_manager.inspect_board_file(candidate_path)
                 except (FileNotFoundError, ValueError):
                     continue
 
@@ -461,6 +470,7 @@ class MultiBoardCLI:
                     'data_file': inspected['data_file'],
                     'name': inspected['name'],
                     'description': '',
+                    'storage_backend': inspected.get('storage_backend'),
                 }
                 options.append(label)
 

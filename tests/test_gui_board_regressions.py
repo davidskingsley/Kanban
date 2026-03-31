@@ -9,6 +9,7 @@ from PySide6.QtGui import QPixmap, QWheelEvent
 from PySide6.QtWidgets import QListWidgetItem, QVBoxLayout, QWidget
 
 from gui_test_case import GuiTestCase
+from kanban.board_manager import BoardManager
 from kanban.gui.pyside_app import (
     CardDialog,
     CardListItemContainer,
@@ -25,6 +26,61 @@ from kanban.models import Priority
 
 
 class GuiBoardRegressionTests(GuiTestCase):
+    def test_sqlite_board_backend_round_trips_and_creates_backups(self):
+        board_id = self.board_manager.create_board('SQLite Board', storage_backend='sqlite')
+        metadata = self.board_manager.load_metadata()
+        board_info = metadata['boards'][board_id]
+
+        self.assertEqual(board_info['storage_backend'], 'sqlite')
+        self.assertTrue(board_info['data_file'].endswith('.sqlite3'))
+
+        board = self.board_manager.get_current_board()
+        column_id = board.get_columns_ordered()[0].id
+        created_card = board.create_card('SQLite Card', 'stored in sqlite', Priority.HIGH, column_id)
+
+        backup_path = board.storage.backup()
+        export_data = self.board_manager.export_board_data(board_id)
+
+        self.assertTrue(os.path.exists(backup_path))
+        self.assertEqual(export_data['cards'][0]['id'], created_card.id)
+
+    def test_import_boards_preserves_sqlite_backend_payloads(self):
+        board_id = self.board_manager.create_board('SQLite Import Board', storage_backend='sqlite')
+        board = self.board_manager.get_current_board()
+        column_id = board.get_columns_ordered()[0].id
+        board.create_card('Imported SQLite Card', 'sqlite export', Priority.MEDIUM, column_id)
+
+        export_snapshot = self.board_manager.export_all_boards()
+        imported_manager = BoardManager(os.path.join(self.temp_dir, 'sqlite_import_target'))
+
+        try:
+            self.assertTrue(imported_manager.import_boards(export_snapshot))
+            imported_metadata = imported_manager.load_metadata()
+            imported_info = imported_metadata['boards'][board_id]
+            imported_data = imported_manager.export_board_data(board_id)
+
+            self.assertEqual(imported_info['storage_backend'], 'sqlite')
+            self.assertEqual(imported_data['cards'][0]['title'], 'Imported SQLite Card')
+        finally:
+            imported_manager.close()
+
+    def test_folder_discovery_includes_sqlite_board_files(self):
+        external_dir = os.path.join(self.temp_dir, 'sqlite_folder_board')
+        os.makedirs(external_dir, exist_ok=True)
+        self.board_manager.create_board(
+            'SQLite Folder Board',
+            target_directory=external_dir,
+            storage_backend='sqlite',
+        )
+        self.gui = MultiBoardGUI(self.board_manager)
+
+        option_map = self.gui._discover_boards_in_folder(external_dir)
+
+        self.assertEqual(len(option_map), 1)
+        discovered_board = next(iter(option_map.values()))
+        self.assertEqual(discovered_board['storage_backend'], 'sqlite')
+        self.assertTrue(discovered_board['data_file'].endswith('.sqlite3'))
+
     def test_card_list_drag_preview_uses_card_widget_not_row_container(self):
         self.board_manager.create_board('Drag Preview Board')
         board = self.board_manager.get_current_board()

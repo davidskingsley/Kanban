@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 
 from ..board import KanbanBoard
 from ..models import CardType, CustomColumn, Priority, Project
+from ..storage import JSON_STORAGE_BACKEND, SQLITE_STORAGE_BACKEND
 from .common import (
 	ColorSelectionField,
 	PropagatingListWidget,
@@ -771,6 +772,9 @@ class BoardDialog(QDialog):
 		self.description_edit = PropagatingTextEdit()
 		self.description_edit.setFixedHeight(90)
 		self.directory_edit = QLineEdit(default_directory)
+		self.backend_combo = QComboBox()
+		self.backend_combo.addItem('Current Backend (JSON File)', JSON_STORAGE_BACKEND)
+		self.backend_combo.addItem('SQLite3 Backend', SQLITE_STORAGE_BACKEND)
 		browse_button = QPushButton('Browse')
 		browse_button.clicked.connect(self.choose_directory)
 
@@ -790,9 +794,10 @@ class BoardDialog(QDialog):
 		configure_form_layout(form)
 		form.addRow('Name', self.name_edit)
 		form.addRow('Description', self.description_edit)
+		form.addRow('Backend', self.backend_combo)
 		form.addRow('Storage Folder', directory_row)
 		content_layout.addLayout(form)
-		content_layout.addWidget(create_dialog_hint_label('Board names should be short and identifiable. The storage folder can be inside or outside the default boards directory.'))
+		content_layout.addWidget(create_dialog_hint_label('Board names should be short and identifiable. Choose the existing JSON backend or SQLite3, then select where the board file should be stored.'))
 
 		buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
 		buttons.accepted.connect(self.accept)
@@ -808,6 +813,7 @@ class BoardDialog(QDialog):
 		return {
 			'name': self.name_edit.text().strip(),
 			'description': self.description_edit.toPlainText().strip(),
+			'storage_backend': self.backend_combo.currentData(),
 			'storage_dir': self.directory_edit.text().strip(),
 		}
 

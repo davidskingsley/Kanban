@@ -9,7 +9,18 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from .board import KanbanBoard
-from .storage import BoardLockCancelledError, LockHandler, get_default_boards_dir, load_json_file
+from .storage import (
+    BoardLockCancelledError,
+    JSON_STORAGE_BACKEND,
+    LockHandler,
+    get_board_file_extension,
+    get_default_boards_dir,
+    infer_storage_backend,
+    is_supported_board_file,
+    load_board_data_file,
+    normalize_storage_backend,
+    save_board_data_file,
+)
 
 
 ## @brief Manage board metadata, loading, switching, import, and export flows.
@@ -35,6 +46,23 @@ class BoardManager:
         # Load existing boards
         self.load_boards_metadata()
 
+    def _normalize_board_info(self, board_info: Dict) -> Dict:
+        """Return a metadata entry with backend defaults applied."""
+        normalized = dict(board_info)
+        data_file = normalized.get('data_file', '')
+        normalized['description'] = normalized.get('description', '')
+        normalized['use_custom_columns'] = normalized.get('use_custom_columns', True)
+        normalized['storage_backend'] = normalize_storage_backend(
+            normalized.get('storage_backend'),
+            file_path=data_file,
+        )
+        normalized['external'] = normalized.get('external', False)
+        return normalized
+
+    def _board_backend(self, board_info: Dict) -> str:
+        """Return the normalized backend name for a board metadata entry."""
+        return normalize_storage_backend(board_info.get('storage_backend'), file_path=board_info.get('data_file'))
+
     def _capture_state(self) -> Dict[str, object]:
         """Capture metadata and board files for board-management undo."""
         metadata = deepcopy(self.load_metadata())
@@ -44,7 +72,10 @@ class BoardManager:
             if board_id in self.boards:
                 boards_data[board_id] = self.boards[board_id].export_data()
             elif os.path.exists(board_info['data_file']):
-                boards_data[board_id] = load_json_file(board_info['data_file'])
+                boards_data[board_id] = load_board_data_file(
+                    board_info['data_file'],
+                    backend=self._board_backend(board_info),
+                )
             else:
                 boards_data[board_id] = None
 
@@ -110,11 +141,7 @@ class BoardManager:
                 continue
 
             data_file = board_info['data_file']
-            directory = os.path.dirname(data_file)
-            if directory and not os.path.exists(directory):
-                os.makedirs(directory, exist_ok=True)
-            with open(data_file, 'w', encoding='utf-8') as output_file:
-                json.dump(board_data, output_file, indent=2, ensure_ascii=False)
+            save_board_data_file(data_file, board_data, backend=self._board_backend(board_info))
 
         self.save_metadata(target_metadata)
         self.current_board_id = target_metadata.get('current_board')
@@ -149,7 +176,11 @@ class BoardManager:
         data_file = board_info['data_file']
         if board_info.get('use_custom_columns') is False:
             raise ValueError('Legacy boards are no longer supported.')
-        board = KanbanBoard(data_file, lock_handler=self.lock_handler)
+        board = KanbanBoard(
+            data_file,
+            lock_handler=self.lock_handler,
+            storage_backend=self._board_backend(board_info),
+        )
         self.boards[board_id] = board
         return board
 
@@ -158,14 +189,18 @@ class BoardManager:
         absolute_path = os.path.abspath(data_file)
         if not os.path.exists(absolute_path):
             raise FileNotFoundError(absolute_path)
+        if not is_supported_board_file(absolute_path):
+            raise ValueError('Unsupported board storage format.')
 
-        data = load_json_file(absolute_path)
+        backend = infer_storage_backend(absolute_path)
+        data = load_board_data_file(absolute_path, backend=backend)
         has_custom_columns = 'columns' in data
         if not has_custom_columns and data.get('cards'):
             raise ValueError('Legacy boards are no longer supported. Boards must use custom columns.')
         default_name = os.path.splitext(os.path.basename(absolute_path))[0]
         return {
             'data_file': absolute_path,
+            'storage_backend': backend,
             'use_custom_columns': True,
             'name': default_name.replace('_', ' ').strip() or default_name,
         }
@@ -191,6 +226,7 @@ class BoardManager:
             board = KanbanBoard(
                 absolute_path,
                 lock_handler=self.lock_handler,
+                storage_backend=inspected['storage_backend'],
             )
         except BoardLockCancelledError:
             return None
@@ -202,6 +238,7 @@ class BoardManager:
             'description': description,
             'created_at': datetime.now().isoformat(),
             'data_file': absolute_path,
+            'storage_backend': inspected['storage_backend'],
             'use_custom_columns': True,
             'external': True,
         }
@@ -224,7 +261,7 @@ class BoardManager:
         return common_path == managed_root
     
     def create_board(self, name: str, description: str = "", use_custom_columns: bool = True,
-                     target_directory: str = None) -> str:
+                     target_directory: str = None, storage_backend: Optional[str] = None) -> str:
         """Create a new Kanban board."""
         self._push_undo_state(f"Create board '{name}'")
 
@@ -235,12 +272,13 @@ class BoardManager:
             target_directory = self.boards_directory
         target_directory = os.path.abspath(target_directory)
         os.makedirs(target_directory, exist_ok=True)
+        storage_backend = normalize_storage_backend(storage_backend or JSON_STORAGE_BACKEND)
         
         # Create board data file path
-        data_file = os.path.join(target_directory, f"{board_id}.json")
+        data_file = os.path.join(target_directory, f"{board_id}{get_board_file_extension(storage_backend)}")
         
         # Create the board with custom columns by default
-        board = KanbanBoard(data_file, lock_handler=self.lock_handler)
+        board = KanbanBoard(data_file, lock_handler=self.lock_handler, storage_backend=storage_backend)
         if not board.get_columns_ordered():
             board._init_default_custom_columns()
         self.boards[board_id] = board
@@ -252,6 +290,7 @@ class BoardManager:
             'description': description,
             'created_at': datetime.now().isoformat(),
             'data_file': data_file,
+            'storage_backend': storage_backend,
             'use_custom_columns': True,
             'external': not self._is_managed_board_path(data_file),
         }
@@ -366,6 +405,7 @@ class BoardManager:
                 'id': board_id,
                 'name': board_info['name'],
                 'description': board_info['description'],
+                'storage_backend': self._board_backend(board_info),
                 'is_current': board_id == self.current_board_id,
                 'external': board_info.get('external', False),
             }
@@ -392,16 +432,32 @@ class BoardManager:
         
         try:
             with open(self.metadata_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                metadata = json.load(f)
         except Exception as e:
             print(f"Error loading boards metadata: {e}")
             return {'boards': {}, 'current_board': None}
+
+        normalized_boards = {
+            board_id: self._normalize_board_info(board_info)
+            for board_id, board_info in metadata.get('boards', {}).items()
+        }
+        return {
+            'boards': normalized_boards,
+            'current_board': metadata.get('current_board'),
+        }
     
     def save_metadata(self, metadata: Dict):
         """Save boards metadata to file."""
         try:
+            normalized_metadata = {
+                'boards': {
+                    board_id: self._normalize_board_info(board_info)
+                    for board_id, board_info in metadata.get('boards', {}).items()
+                },
+                'current_board': metadata.get('current_board'),
+            }
             with open(self.metadata_file, 'w', encoding='utf-8') as f:
-                json.dump(metadata, f, indent=2, ensure_ascii=False)
+                json.dump(normalized_metadata, f, indent=2, ensure_ascii=False)
         except Exception as e:
             print(f"Error saving boards metadata: {e}")
     
@@ -436,7 +492,10 @@ class BoardManager:
         for board_id, board_info in metadata['boards'].items():
             data_file = board_info['data_file']
             if os.path.exists(data_file):
-                export_data['boards'][board_id] = load_json_file(data_file)
+                export_data['boards'][board_id] = load_board_data_file(
+                    data_file,
+                    backend=self._board_backend(board_info),
+                )
         
         return export_data
 
@@ -453,7 +512,7 @@ class BoardManager:
         if not os.path.exists(data_file):
             raise FileNotFoundError(data_file)
 
-        return load_json_file(data_file)
+        return load_board_data_file(data_file, backend=self._board_backend(metadata['boards'][board_id]))
     
     def import_boards(self, import_data: Dict) -> bool:
         """Import boards data from backup."""
@@ -467,15 +526,26 @@ class BoardManager:
             
             # Import new data
             metadata = import_data.get('metadata', {'boards': {}, 'current_board': None})
+            metadata = {
+                'boards': {
+                    board_id: self._normalize_board_info(board_info)
+                    for board_id, board_info in metadata.get('boards', {}).items()
+                },
+                'current_board': metadata.get('current_board'),
+            }
+
+            for board in self.boards.values():
+                board.close()
+            self.boards = {}
             
             for board_id, board_data in import_data.get('boards', {}).items():
                 if board_id in metadata['boards']:
-                    data_file = metadata['boards'][board_id]['data_file']
-                    directory = os.path.dirname(data_file)
-                    if directory and not os.path.exists(directory):
-                        os.makedirs(directory, exist_ok=True)
-                    with open(data_file, 'w', encoding='utf-8') as output_file:
-                        json.dump(board_data, output_file, indent=2, ensure_ascii=False)
+                    board_info = metadata['boards'][board_id]
+                    save_board_data_file(
+                        board_info['data_file'],
+                        board_data,
+                        backend=self._board_backend(board_info),
+                    )
             
             self.save_metadata(metadata)
             self.load_boards_metadata()

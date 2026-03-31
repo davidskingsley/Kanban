@@ -35,6 +35,16 @@ from kanban.models import Priority
 
 
 class GuiDialogRegressionTests(GuiTestCase):
+    def test_board_dialog_exposes_json_and_sqlite_backends(self):
+        dialog = BoardDialog(self.temp_dir)
+
+        backend_values = [dialog.backend_combo.itemData(index) for index in range(dialog.backend_combo.count())]
+
+        self.assertEqual(backend_values, ['json', 'sqlite'])
+        dialog.name_edit.setText('SQLite Board')
+        dialog.backend_combo.setCurrentIndex(1)
+        self.assertEqual(dialog.values()['storage_backend'], 'sqlite')
+
     def test_legacy_board_files_are_rejected_and_skipped_in_folder_discovery(self):
         legacy_board_path = Path(self.temp_dir) / 'legacy_board.json'
         shutil.copyfile(Path(__file__).resolve().parents[1] / 'example_kanban.json', legacy_board_path)

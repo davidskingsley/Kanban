@@ -19,11 +19,11 @@ class KanbanBoard:
     MAX_UNDO_STEPS = 100
     
     def __init__(self, data_file: str = None, use_custom_columns: bool = True,
-                 lock_handler: Optional[LockHandler] = None):
+                 lock_handler: Optional[LockHandler] = None, storage_backend: Optional[str] = None):
         if data_file is None:
             data_file = get_default_single_board_file()
         
-        self.storage = DataStorage(data_file, lock_handler=lock_handler)
+        self.storage = DataStorage(data_file, lock_handler=lock_handler, backend=storage_backend)
         self.use_custom_columns = True
         self.card_types: Dict[str, CardType] = {}
         self.projects: Dict[str, Project] = {}

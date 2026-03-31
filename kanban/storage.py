@@ -7,10 +7,204 @@ import json
 import os
 import shutil
 import socket
+import sqlite3
+from contextlib import closing
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
 LockHandler = Callable[[str, Dict[str, Any]], str]
+
+JSON_STORAGE_BACKEND = 'json'
+SQLITE_STORAGE_BACKEND = 'sqlite'
+SQLITE_STORAGE_SUFFIXES = ('.sqlite3', '.sqlite', '.db')
+
+
+def empty_board_data() -> Dict[str, Any]:
+    """Return the default empty board payload."""
+    return {'cards': []}
+
+
+def infer_storage_backend(file_path: str) -> str:
+    """Infer the storage backend from a board file path."""
+    file_path = (file_path or '').lower()
+    if file_path.endswith('.json'):
+        return JSON_STORAGE_BACKEND
+    if file_path.endswith(SQLITE_STORAGE_SUFFIXES):
+        return SQLITE_STORAGE_BACKEND
+    return JSON_STORAGE_BACKEND
+
+
+def normalize_storage_backend(backend: Optional[str], file_path: Optional[str] = None) -> str:
+    """Normalize user or metadata backend values to a supported backend name."""
+    if backend is None or not str(backend).strip():
+        return infer_storage_backend(file_path or '') if file_path else JSON_STORAGE_BACKEND
+
+    value = str(backend).strip().lower()
+    if value in {'current', 'default', 'json'}:
+        return JSON_STORAGE_BACKEND
+    if value in {'sqlite', 'sqlite3', 'db'}:
+        return SQLITE_STORAGE_BACKEND
+    raise ValueError(f'Unsupported storage backend: {backend}')
+
+
+def get_board_file_extension(backend: Optional[str]) -> str:
+    """Return the preferred file extension for a storage backend."""
+    backend = normalize_storage_backend(backend)
+    if backend == SQLITE_STORAGE_BACKEND:
+        return '.sqlite3'
+    return '.json'
+
+
+def is_supported_board_file(file_path: str) -> bool:
+    """Return whether the given file path looks like a supported board store."""
+    backend = infer_storage_backend(file_path)
+    if backend == JSON_STORAGE_BACKEND:
+        return str(file_path).lower().endswith('.json')
+    return str(file_path).lower().endswith(SQLITE_STORAGE_SUFFIXES)
+
+
+def is_board_backup_file(file_name: str) -> bool:
+    """Return whether a candidate board file name looks like a generated backup."""
+    lower_name = (file_name or '').lower()
+    return '.backup.' in lower_name or lower_name.endswith('.backup')
+
+
+def get_default_backup_path(file_path: str, backend: Optional[str] = None) -> str:
+    """Return the default backup file path for a board store."""
+    backend = normalize_storage_backend(backend, file_path=file_path)
+    root, extension = os.path.splitext(file_path)
+    if not extension:
+        extension = get_board_file_extension(backend)
+    return f'{root}.backup{extension}'
+
+
+def _ensure_directory(path: str) -> None:
+    """Create the parent directory for a file path if needed."""
+    directory = os.path.dirname(path)
+    if directory and not os.path.exists(directory):
+        os.makedirs(directory, exist_ok=True)
+
+
+def _ensure_sqlite_schema(connection: sqlite3.Connection) -> None:
+    """Ensure the SQLite schema exists for storing a board payload."""
+    connection.execute(
+        '''
+        CREATE TABLE IF NOT EXISTS board_state (
+            board_id INTEGER PRIMARY KEY CHECK (board_id = 1),
+            state_json TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        '''
+    )
+    connection.commit()
+
+
+def load_sqlite_file(file_path: str) -> Dict[str, Any]:
+    """Load raw board data from a SQLite board file without acquiring locks."""
+    if not os.path.exists(file_path):
+        return empty_board_data()
+
+    try:
+        with closing(sqlite3.connect(file_path)) as connection:
+            _ensure_sqlite_schema(connection)
+            row = connection.execute(
+                'SELECT state_json FROM board_state WHERE board_id = 1'
+            ).fetchone()
+    except sqlite3.Error:
+        return empty_board_data()
+
+    if not row or not row[0]:
+        return empty_board_data()
+
+    try:
+        return json.loads(row[0])
+    except Exception:
+        return empty_board_data()
+
+
+def save_sqlite_file(file_path: str, data: Dict[str, Any]) -> None:
+    """Persist raw board data into a SQLite board file."""
+    _ensure_directory(file_path)
+    with closing(sqlite3.connect(file_path)) as connection:
+        _ensure_sqlite_schema(connection)
+        connection.execute(
+            '''
+            INSERT INTO board_state (board_id, state_json, updated_at)
+            VALUES (1, ?, ?)
+            ON CONFLICT(board_id) DO UPDATE SET
+                state_json = excluded.state_json,
+                updated_at = excluded.updated_at
+            ''',
+            (json.dumps(data, indent=2, ensure_ascii=False), datetime.now().isoformat()),
+        )
+        connection.commit()
+
+
+def load_board_data_file(file_path: str, backend: Optional[str] = None) -> Dict[str, Any]:
+    """Load a board payload using the configured backend."""
+    backend = normalize_storage_backend(backend, file_path=file_path)
+    if backend == SQLITE_STORAGE_BACKEND:
+        return load_sqlite_file(file_path)
+    return load_json_file(file_path)
+
+
+def save_board_data_file(file_path: str, data: Dict[str, Any], backend: Optional[str] = None) -> None:
+    """Write a board payload using the configured backend."""
+    backend = normalize_storage_backend(backend, file_path=file_path)
+    if backend == SQLITE_STORAGE_BACKEND:
+        save_sqlite_file(file_path, data)
+        return
+
+    _ensure_directory(file_path)
+    with open(file_path, 'w', encoding='utf-8') as output_file:
+        json.dump(data, output_file, indent=2, ensure_ascii=False)
+
+
+def backup_board_data_file(file_path: str, backup_path: Optional[str] = None, backend: Optional[str] = None) -> Optional[str]:
+    """Create a backup of a board payload and return the backup path."""
+    backend = normalize_storage_backend(backend, file_path=file_path)
+    if backup_path is None:
+        backup_path = get_default_backup_path(file_path, backend)
+
+    if not os.path.exists(file_path):
+        return None
+
+    _ensure_directory(backup_path)
+    if backend == SQLITE_STORAGE_BACKEND:
+        try:
+            with closing(sqlite3.connect(file_path)) as source_connection, closing(sqlite3.connect(backup_path)) as backup_connection:
+                source_connection.backup(backup_connection)
+            return backup_path
+        except sqlite3.Error:
+            return None
+
+    try:
+        shutil.copy2(file_path, backup_path)
+        return backup_path
+    except Exception:
+        return None
+
+
+def restore_board_data_file(file_path: str, backup_path: str, backend: Optional[str] = None) -> bool:
+    """Restore a board payload from a backup file."""
+    backend = normalize_storage_backend(backend, file_path=file_path)
+    if not os.path.exists(backup_path):
+        return False
+
+    _ensure_directory(file_path)
+    if backend == SQLITE_STORAGE_BACKEND:
+        try:
+            with closing(sqlite3.connect(backup_path)) as source_connection, closing(sqlite3.connect(file_path)) as destination_connection:
+                source_connection.backup(destination_connection)
+            return True
+        except sqlite3.Error:
+            return False
+
+    try:
+        shutil.copy2(backup_path, file_path)
+        return True
+    except Exception:
+        return False
 
 
 class BoardLockCancelledError(Exception):
@@ -52,13 +246,13 @@ def get_default_boards_dir() -> str:
 def load_json_file(file_path: str) -> Dict[str, Any]:
     """Load raw JSON data from a board file without acquiring locks."""
     if not os.path.exists(file_path):
-        return {'cards': []}
+        return empty_board_data()
 
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception:
-        return {'cards': []}
+        return empty_board_data()
 
 
 ## @brief Persist board data and coordinate read-only lock behavior.
@@ -67,8 +261,9 @@ class DataStorage:
 
     _owned_locks: Dict[str, int] = {}
     
-    def __init__(self, file_path: str, lock_handler: Optional[LockHandler] = None):
+    def __init__(self, file_path: str, lock_handler: Optional[LockHandler] = None, backend: Optional[str] = None):
         self.file_path = os.path.abspath(file_path)
+        self.backend = normalize_storage_backend(backend, file_path=self.file_path)
         self.lock_path = get_lock_path(self.file_path)
         self.read_only = False
         self.lock_owned = False
@@ -182,42 +377,29 @@ class DataStorage:
         )
     
     def save(self, data: Dict[str, Any]):
-        """Save data to the JSON file."""
+        """Save data to the configured board storage backend."""
         if self.read_only:
             raise PermissionError(self.get_read_only_message())
 
         try:
-            # Create directory if it doesn't exist
-            directory = os.path.dirname(self.file_path)
-            if directory and not os.path.exists(directory):
-                os.makedirs(directory)
-            
-            with open(self.file_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+            save_board_data_file(self.file_path, data, backend=self.backend)
         except Exception as e:
             print(f"Error saving data: {e}")
     
     def load(self) -> Dict[str, Any]:
-        """Load data from the JSON file."""
-        data = load_json_file(self.file_path)
+        """Load data from the configured board storage backend."""
+        data = load_board_data_file(self.file_path, backend=self.backend)
         if not data:
-            return {'cards': []}
+            return empty_board_data()
         return data
     
     def backup(self, backup_path: str = None):
         """Create a backup of the current data file."""
-        if backup_path is None:
-            backup_path = f"{self.file_path}.backup"
-        
-        if os.path.exists(self.file_path):
-            try:
-                import shutil
-                shutil.copy2(self.file_path, backup_path)
-                return backup_path
-            except Exception as e:
-                print(f"Error creating backup: {e}")
-                return None
-        return None
+        try:
+            return backup_board_data_file(self.file_path, backup_path=backup_path, backend=self.backend)
+        except Exception as e:
+            print(f"Error creating backup: {e}")
+            return None
 
     def get_board_directory(self) -> str:
         """Return the directory containing the board data file."""
@@ -303,12 +485,8 @@ class DataStorage:
     
     def restore(self, backup_path: str):
         """Restore data from a backup file."""
-        if os.path.exists(backup_path):
-            try:
-                import shutil
-                shutil.copy2(backup_path, self.file_path)
-                return True
-            except Exception as e:
-                print(f"Error restoring backup: {e}")
-                return False
-        return False
+        try:
+            return restore_board_data_file(self.file_path, backup_path, backend=self.backend)
+        except Exception as e:
+            print(f"Error restoring backup: {e}")
+            return False

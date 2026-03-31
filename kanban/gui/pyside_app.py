@@ -1009,7 +1009,12 @@ class MultiBoardGUI:
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         values = dialog.values()
-        board_id = self.board_manager.create_board(values['name'], values['description'], target_directory=values['storage_dir'])
+        board_id = self.board_manager.create_board(
+            values['name'],
+            values['description'],
+            target_directory=values['storage_dir'],
+            storage_backend=values['storage_backend'],
+        )
         self._switch_board_by_id(board_id)
 
     def rename_current_board(self):
@@ -1474,13 +1479,15 @@ class MultiBoardGUI:
                     'data_file': data_file,
                     'name': board_info.get('name', label),
                     'description': board_info.get('description', ''),
+                    'storage_backend': board_info.get('storage_backend'),
                 }
         else:
             for entry in sorted(os.listdir(folder)):
-                if not entry.endswith('.json') or entry == 'boards_metadata.json' or entry.endswith('.backup.json'):
+                candidate_path = os.path.join(folder, entry)
+                if entry == 'boards_metadata.json' or os.path.isdir(candidate_path) or '.backup.' in entry.lower():
                     continue
                 try:
-                    inspected = self.board_manager.inspect_board_file(os.path.join(folder, entry))
+                    inspected = self.board_manager.inspect_board_file(candidate_path)
                 except ValueError:
                     continue
                 label = inspected['name']
@@ -1490,6 +1497,7 @@ class MultiBoardGUI:
                     'data_file': inspected['data_file'],
                     'name': inspected['name'],
                     'description': '',
+                    'storage_backend': inspected.get('storage_backend'),
                 }
         return option_map
 
