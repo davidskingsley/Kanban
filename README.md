@@ -158,7 +158,7 @@ The desktop application includes:
 - create, edit, move, and delete actions for cards
 - create, rename, delete, recolor, reorder, and flag editing for columns
 - reusable card type management
-- About and Command Line Guide dialogs under Help
+- About, Command Line Guide, and Direct-Action CLI Options dialogs under Help
 
 Common GUI actions:
 
@@ -166,7 +166,7 @@ Common GUI actions:
 2. Load an external board from another folder without copying the source board into the default registry.
 3. Use the Cards and Columns menus after selecting a card or column in the board view.
 4. Double-click a card to edit it.
-5. Use Help to open the About dialog or the Command Line Guide.
+5. Use Help to open the About dialog, the Command Line Guide, or the Direct-Action CLI Options reference.
 
 Visual cues include priority indicators, assignee labels, tags, custom card colors, checklist progress, subcard progress, and read-only state when a lock is held elsewhere.
 
@@ -202,16 +202,28 @@ Board-level capabilities include:
 | `Ctrl+Shift+O` | Load board from folder |
 | `Ctrl+Shift+S` | Export current board |
 | `Ctrl+O` | Switch board |
+| `F5` | Refresh boards |
 | `Ctrl+R` | Rename current board |
 | `Ctrl+Shift+D` | Delete current board |
+| `Ctrl+Shift+E` | Export all boards |
+| `Ctrl+Shift+I` | Import boards |
+| `Ctrl+Shift+T` | Due Date View |
 | `Ctrl+I` | Board statistics |
 | `Ctrl+Shift+N` | Create card |
 | `Ctrl+Shift+J` | Add subcard to the selected card |
 | `Ctrl+E` | Edit selected card |
 | `Ctrl+M` | Move selected card |
 | `Ctrl+D` | Delete selected card |
+| `Ctrl+Shift+K` | Clear done cards |
+| `Ctrl+Shift+C` | Create column |
+| `Ctrl+Alt+R` | Edit selected column |
+| `Ctrl+Alt+D` | Delete selected column |
+| `Ctrl+Alt+O` | Reorder columns |
 | `Ctrl+Z` | Undo current board action |
 | `Ctrl+Y` | Redo current board action |
+| `Ctrl+Shift+Z` | Undo board-management action |
+| `Ctrl+Shift+Y` | Redo board-management action |
+| `F1` | Open About Kanban |
 | `Ctrl+Q` | Quit application |
 
 ## Development

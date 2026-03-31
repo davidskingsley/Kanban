@@ -345,15 +345,28 @@ class AboutDialog(QDialog):
 		content_layout.addWidget(create_dialog_section_label('Keyboard Shortcuts'))
 		self.shortcuts_label = QLabel(
 			'<b>Ctrl+N</b> New board<br>'
+			'<b>Ctrl+Shift+O</b> Load board from folder<br>'
+			'<b>Ctrl+Shift+S</b> Export current board<br>'
 			'<b>Ctrl+O</b> Switch board<br>'
 			'<b>F5</b> Refresh boards<br>'
+			'<b>Ctrl+R</b> Rename current board<br>'
+			'<b>Ctrl+Shift+D</b> Delete current board<br>'
+			'<b>Ctrl+Shift+T</b> Due Date View<br>'
+			'<b>Ctrl+I</b> Board statistics<br>'
 			'<b>Ctrl+Shift+N</b> New card<br>'
 			'<b>Ctrl+Shift+J</b> Add subcard to the selected card<br>'
 			'<b>Ctrl+E</b> Edit selected card<br>'
 			'<b>Ctrl+M</b> Move selected card<br>'
 			'<b>Ctrl+D</b> Delete selected card<br>'
+			'<b>Ctrl+Shift+K</b> Clear done cards<br>'
+			'<b>Ctrl+Shift+C</b> New column<br>'
+			'<b>Ctrl+Alt+R</b> Edit selected column<br>'
+			'<b>Ctrl+Alt+O</b> Reorder columns<br>'
 			'<b>Ctrl+Z</b> Undo current board action<br>'
-			'<b>Ctrl+Y</b> Redo current board action'
+			'<b>Ctrl+Y</b> Redo current board action<br>'
+			'<b>Ctrl+Shift+Z</b> Undo board-management action<br>'
+			'<b>Ctrl+Shift+Y</b> Redo board-management action<br>'
+			'<b>F1</b> About Kanban'
 		)
 		self.shortcuts_label.setObjectName('AboutShortcuts')
 		self.shortcuts_label.setWordWrap(True)
@@ -400,8 +413,8 @@ def build_command_line_guide_html() -> str:
 		'<li><b>list-boards</b>: print the registered boards, backends, and current-board marker.</li>'
 		'<li><b>create-board</b>, <b>switch-board</b>, <b>rename-board</b>, <b>delete-board</b>: automate board management. Destructive commands require <b>--force</b>.</li>'
 		'<li><b>convert-board</b>: switch an existing board between JSON and SQLite storage.</li>'
-		'<li><b>show-board</b>, <b>create-card</b>, <b>edit-card</b>, <b>move-card</b>, <b>delete-card</b>: automate current-board work without opening the menu CLI.</li>'
-		'<li><b>search-cards</b>, <b>filter-priority</b>, <b>filter-assignee</b>, <b>card-details</b>: retrieve board information directly from scripts.</li>'
+		'<li><b>show-board</b>, <b>create-card</b>, <b>edit-card</b>, <b>add-subcard</b>, <b>move-card</b>, <b>delete-card</b>, and checklist item commands: automate current-board work without opening the menu CLI.</li>'
+		'<li><b>search-cards</b>, <b>filter-priority</b>, <b>filter-assignee</b>, <b>add-tag</b>, and <b>card-details</b>: retrieve board information directly from scripts and targeted automation.</li>'
 		'<li><b>create-column</b>, <b>rename-column</b>, <b>delete-column</b>, <b>reorder-columns</b>, <b>change-column-color</b>, <b>edit-column-flags</b>: automate column maintenance.</li>'
 		'<li><b>create-card-type</b>, <b>edit-card-type</b>, <b>delete-card-type</b>, <b>create-backup</b>, <b>cleanup-orphaned-attachments</b>, <b>undo-current-board</b>, <b>redo-current-board</b>: cover the board-level maintenance actions.</li>'
 		'</ul>'
@@ -432,6 +445,7 @@ def build_command_line_guide_html() -> str:
 		'<li><b>Maintenance</b>: create a backup, clean orphaned attachment files, undo, and redo.</li>'
 		'</ul>'
 		'<p style="margin: 10px 0 0 0;">When the CLI requests dates, use <b>YYYY-MM-DD</b>. If a board is locked by another process, the terminal offers three responses: open read only, delete the lock, or cancel opening the board.</p>'
+		'<p style="margin: 10px 0 0 0;">Checklist input accepts pipe-delimited items in the menu CLI, and direct commands can target individual checklist items by the ids printed in <b>card-details</b>.</p>'
 		'<h3 style="margin: 16px 0 8px 0; color: #6f3d1c;">Practical Notes</h3>'
 		'<ul style="margin: 0 0 0 18px; padding: 0;">'
 		'<li>Backups, imports, exports, and board loading work with both JSON and SQLite-backed boards.</li>'
@@ -515,6 +529,7 @@ def build_direct_action_cli_options_html() -> str:
 		'<li>Destructive commands require <b>--force</b> where shown.</li>'
 		'<li>Date values use <b>YYYY-MM-DD</b>.</li>'
 		'<li><b>card-details</b> prints checklist item ids so single-item checklist commands can target them exactly.</li>'
+		'<li>The Help menu in the GUI includes this reference alongside the About and Command Line Guide dialogs.</li>'
 		'</ul>'
 	)
 
