@@ -88,21 +88,22 @@ class MultiBoardCLI:
             print("1. Open current board")
             print("2. Switch board")
             print("3. Create new board")
-            print("4. Rename board")
-            print("5. Delete board")
-            print("6. Board statistics")
-            print("7. Export current board")
-            print("8. Export all boards")
-            print("9. Import boards")
-            print("10. Load board from folder")
-            print("11. Undo last board-management change")
-            print("12. Redo last undone board-management change")
+            print("4. Convert board backend")
+            print("5. Rename board")
+            print("6. Delete board")
+            print("7. Board statistics")
+            print("8. Export current board")
+            print("9. Export all boards")
+            print("10. Import boards")
+            print("11. Load board from folder")
+            print("12. Undo last board-management change")
+            print("13. Redo last undone board-management change")
         else:
             print("3. Create new board")
-            print("9. Import boards")
-            print("10. Load board from folder")
-            print("11. Undo last board-management change")
-            print("12. Redo last undone board-management change")
+            print("10. Import boards")
+            print("11. Load board from folder")
+            print("12. Undo last board-management change")
+            print("13. Redo last undone board-management change")
         print("0. Exit")
         print()
     
@@ -114,15 +115,16 @@ class MultiBoardCLI:
             '1': self.open_current_board if boards else None,
             '2': self.switch_board if boards else None,
             '3': self.create_board,
-            '4': self.rename_board if boards else None,
-            '5': self.delete_board if boards else None,
-            '6': self.show_board_statistics if boards else None,
-            '7': self.export_current_board if boards else None,
-            '8': self.export_all_boards if boards else None,
-            '9': self.import_boards,
-            '10': self.load_board_from_folder,
-            '11': self.undo_last_change,
-            '12': self.redo_last_change,
+            '4': self.convert_board_backend if boards else None,
+            '5': self.rename_board if boards else None,
+            '6': self.delete_board if boards else None,
+            '7': self.show_board_statistics if boards else None,
+            '8': self.export_current_board if boards else None,
+            '9': self.export_all_boards if boards else None,
+            '10': self.import_boards,
+            '11': self.load_board_from_folder,
+            '12': self.undo_last_change,
+            '13': self.redo_last_change,
             '0': self.exit_app
         }
         
@@ -243,6 +245,45 @@ class MultiBoardCLI:
                 print("Invalid selection!")
         except (ValueError, IndexError):
             print("Invalid input!")
+
+    def convert_board_backend(self):
+        """Convert a board between JSON and SQLite storage backends."""
+        boards = self.board_manager.get_board_list()
+        if not boards:
+            print("No boards available!")
+            return
+
+        print("\n--- CONVERT BOARD BACKEND ---")
+        print("Available boards:")
+        for i, board in enumerate(boards, 1):
+            print(f"{i}. {board['name']} [{board.get('storage_backend', 'json')}]")
+
+        try:
+            choice = int(input(f"Select board to convert (1-{len(boards)}): "))
+            if not 1 <= choice <= len(boards):
+                print("Invalid selection!")
+                return
+        except ValueError:
+            print("Invalid input!")
+            return
+
+        board = boards[choice - 1]
+        current_backend = board.get('storage_backend', 'json')
+        target_backend = 'sqlite' if current_backend == 'json' else 'json'
+        target_label = 'SQLite3' if target_backend == 'sqlite' else 'Current JSON'
+
+        print(f"Current backend: {current_backend}")
+        confirm = input(f"Convert '{board['name']}' to {target_label}? (y/N): ").strip().lower()
+        if confirm not in ('y', 'yes'):
+            print("Conversion cancelled.")
+            return
+
+        try:
+            target_file = self.board_manager.convert_board_storage_backend(board['id'], target_backend)
+            print(f"✅ Converted '{board['name']}' to {target_label}!")
+            print(f"📁 New file: {target_file}")
+        except Exception as error:
+            print(f"❌ Failed to convert board: {error}")
     
     def delete_board(self):
         """Delete a board."""
@@ -298,20 +339,19 @@ class MultiBoardCLI:
             print(f"\n📋 Board: {board['name']}")
             if board['description']:
                 print(f"   📝 {board['description']}")
+            print(f"   🗄️ Backend: {str(board.get('storage_backend', 'json')).upper()}")
             
             if 'stats' in board:
                 stats = board['stats']
                 print(f"   📊 Total cards: {stats['total_cards']}")
-                print(f"   📝 To Do: {stats['todo']}")
-                print(f"   ⚡ In Progress: {stats['in_progress']}")
-                print(f"   🔍 Review: {stats['review']}")
-                print(f"   ✅ Done: {stats['done']}")
+                for label in self._format_board_stats(stats):
+                    print(f"   {label}")
                 
                 total_cards += stats['total_cards']
-                total_todos += stats['todo']
-                total_in_progress += stats['in_progress']
-                total_review += stats['review']
-                total_done += stats['done']
+                total_todos += stats.get('todo', 0)
+                total_in_progress += stats.get('in_progress', 0)
+                total_review += stats.get('review', 0)
+                total_done += stats.get('done', 0)
             else:
                 print("   📊 (Board not loaded)")
         
@@ -322,6 +362,18 @@ class MultiBoardCLI:
         print(f"   ⚡ Total In Progress: {total_in_progress}")
         print(f"   🔍 Total Review: {total_review}")
         print(f"   ✅ Total Done: {total_done}")
+
+    def _format_board_stats(self, stats: dict) -> list[str]:
+        if all(key in stats for key in ('todo', 'in_progress', 'review', 'done')):
+            return [
+                f"📝 To Do: {stats['todo']}",
+                f"⚡ In Progress: {stats['in_progress']}",
+                f"🔍 Review: {stats['review']}",
+                f"✅ Done: {stats['done']}",
+            ]
+
+        ignored_keys = {'total_cards', 'priority_counts', 'use_custom_columns'}
+        return [f"📂 {name}: {count}" for name, count in stats.items() if name not in ignored_keys]
     
     def export_all_boards(self):
         """Export all boards to a backup file."""

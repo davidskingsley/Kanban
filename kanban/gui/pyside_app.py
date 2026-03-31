@@ -236,6 +236,7 @@ class MultiBoardGUI:
         self.board_menu.addSection('Current Board')
         self.board_menu.addAction(self._action('Refresh Boards', self.refresh_ui, 'F5'))
         self.board_menu.addAction(self._action('Rename Current Board', self.rename_current_board, 'Ctrl+R'))
+        self.board_menu.addAction(self._action('Convert Current Board Backend', self.convert_current_board_backend))
         self.board_menu.addAction(self._action('Delete Current Board', self.delete_current_board, 'Ctrl+Shift+D'))
         self.board_menu.addAction(self._action('Export Current Board', self.export_current_board, 'Ctrl+Shift+S'))
         self.board_menu.addSection('Import / Export')
@@ -1041,6 +1042,43 @@ class MultiBoardGUI:
         if ok and new_name.strip():
             self.board_manager.rename_board(current['id'], new_name.strip())
             self.refresh_ui()
+
+    def convert_current_board_backend(self):
+        """Convert the current board between JSON and SQLite storage backends."""
+        boards = self.board_manager.get_board_list()
+        current = next((board for board in boards if board['is_current']), None)
+        if current is None:
+            return
+
+        current_backend = current.get('storage_backend', 'json')
+        option_map = {
+            'Current JSON File': 'json',
+            'SQLite3 Backend': 'sqlite',
+        }
+        available_options = [label for label, backend in option_map.items() if backend != current_backend]
+        selected, ok = QInputDialog.getItem(
+            self.window,
+            'Convert Board Backend',
+            f"Current backend: {current_backend}\nConvert to",
+            available_options,
+            editable=False,
+        )
+        if not ok or not selected:
+            return
+
+        target_backend = option_map[selected]
+        try:
+            target_file = self.board_manager.convert_board_storage_backend(current['id'], target_backend)
+        except Exception as error:
+            QMessageBox.warning(self.window, 'Convert Board Backend', str(error))
+            return
+
+        QMessageBox.information(
+            self.window,
+            'Convert Board Backend',
+            f"Converted '{current['name']}' to {target_backend}.\n\nNew file: {target_file}",
+        )
+        self.refresh_ui()
 
     def delete_current_board(self):
         """Delete the current board."""

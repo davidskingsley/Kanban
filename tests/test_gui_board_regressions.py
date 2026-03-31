@@ -81,6 +81,46 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertEqual(discovered_board['storage_backend'], 'sqlite')
         self.assertTrue(discovered_board['data_file'].endswith('.sqlite3'))
 
+    def test_board_manager_converts_board_between_json_and_sqlite(self):
+        board_id = self.board_manager.create_board('Convertible Board', storage_backend='json')
+        board = self.board_manager.get_current_board()
+        column_id = board.get_columns_ordered()[0].id
+        card = board.create_card('Convert Me', 'persist across backend changes', Priority.MEDIUM, column_id)
+        json_path = self.board_manager.load_metadata()['boards'][board_id]['data_file']
+
+        sqlite_path = self.board_manager.convert_board_storage_backend(board_id, 'sqlite')
+        converted_metadata = self.board_manager.load_metadata()['boards'][board_id]
+
+        self.assertEqual(converted_metadata['storage_backend'], 'sqlite')
+        self.assertTrue(sqlite_path.endswith('.sqlite3'))
+        self.assertTrue(os.path.exists(sqlite_path))
+        self.assertFalse(os.path.exists(json_path))
+        self.assertEqual(self.board_manager.export_board_data(board_id)['cards'][0]['id'], card.id)
+
+        json_path = self.board_manager.convert_board_storage_backend(board_id, 'json')
+        converted_metadata = self.board_manager.load_metadata()['boards'][board_id]
+
+        self.assertEqual(converted_metadata['storage_backend'], 'json')
+        self.assertTrue(json_path.endswith('.json'))
+        self.assertTrue(os.path.exists(json_path))
+        self.assertEqual(self.board_manager.export_board_data(board_id)['cards'][0]['title'], 'Convert Me')
+
+    def test_gui_can_convert_current_board_backend(self):
+        board_id = self.board_manager.create_board('GUI Convertible Board', storage_backend='json')
+        self.gui = MultiBoardGUI(self.board_manager)
+        original_path = self.board_manager.load_metadata()['boards'][board_id]['data_file']
+
+        with patch('kanban.gui.pyside_app.QInputDialog.getItem', return_value=('SQLite3 Backend', True)), patch(
+            'kanban.gui.pyside_app.QMessageBox.information'
+        ) as information_mock:
+            self.gui.convert_current_board_backend()
+
+        converted_metadata = self.board_manager.load_metadata()['boards'][board_id]
+        self.assertEqual(converted_metadata['storage_backend'], 'sqlite')
+        self.assertTrue(converted_metadata['data_file'].endswith('.sqlite3'))
+        self.assertFalse(os.path.exists(original_path))
+        information_mock.assert_called_once()
+
     def test_card_list_drag_preview_uses_card_widget_not_row_container(self):
         self.board_manager.create_board('Drag Preview Board')
         board = self.board_manager.get_current_board()

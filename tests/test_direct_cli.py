@@ -160,6 +160,48 @@ class DirectCliRegressionTests(unittest.TestCase):
         finally:
             shutil.rmtree(external_dir, ignore_errors=True)
 
+    def test_convert_board_between_json_and_sqlite_directly(self):
+        self.invoke_direct(['create-board', '--name', 'Convertible Board'])
+        self.invoke_direct([
+            'create-card',
+            '--board', 'Convertible Board',
+            '--title', 'Preserved Card',
+        ])
+
+        exit_code, output = self.invoke_direct([
+            'convert-board',
+            '--board', 'Convertible Board',
+            '--storage-backend', 'sqlite',
+        ])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Converted board 'Convertible Board' from json to sqlite", output)
+
+        manager = BoardManager(self.temp_dir)
+        try:
+            boards = manager.get_board_list()
+            board_info = next(board for board in boards if board['name'] == 'Convertible Board')
+            self.assertEqual(board_info['storage_backend'], 'sqlite')
+            self.assertTrue(manager.load_metadata()['boards'][board_info['id']]['data_file'].endswith('.sqlite3'))
+        finally:
+            manager.close()
+
+        exit_code, output = self.invoke_direct([
+            'convert-board',
+            '--board', 'Convertible Board',
+            '--storage-backend', 'json',
+        ])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Converted board 'Convertible Board' from sqlite to json", output)
+
+        _, detail_output = self.invoke_direct([
+            'card-details',
+            '--board', 'Convertible Board',
+            '--card', 'Preserved Card',
+        ])
+        self.assertIn('Title: Preserved Card', detail_output)
+
     def test_main_executes_direct_action_subcommand(self):
         output = io.StringIO()
         with redirect_stdout(output):
@@ -168,6 +210,14 @@ class DirectCliRegressionTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertIn("Created board 'Main Entry Board'", output.getvalue())
         self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'boards_metadata.json')))
+
+    def test_board_stats_reports_backend_type(self):
+        self.invoke_direct(['create-board', '--name', 'Stats Board', '--storage-backend', 'sqlite'])
+
+        exit_code, output = self.invoke_direct(['board-stats', '--board', 'Stats Board'])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn('Backend: sqlite', output)
 
 
 if __name__ == '__main__':

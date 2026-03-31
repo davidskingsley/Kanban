@@ -282,6 +282,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(dialog.windowTitle(), 'Kanban Command Line Guide')
         self.assertIn('python main.py --cli', guide_text)
         self.assertIn('--boards-dir DIR', guide_text)
+        self.assertIn('Convert board backend', guide_text)
         self.assertIn('Open current board', guide_text)
         self.assertIn('YYYY-MM-DD', guide_text)
         self.assertIn('SQLite3 backend', guide_text)
@@ -304,6 +305,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(dialog.windowTitle(), 'Kanban Direct-Action CLI Options')
         self.assertIn('Direct-Action CLI Options', guide_text)
         self.assertIn('create-board --name NAME', guide_text)
+        self.assertIn('convert-board --board BOARD --storage-backend json|sqlite', guide_text)
         self.assertIn('delete-board --board BOARD --force', guide_text)
         self.assertIn('create-card', guide_text)
         self.assertIn('edit-column-flags', guide_text)
@@ -327,7 +329,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(self.gui.window.windowTitle(), 'Multi-Board Kanban Manager - Title Summary Board | 0 cards | 0 completed')
 
     def test_board_statistics_dialog_shows_current_board_breakdown(self):
-        self.board_manager.create_board('Statistics Board')
+        self.board_manager.create_board('Statistics Board', storage_backend='sqlite')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
         columns = board.get_columns_ordered()
@@ -341,11 +343,16 @@ class GuiDialogRegressionTests(GuiTestCase):
         dialog = BoardStatisticsDialog(self.board_manager.get_board_list(), self.board_manager.boards, self.gui.window)
 
         self.assertEqual(dialog.boards_table.rowCount(), 1)
+        self.assertEqual(dialog.boards_table.columnCount(), 10)
         self.assertEqual(dialog.columns_table.rowCount(), len(columns))
         self.assertEqual(dialog.priority_table.rowCount(), 4)
         self.assertGreaterEqual(dialog.due_state_table.rowCount(), 1)
         self.assertEqual(dialog.stat_cards['cards']['value'].text(), '3')
         self.assertEqual(dialog.stat_cards['completed']['value'].text(), '2')
+        self.assertEqual(dialog.boards_table.item(0, 2).text(), 'SQLITE')
+        self.assertIn('SQLITE storage', dialog.current_board_hint.text())
+        self.assertFalse(dialog.findChildren(QScrollArea, 'DialogScrollArea'))
+        self.assertIs(dialog.button_box.parentWidget(), dialog)
 
     def test_due_date_dialog_uses_timeline_column_for_gantt_style_view(self):
         self.board_manager.create_board('Timeline Board')

@@ -37,6 +37,12 @@ def add_direct_action_subcommands(subparsers: argparse._SubParsersAction):
     rename_board.add_argument('--new-name', required=True, help='New board name')
     rename_board.set_defaults(command='rename-board')
 
+    convert_board = subparsers.add_parser('convert-board', help='Convert a board between JSON and SQLite storage')
+    convert_board.add_argument('--board', required=True, help='Board id or exact board name')
+    convert_board.add_argument('--storage-backend', required=True, choices=('json', 'sqlite'), help='Target storage backend')
+    convert_board.add_argument('--target-directory', help='Optional target directory for the converted board file')
+    convert_board.set_defaults(command='convert-board')
+
     delete_board = subparsers.add_parser('delete-board', help='Delete a board')
     delete_board.add_argument('--board', required=True, help='Board id or exact board name')
     delete_board.add_argument('--force', action='store_true', help='Confirm permanent deletion')
@@ -327,6 +333,19 @@ class DirectActionCLI:
             raise ValueError(f"Unable to rename board '{board_info['name']}'.")
         print(f"Renamed board '{board_info['name']}' to '{args.new_name}'.")
 
+    def cmd_convert_board(self, args: argparse.Namespace):
+        board_id, board_info = self._resolve_board_reference(args.board)
+        current_backend = board_info.get('storage_backend', 'json')
+        target_file = self.board_manager.convert_board_storage_backend(
+            board_id,
+            args.storage_backend,
+            target_directory=args.target_directory,
+        )
+        print(
+            f"Converted board '{board_info['name']}' from {current_backend} to {args.storage_backend}. "
+            f"New file: '{target_file}'."
+        )
+
     def cmd_delete_board(self, args: argparse.Namespace):
         self._require_force(args.force, 'Deleting a board requires --force.')
         board_id, board_info = self._resolve_board_reference(args.board)
@@ -339,11 +358,10 @@ class DirectActionCLI:
             board_id, board_info, board = self._load_board(args.board)
             stats = board.get_board_stats()
             print(f"Board: {board_info['name']} ({board_id})")
+            print(f"Backend: {board_info.get('storage_backend', 'json')}")
             print(f"Total cards: {stats['total_cards']}")
-            print(f"To Do: {stats['todo']}")
-            print(f"In Progress: {stats['in_progress']}")
-            print(f"Review: {stats['review']}")
-            print(f"Done: {stats['done']}")
+            for label in self._format_board_stat_lines(stats):
+                print(label)
             return
 
         boards = self.board_manager.get_board_list()
@@ -357,7 +375,8 @@ class DirectActionCLI:
             if stats is None:
                 _, _, loaded_board = self._load_board(board['id'])
                 stats = loaded_board.get_board_stats()
-            print(f"  cards={stats['total_cards']} todo={stats['todo']} in_progress={stats['in_progress']} review={stats['review']} done={stats['done']}")
+            summary = ' | '.join(self._format_board_stat_lines(stats))
+            print(f"  backend={board.get('storage_backend', 'json')} cards={stats['total_cards']} | {summary}")
 
     def cmd_export_board(self, args: argparse.Namespace):
         board_id, board_info = self._resolve_board_reference(args.board)
@@ -857,6 +876,18 @@ class DirectActionCLI:
         completed, total = board.get_subcard_progress(card.id)
         if total:
             print(f"Subcards: {completed}/{total} done")
+
+    def _format_board_stat_lines(self, stats: Dict[str, object]) -> List[str]:
+        if all(key in stats for key in ('todo', 'in_progress', 'review', 'done')):
+            return [
+                f"To Do: {stats['todo']}",
+                f"In Progress: {stats['in_progress']}",
+                f"Review: {stats['review']}",
+                f"Done: {stats['done']}",
+            ]
+
+        ignored_keys = {'total_cards', 'priority_counts', 'use_custom_columns'}
+        return [f"{name}: {count}" for name, count in stats.items() if name not in ignored_keys]
 
     def _pick_optional_value(self, value: Optional[str], clear: bool, clear_value):
         if clear:

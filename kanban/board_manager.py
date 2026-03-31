@@ -13,6 +13,7 @@ from .storage import (
     JSON_STORAGE_BACKEND,
     BoardLockCancelledError,
     LockHandler,
+    delete_board_lock,
     get_board_file_extension,
     get_default_boards_dir,
     infer_storage_backend,
@@ -62,6 +63,13 @@ class BoardManager:
     def _board_backend(self, board_info: Dict) -> str:
         """Return the normalized backend name for a board metadata entry."""
         return normalize_storage_backend(board_info.get('storage_backend'), file_path=board_info.get('data_file'))
+
+    def _remove_board_file(self, data_file: str) -> None:
+        """Remove a board data file and its adjacent lock file when present."""
+        absolute_path = os.path.abspath(data_file)
+        delete_board_lock(absolute_path)
+        if os.path.exists(absolute_path):
+            os.remove(absolute_path)
 
     def _capture_state(self) -> Dict[str, object]:
         """Capture metadata and board files for board-management undo."""
@@ -133,7 +141,15 @@ class BoardManager:
             board_info = current_metadata['boards'][board_id]
             data_file = board_info['data_file']
             if not board_info.get('external') and os.path.exists(data_file):
-                os.remove(data_file)
+                self._remove_board_file(data_file)
+
+        for board_id in current_board_ids & target_board_ids:
+            current_info = current_metadata['boards'][board_id]
+            target_info = target_metadata['boards'][board_id]
+            current_path = os.path.abspath(current_info['data_file'])
+            target_path = os.path.abspath(target_info['data_file'])
+            if current_path != target_path and os.path.exists(current_path):
+                self._remove_board_file(current_path)
 
         for board_id, board_info in target_metadata['boards'].items():
             board_data = state['boards'].get(board_id)
@@ -302,6 +318,53 @@ class BoardManager:
         
         self.save_metadata(metadata)
         return board_id
+
+    def convert_board_storage_backend(self, board_id: str, storage_backend: str, target_directory: str = None) -> str:
+        """Convert an existing board between JSON and SQLite storage backends."""
+        metadata = self.load_metadata()
+        if board_id not in metadata['boards']:
+            raise KeyError(board_id)
+
+        board_info = metadata['boards'][board_id]
+        current_backend = self._board_backend(board_info)
+        target_backend = normalize_storage_backend(storage_backend)
+        if current_backend == target_backend:
+            raise ValueError(f"Board '{board_info['name']}' already uses the {target_backend} backend.")
+
+        if board_id not in self.boards:
+            self._load_board_from_metadata(board_id, board_info)
+
+        board = self.boards[board_id]
+        if board.is_read_only():
+            raise PermissionError(board.get_read_only_message())
+
+        self._push_undo_state(f"Convert board '{board_info['name']}' to {target_backend}")
+
+        source_file = os.path.abspath(board_info['data_file'])
+        source_directory = os.path.dirname(source_file)
+        source_name = os.path.splitext(os.path.basename(source_file))[0] or board_id
+        target_directory = os.path.abspath(target_directory or source_directory)
+        os.makedirs(target_directory, exist_ok=True)
+        target_file = os.path.join(target_directory, f"{source_name}{get_board_file_extension(target_backend)}")
+
+        if os.path.abspath(target_file) != source_file and os.path.exists(target_file):
+            raise FileExistsError(target_file)
+
+        board_data = deepcopy(board.export_data())
+        board.close()
+        del self.boards[board_id]
+
+        save_board_data_file(target_file, board_data, backend=target_backend)
+        if os.path.abspath(target_file) != source_file and os.path.exists(source_file):
+            self._remove_board_file(source_file)
+
+        board_info['data_file'] = target_file
+        board_info['storage_backend'] = target_backend
+        board_info['external'] = not self._is_managed_board_path(target_file)
+        self.save_metadata(metadata)
+
+        self._load_board_from_metadata(board_id, board_info)
+        return target_file
     
     def delete_board(self, board_id: str) -> bool:
         """Delete a Kanban board."""
@@ -317,7 +380,7 @@ class BoardManager:
         # Delete the board data file only for managed local boards.
         data_file = board_info['data_file']
         if not board_info.get('external') and os.path.exists(data_file):
-            os.remove(data_file)
+            self._remove_board_file(data_file)
         
         # Remove from metadata
         del metadata['boards'][board_id]

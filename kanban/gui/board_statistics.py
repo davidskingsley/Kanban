@@ -57,6 +57,7 @@ class BoardStatisticsDialog(QDialog):
 			self,
 			'Board Statistics',
 			'Review portfolio totals, per-board summaries, and a deeper breakdown for the active board.',
+			scrollable=False,
 		)
 
 		content_layout.addWidget(create_dialog_section_label('Overview'))
@@ -78,9 +79,9 @@ class BoardStatisticsDialog(QDialog):
 		content_layout.addWidget(stat_row)
 
 		content_layout.addWidget(create_dialog_section_label('Boards'))
-		self.boards_table = PropagatingTableWidget(0, 9)
+		self.boards_table = PropagatingTableWidget(0, 10)
 		self.boards_table.setHorizontalHeaderLabels([
-			'Board', 'Description', 'Status', 'Cards', 'Done', 'Overdue', 'Due Soon', 'Columns', 'Priority Mix'
+			'Board', 'Description', 'Backend', 'Status', 'Cards', 'Done', 'Overdue', 'Due Soon', 'Columns', 'Priority Mix'
 		])
 		self._configure_table(self.boards_table, stretch_columns={1})
 		content_layout.addWidget(self.boards_table)
@@ -110,10 +111,10 @@ class BoardStatisticsDialog(QDialog):
 		self.current_board_hint = create_dialog_hint_label('Select a current board to see its detailed breakdown.')
 		content_layout.addWidget(self.current_board_hint)
 
-		buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
-		buttons.rejected.connect(self.reject)
-		buttons.accepted.connect(self.accept)
-		content_layout.addWidget(buttons)
+		self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+		self.button_box.rejected.connect(self.reject)
+		self.button_box.accepted.connect(self.accept)
+		self.layout().addWidget(self.button_box)
 
 	def _create_stat_card(self, caption: str) -> Dict[str, QWidget]:
 		frame = QFrame()
@@ -188,6 +189,7 @@ class BoardStatisticsDialog(QDialog):
 				board_rows.append({
 					'name': board_info['name'],
 					'description': board_info.get('description') or '—',
+					'backend': str(board_info.get('storage_backend', 'json')).upper(),
 					'status': 'Metadata only',
 					'cards': '—',
 					'done': '—',
@@ -217,6 +219,7 @@ class BoardStatisticsDialog(QDialog):
 			board_rows.append({
 				'name': board_info['name'],
 				'description': board_info.get('description') or '—',
+				'backend': str(board_info.get('storage_backend', 'json')).upper(),
 				'status': ' | '.join(status_parts),
 				'cards': str(metrics['total_cards']),
 				'done': str(metrics['completed']),
@@ -235,7 +238,7 @@ class BoardStatisticsDialog(QDialog):
 
 		self.boards_table.setRowCount(len(board_rows))
 		for row_index, row in enumerate(board_rows):
-			for column_index, key in enumerate(['name', 'description', 'status', 'cards', 'done', 'overdue', 'due_soon', 'columns', 'priority_mix']):
+			for column_index, key in enumerate(['name', 'description', 'backend', 'status', 'cards', 'done', 'overdue', 'due_soon', 'columns', 'priority_mix']):
 				item = QTableWidgetItem(row[key])
 				if key == 'name' and self.current_board_info and row['name'] == self.current_board_info['name']:
 					font = item.font()
@@ -256,7 +259,7 @@ class BoardStatisticsDialog(QDialog):
 		metrics = self._board_metrics(self.current_board)
 		total_cards = max(metrics['total_cards'], 1)
 		self.current_board_hint.setText(
-			f"{self.current_board_info['name']} has {metrics['total_cards']} cards across {len(metrics['columns'])} columns."
+			f"{self.current_board_info['name']} uses {str(self.current_board_info.get('storage_backend', 'json')).upper()} storage and has {metrics['total_cards']} cards across {len(metrics['columns'])} columns."
 		)
 
 		self.columns_table.setRowCount(len(metrics['columns']))
