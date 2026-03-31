@@ -62,8 +62,8 @@ from .dialogs import (
     CardDialog,
     CardTypeDialog,
     CardTypesBrowserDialog,
-    CommandLineGuideDialog,
     ColumnDialog,
+    CommandLineGuideDialog,
     DueDateViewDialog,
     OptionalDateField,  # noqa: F401
     ProjectDialog,

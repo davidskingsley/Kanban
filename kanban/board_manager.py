@@ -10,8 +10,8 @@ from typing import Dict, List, Optional
 
 from .board import KanbanBoard
 from .storage import (
-    BoardLockCancelledError,
     JSON_STORAGE_BACKEND,
+    BoardLockCancelledError,
     LockHandler,
     get_board_file_extension,
     get_default_boards_dir,

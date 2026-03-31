@@ -8,7 +8,18 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 from PySide6.QtCore import QPoint, QPointF, QSize, Qt
 from PySide6.QtGui import QColor, QContextMenuEvent, QMouseEvent, QPixmap
-from PySide6.QtWidgets import QApplication, QAbstractItemView, QLabel, QListWidget, QMessageBox, QPushButton, QScrollArea, QSizePolicy, QTextBrowser, QToolBar
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
+    QLabel,
+    QListWidget,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QTextBrowser,
+    QToolBar,
+)
 
 from gui_test_case import GuiTestCase
 from kanban.gui.board_statistics import BoardStatisticsDialog
