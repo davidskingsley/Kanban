@@ -1,68 +1,54 @@
 # Multi-Board Kanban Manager
 
-A Python Kanban application focused on multi-board management with a PySide6 GUI and CLI workflows. It supports custom columns, card priorities, reusable card types, external board loading, and interactive lock handling when a board is already open elsewhere.
+A Python Kanban application with three ways to work: a PySide6 desktop GUI, an interactive multi-board terminal UI, and a direct-action CLI for scripting and automation. The current codebase supports JSON and SQLite board storage, external board registration, reusable card types, subcards, attachments, backups, import and export flows, and lock-aware read-only handling when a board is already open elsewhere.
 
-## Features
+## Highlights
 
-- Multi-board PySide6 GUI for creating, switching, renaming, deleting, importing, and exporting boards
-- Multi-board CLI for terminal-based board management and per-board card operations
-- Custom columns with rename, reorder, recolor, and delete support
-- Card priorities, assignees, tags, projects, custom colors, reusable card types, and real subcards
-- External board loading by reference
-- Lock files with prompts to open read only, delete the lock, or cancel opening the board
+- Multi-board PySide6 GUI with board creation, switching, rename, delete, import, export, statistics, and Help dialogs
+- Interactive CLI for full terminal-driven board management and board-level card and column operations
+- Direct-action CLI subcommands for non-interactive automation and scheduled jobs
+- JSON and SQLite storage backends for boards
+- External board loading by reference from folders containing `boards_metadata.json`, `.json`, or `.sqlite3` board files
+- Card priorities, assignees, tags, projects, custom colors, reusable card types, real subcards, and attachment cleanup tools
+- Undo and redo support for board-management actions and current-board actions
+- Lock handling that can open boards read-only, delete stale locks, or cancel access
 
-## Installation
+## Requirements
 
-1. Install Python 3.9 through 3.14.
-2. Install `uv`.
-3. Change into the project directory.
-4. Sync the project environment.
-
-```bash
-cd Kanban
-uv sync
-```
+- Python 3.9 through 3.14
+- `uv` for environment management
 
 On Windows, `winget install astral-sh.uv` is the simplest way to install `uv`.
 
-## Development Tools
-
-This project uses:
-
-- `uv` for dependency and environment management
-- `ruff` for linting
-
-Run the linter with:
+## Installation
 
 ```bash
-uv run ruff check .
+git clone https://github.com/davidskingsley/Kanban.git
+cd Kanban
+uv sync --all-groups
 ```
 
-Auto-fix safe issues with:
+This installs the runtime dependency set plus development tools such as Ruff.
 
-```bash
-uv run ruff check . --fix
-```
+## Launch Modes
 
-## Usage
-
-### Multi-Board GUI
+### GUI
 
 ```bash
 uv run python main.py
 ```
 
-This is the default mode and the primary GUI workflow.
+This is the default launch mode. The GUI provides the board list, embedded board view, dialogs for cards and columns, board statistics, due-date views, Help dialogs, and keyboard shortcuts.
 
-### Multi-Board CLI
+### Interactive CLI
 
 ```bash
 uv run python main.py --cli
 ```
 
-### Direct-Action CLI
+This opens the menu-based multi-board CLI. It is intended for terminal-first workflows where you still want guided prompts and board-level menus.
 
-Use direct subcommands when you want one action to run without prompts or menu navigation.
+### Direct-Action CLI
 
 ```bash
 uv run python main.py list-boards
@@ -71,98 +57,126 @@ uv run python main.py create-card --board "Automation" --title "Ship release" --
 uv run python main.py export-board --board "Automation" --output automation.json
 ```
 
-### Demo Scripts
+Use direct subcommands when one action should run immediately with no interactive prompts. This mode is suitable for shell scripts, scheduled jobs, and external automation.
 
-```bash
-uv run python demo_multiboard.py
-uv run python example_usage.py
-```
+## Top-Level Options
 
-## Testing
-
-Run the regression suite with the workspace virtual environment:
-
-```bash
-uv run python -m unittest discover -s tests
-```
-
-## Command Options
-
-```bash
+```text
 uv run python main.py [options]
 uv run python main.py <direct-command> [command-options]
 
 Options:
-   --cli                          Use the interactive multi-board command-line interface
-   --boards-dir DIR               Specify a custom boards directory for multi-board mode
-   --lock-action ACTION           Choose cancel, open_read_only, or delete_lock for direct commands
-   --help                         Show help message
-
-Direct commands include:
-   list-boards                    List registered boards
-   create-board                   Create a board without prompts
-   switch-board                   Change the current board
-   delete-board                   Delete a board with --force
-   show-board                     Print a board to the terminal
-   create-card                    Create a card without prompts
-   edit-card                      Update a card without prompts
-   move-card                      Move a card to another column
-   create-column                  Create a column without prompts
-   change-column-color            Update a column color
-   create-card-type               Create a reusable card type
-   create-backup                  Create a board backup file
+  --cli
+  --boards-dir DIR
+  --lock-action {cancel,open_read_only,delete_lock}
+  --help
 ```
 
-Run `uv run python main.py <direct-command> --help` to inspect the full options for any direct action.
+- `--cli` starts the interactive multi-board CLI instead of the GUI
+- `--boards-dir DIR` uses a custom board registry directory for the session
+- `--lock-action` controls how direct commands respond when the selected board is locked
 
-## Storage
+Run `uv run python main.py --help` for launcher help, or `uv run python main.py <direct-command> --help` for the flags supported by a specific direct command.
 
-Default runtime storage locations:
+## Direct-Action CLI Coverage
+
+The direct CLI covers the same major workflows as the interactive CLI, but without prompts.
+
+- Board management: `list-boards`, `create-board`, `switch-board`, `rename-board`, `delete-board`, `board-stats`, `export-board`, `export-all-boards`, `import-boards`, `load-board-from-folder`, `undo-board-management`, `redo-board-management`, `show-board`
+- Card actions: `create-card`, `edit-card`, `add-subcard`, `move-card`, `delete-card`, `search-cards`, `filter-priority`, `filter-assignee`, `add-tag`, `card-details`, `clear-done-cards`
+- Column actions: `create-column`, `rename-column`, `delete-column`, `reorder-columns`, `change-column-color`, `edit-column-flags`, `list-columns`
+- Card type and maintenance actions: `list-card-types`, `create-card-type`, `edit-card-type`, `delete-card-type`, `create-backup`, `cleanup-orphaned-attachments`, `undo-current-board`, `redo-current-board`
+
+Safety notes:
+
+- Destructive direct commands require `--force`
+- Locked-board behavior in direct mode is controlled with `--lock-action`
+- Date arguments use `YYYY-MM-DD`
+
+## Storage Backends
+
+Boards can use either backend:
+
+- JSON: portable `.json` board files
+- SQLite: `.sqlite3` board files backed by a small SQLite schema
+
+You can choose the backend when creating boards in the GUI, the interactive CLI, or the direct CLI.
+
+Default board registry location:
 
 - Multi-board mode: `$HOME/.kanban-ds/boards`
 
-External board loading:
+Backups, exports, imports, and external board discovery support both JSON and SQLite-backed boards.
 
-- Multi-board GUI: `Boards -> Load Board From Folder`
-- Multi-board CLI: `9. Load board from folder`
-- You can select either a folder containing `boards_metadata.json` or a folder with standalone board `.json` files
-- External boards remain in their original location and are registered by reference
-- If a board is already open in another process, it opens read-only until that lock is released
+## External Boards And Locking
 
-## Multi-Board GUI Guide
+The application can register boards stored outside the default boards directory.
 
-### Main Areas
+- GUI: `Boards -> Load Board From Folder`
+- Interactive CLI: `Load board from folder`
+- Direct CLI: `load-board-from-folder`
 
-- Menu bar for boards, cards, and columns
-- Left-side board list for switching between boards
-- Summary area showing card counts, completed counts, and read-only status
-- Horizontal board view with one list per column and per-column add-card actions
-- Dialog-driven card and column management built on PySide6 widgets
+Supported external sources:
 
-### Common Actions
+- A folder containing `boards_metadata.json`
+- Standalone `.json` board files
+- Standalone `.sqlite3`, `.sqlite`, or `.db` board files
 
-1. Create a board from the Boards menu.
-   The create-board dialog defaults to the standard boards folder, but you can browse to a different storage folder and the board will still be remembered in the board list.
-2. Load an external board with `Boards -> Load Board From Folder`.
-3. Export the current board with `Boards -> Export Current Board` to create a standalone board JSON file that can be loaded later from a folder.
-4. Switch boards from the dropdown or with `Ctrl+O`.
-5. Double-click a card to edit it.
-6. Select a column and use the Columns menu to edit, delete, or reorder it.
-7. Choose a custom card color in the create or edit card dialog, or leave it blank to use the default board style.
-8. Manage reusable card types from the card dialog when creating or editing cards.
+When a board is already open in another process, Kanban can:
 
-### Visual Indicators
+- open it read-only
+- delete a stale lock and retry
+- cancel opening it
 
-- Priority bars show urgency from low to critical
-- Assignees display as `@name`
-- Tags display as `#tag`
-- Card backgrounds can use a custom color while preserving readable text contrast
-- Parent cards show subcard progress
-- Read-only mode is shown when another process holds the lock
+The interactive CLI prompts for that choice. The direct CLI uses `--lock-action`.
+
+## GUI Workflow
+
+The desktop application includes:
+
+- board list and current-board switching
+- embedded multi-column board view
+- board statistics and due-date views
+- create, edit, move, and delete actions for cards
+- create, rename, delete, recolor, reorder, and flag editing for columns
+- reusable card type management
+- About and Command Line Guide dialogs under Help
+
+Common GUI actions:
+
+1. Create a board from the Boards menu and choose JSON or SQLite storage.
+2. Load an external board from another folder without copying the source board into the default registry.
+3. Use the Cards and Columns menus after selecting a card or column in the board view.
+4. Double-click a card to edit it.
+5. Use Help to open the About dialog or the Command Line Guide.
+
+Visual cues include priority indicators, assignee labels, tags, custom card colors, subcard progress, and read-only state when a lock is held elsewhere.
+
+## Interactive CLI Workflow
+
+The interactive CLI starts with a board-management menu and then drops into the board-level CLI for card and column operations.
+
+Board-management capabilities include:
+
+- opening the current board
+- switching, creating, renaming, and deleting boards
+- board statistics
+- exporting the current board
+- exporting all boards
+- importing boards from a backup JSON file
+- loading a board from a folder
+- undo and redo for board-management actions
+
+Board-level capabilities include:
+
+- card creation, editing, moving, deleting, searching, filtering, tag management, card details, clear-done, and subcards
+- column creation, rename, deletion, reorder, recolor, flag editing, and listing
+- card type listing, creation, editing, and deletion
+- maintenance actions such as backup creation, orphaned attachment cleanup, undo, and redo
 
 ## Keyboard Shortcuts
 
-### Multi-Board GUI
+### GUI Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
@@ -174,57 +188,89 @@ External board loading:
 | `Ctrl+Shift+D` | Delete current board |
 | `Ctrl+I` | Board statistics |
 | `Ctrl+Shift+N` | Create card |
+| `Ctrl+Shift+J` | Add subcard to the selected card |
 | `Ctrl+E` | Edit selected card |
 | `Ctrl+M` | Move selected card |
-| `Ctrl+Shift+C` | Create column |
+| `Ctrl+D` | Delete selected card |
+| `Ctrl+Z` | Undo current board action |
+| `Ctrl+Y` | Redo current board action |
 | `Ctrl+Q` | Quit application |
 
-### Mouse Actions
+## Development
 
-| Action | Result |
-|--------|--------|
-| Select board | Switch current board |
-| Select column | Mark column as active for add/edit actions |
-| Select card | Mark card as active for edit/move/delete actions |
-| Double-click card | Edit card |
+This repository uses:
 
-## Project Structure
+- `uv` for environment and dependency management
+- `ruff` for linting
+- `unittest` for regression tests
+
+Useful commands:
+
+```bash
+uv run ruff check .
+uv run ruff check . --fix
+uv run python -m unittest discover -s tests
+```
+
+GitHub Actions runs the lint and test suite on Ubuntu with `uv` and PySide6 configured for offscreen execution.
+
+## Packaging
+
+A PyInstaller spec file is included as `Kanban.spec`. It packages `main.py` with the project assets folder and the application icon.
+
+If you want to build the Windows executable yourself, install PyInstaller in your environment and run:
+
+```bash
+uv run pyinstaller Kanban.spec
+```
+
+## Project Layout
 
 ```text
 Kanban/
-├── main.py
-├── demo_multiboard.py
-├── example_usage.py
-├── README.md
-├── pyproject.toml
-├── uv.lock
+├── assets/
+├── build/
+├── dist/
+├── .github/workflows/
+├── tests/
+│   ├── gui_test_case.py
+│   ├── test_direct_cli.py
+│   ├── test_gui_board_regressions.py
+│   └── test_gui_dialog_regressions.py
+├── kanban/
+│   ├── gui/
+│   ├── board.py
+│   ├── board_manager.py
+│   ├── cli.py
+│   ├── direct_cli.py
+│   ├── models.py
+│   ├── multi_board_cli.py
+│   ├── multi_board_gui.py
+│   └── storage.py
 ├── demo_kanban.json
+├── demo_multiboard.py
 ├── example_kanban.json
-├── kanban_data.json
-└── kanban/
-    ├── __init__.py
-    ├── board.py
-    ├── board_manager.py
-    ├── cli.py
-    ├── models.py
-    ├── multi_board_cli.py
-    ├── multi_board_gui.py
-    └── storage.py
+├── example_usage.py
+├── Kanban.spec
+├── main.py
+├── pyproject.toml
+├── README.md
+└── uv.lock
 ```
 
 ## Troubleshooting
 
-1. GUI will not start:
-   Verify dependencies were installed with `uv sync`, or run `uv run python main.py --cli`.
-2. Permission errors:
-   Check write access to `$HOME/.kanban-ds` or the external board folder, and verify the board file and adjacent `.lock` file are writable.
-3. Board opens read-only:
-   Another process currently owns the lock. Close that instance or reopen the board after the lock is released.
-4. Backup or import problems:
-   Verify the target path exists and that the JSON files are not corrupted.
-5. Need advanced maintenance operations:
-   Use `uv run python main.py --cli` for attachment, note, and other advanced board-management commands.
+1. GUI does not start.
+   Run `uv sync --all-groups` first, then retry `uv run python main.py`. If PySide6 is unavailable, use `uv run python main.py --cli`.
+2. A board opens read-only.
+   Another process already owns the lock. Close the other instance, reopen the board later, or choose a different lock action.
+3. Backup, import, or export fails.
+   Confirm the source and destination paths are writable and that the JSON backup file is valid.
+4. External boards are not discovered.
+   Check that the folder contains `boards_metadata.json` or supported board files such as `.json` or `.sqlite3`.
+5. You need scriptable automation.
+   Use the direct CLI subcommands rather than the interactive `--cli` mode.
 
 ## License
 
-This project is intended for educational and personal use. Modify and distribute it as needed.
+See [LICENSE](LICENSE).
