@@ -43,6 +43,7 @@ from .common import (
 	PropagatingListWidget,
 	PropagatingTableWidget,
 	PropagatingTextEdit,
+	add_dialog_footer,
 	build_dialog_shell,
 	choose_existing_directory_dialog,
 	choose_open_files_dialog,
@@ -364,7 +365,7 @@ class AboutDialog(QDialog):
 
 		self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
 		self.button_box.accepted.connect(self.accept)
-		self.layout().addWidget(self.button_box)
+		add_dialog_footer(self, self.button_box)
 
 
 def build_command_line_guide_html() -> str:
@@ -554,7 +555,7 @@ class CommandLineGuideDialog(QDialog):
 
 		self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
 		self.button_box.accepted.connect(self.accept)
-		self.layout().addWidget(self.button_box)
+		add_dialog_footer(self, self.button_box)
 
 
 class DirectActionCliOptionsDialog(QDialog):
@@ -593,7 +594,7 @@ class DirectActionCliOptionsDialog(QDialog):
 
 		self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
 		self.button_box.accepted.connect(self.accept)
-		self.layout().addWidget(self.button_box)
+		add_dialog_footer(self, self.button_box)
 
 
 class DueDateViewDialog(QDialog):
@@ -1032,7 +1033,7 @@ class BoardDialog(QDialog):
 		buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
 		buttons.accepted.connect(self.accept)
 		buttons.rejected.connect(self.reject)
-		content_layout.addWidget(buttons)
+		add_dialog_footer(self, buttons)
 
 	def choose_directory(self):
 		directory = choose_existing_directory_dialog(self, 'Select Board Storage Folder', self.directory_edit.text())
@@ -1092,7 +1093,7 @@ class ColumnDialog(QDialog):
 		buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
 		buttons.accepted.connect(self.accept)
 		buttons.rejected.connect(self.reject)
-		content_layout.addWidget(buttons)
+		add_dialog_footer(self, buttons)
 
 	def values(self) -> Dict[str, object]:
 		return {
@@ -1143,7 +1144,7 @@ class ReorderColumnsDialog(QDialog):
 		buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
 		buttons.accepted.connect(self.accept)
 		buttons.rejected.connect(self.reject)
-		content_layout.addWidget(buttons)
+		add_dialog_footer(self, buttons)
 
 	def refresh_items(self):
 		self.list_widget.clear()
@@ -1213,7 +1214,7 @@ class CardTypeDialog(QDialog):
 		buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
 		buttons.accepted.connect(self.accept)
 		buttons.rejected.connect(self.reject)
-		content_layout.addWidget(buttons)
+		add_dialog_footer(self, buttons)
 
 	def values(self) -> Dict[str, Optional[str]]:
 		return {
@@ -1269,7 +1270,7 @@ class CardTypesBrowserDialog(QDialog):
 
 		buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
 		buttons.rejected.connect(self.reject)
-		content_layout.addWidget(buttons)
+		add_dialog_footer(self, buttons)
 
 		self.refresh_rows()
 
@@ -1370,7 +1371,7 @@ class ProjectDialog(QDialog):
 		buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
 		buttons.accepted.connect(self.accept)
 		buttons.rejected.connect(self.reject)
-		content_layout.addWidget(buttons)
+		add_dialog_footer(self, buttons)
 
 	def values(self) -> Dict[str, str]:
 		return {
@@ -1419,7 +1420,7 @@ class ProjectsBrowserDialog(QDialog):
 
 		buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
 		buttons.rejected.connect(self.reject)
-		content_layout.addWidget(buttons)
+		add_dialog_footer(self, buttons)
 
 		self.refresh_rows()
 
@@ -1779,7 +1780,7 @@ class CardDialog(QDialog):
 		buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
 		buttons.accepted.connect(self.accept)
 		buttons.rejected.connect(self.reject)
-		content_layout.addWidget(buttons)
+		add_dialog_footer(self, buttons)
 
 	def _append_todo_list_item(self, text: str, completed: bool = False, item_id: Optional[str] = None):
 		item = QListWidgetItem(text)

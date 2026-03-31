@@ -710,6 +710,13 @@ def create_dialog_hint_label(text: str) -> QLabel:
 	return label
 
 
+def add_dialog_footer(dialog: QDialog, footer: QWidget):
+	layout = dialog.layout()
+	if layout is None:
+		raise ValueError('Dialog footer requires the dialog shell layout to be created first')
+	layout.addWidget(footer)
+
+
 class ColorSelectionField(QWidget):
 	def __init__(self, initial_color: Optional[str] = None, allow_clear: bool = False,
 				 default_label: str = 'Default', selected_label: str = 'Color selected',

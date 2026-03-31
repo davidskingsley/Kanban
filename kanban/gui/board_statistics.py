@@ -26,6 +26,7 @@ from ..board import KanbanBoard
 from ..models import Priority
 from .common import (
 	PropagatingTableWidget,
+	add_dialog_footer,
 	build_dialog_shell,
 	create_dialog_hint_label,
 	create_dialog_section_label,
@@ -114,7 +115,7 @@ class BoardStatisticsDialog(QDialog):
 		self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
 		self.button_box.rejected.connect(self.reject)
 		self.button_box.accepted.connect(self.accept)
-		self.layout().addWidget(self.button_box)
+		add_dialog_footer(self, self.button_box)
 
 	def _create_stat_card(self, caption: str) -> Dict[str, QWidget]:
 		frame = QFrame()

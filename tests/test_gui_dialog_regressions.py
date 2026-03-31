@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QCheckBox,
+    QDialogButtonBox,
     QLabel,
     QListWidget,
     QMessageBox,
@@ -97,6 +98,29 @@ class GuiDialogRegressionTests(GuiTestCase):
             QApplication.processEvents()
             self.assertGreater(scroll_areas[0].verticalScrollBar().maximum(), 0)
             dialog.close()
+
+    def test_dialog_action_buttons_stay_outside_scroll_content(self):
+        self.board_manager.create_board('Pinned Footer Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        column_id = board.get_columns_ordered()[0].id
+        card = board.create_card('Pinned Footer Card', 'dialog content', Priority.MEDIUM, column_id)
+        card_type = board.get_card_types_ordered()[0]
+
+        dialogs = [
+            AboutDialog(version='2.0', parent=self.gui.window),
+            BoardDialog(self.temp_dir, parent=self.gui.window),
+            CardTypeDialog(card_type=card_type, parent=self.gui.window),
+            CardDialog(board, card=card, parent=self.gui.window),
+        ]
+
+        for dialog in dialogs:
+            scroll_area = dialog.findChild(QScrollArea, 'DialogScrollArea')
+            self.assertIsNotNone(scroll_area, f'{type(dialog).__name__} should include a scroll area')
+            button_box = dialog.findChild(QDialogButtonBox)
+            self.assertIsNotNone(button_box, f'{type(dialog).__name__} should include a button box')
+            self.assertIsNot(button_box.parentWidget(), scroll_area.widget())
+            self.assertNotIn(button_box, scroll_area.widget().findChildren(QDialogButtonBox))
 
     def test_drag_hotspot_is_clamped_to_preview_bounds(self):
         self.assertEqual(clamp_drag_hotspot(QPoint(12, 18), QSize(100, 80)), QPoint(12, 18))
@@ -683,6 +707,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         left_double_click = QMouseEvent(
             QMouseEvent.Type.MouseButtonDblClick,
             QPointF(10, 10),
+            QPointF(10, 10),
             Qt.MouseButton.LeftButton,
             Qt.MouseButton.LeftButton,
             Qt.KeyboardModifier.NoModifier,
@@ -691,6 +716,7 @@ class GuiDialogRegressionTests(GuiTestCase):
 
         right_double_click = QMouseEvent(
             QMouseEvent.Type.MouseButtonDblClick,
+            QPointF(10, 10),
             QPointF(10, 10),
             Qt.MouseButton.RightButton,
             Qt.MouseButton.RightButton,
@@ -708,6 +734,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         tile = CardTile(board, card)
         left_press = QMouseEvent(
             QMouseEvent.Type.MouseButtonPress,
+            QPointF(10, 10),
             QPointF(10, 10),
             Qt.MouseButton.LeftButton,
             Qt.MouseButton.LeftButton,
