@@ -60,6 +60,17 @@ This is the default mode and the primary GUI workflow.
 uv run python main.py --cli
 ```
 
+### Direct-Action CLI
+
+Use direct subcommands when you want one action to run without prompts or menu navigation.
+
+```bash
+uv run python main.py list-boards
+uv run python main.py create-board --name "Automation" --storage-backend sqlite --switch
+uv run python main.py create-card --board "Automation" --title "Ship release" --priority high --assignee david
+uv run python main.py export-board --board "Automation" --output automation.json
+```
+
 ### Demo Scripts
 
 ```bash
@@ -79,12 +90,30 @@ uv run python -m unittest discover -s tests
 
 ```bash
 uv run python main.py [options]
+uv run python main.py <direct-command> [command-options]
 
 Options:
-  --cli              Use the multi-board command-line interface
-  --boards-dir DIR   Specify a custom boards directory for multi-board mode
-  --help             Show help message
+   --cli                          Use the interactive multi-board command-line interface
+   --boards-dir DIR               Specify a custom boards directory for multi-board mode
+   --lock-action ACTION           Choose cancel, open_read_only, or delete_lock for direct commands
+   --help                         Show help message
+
+Direct commands include:
+   list-boards                    List registered boards
+   create-board                   Create a board without prompts
+   switch-board                   Change the current board
+   delete-board                   Delete a board with --force
+   show-board                     Print a board to the terminal
+   create-card                    Create a card without prompts
+   edit-card                      Update a card without prompts
+   move-card                      Move a card to another column
+   create-column                  Create a column without prompts
+   change-column-color            Update a column color
+   create-card-type               Create a reusable card type
+   create-backup                  Create a board backup file
 ```
+
+Run `uv run python main.py <direct-command> --help` to inspect the full options for any direct action.
 
 ## Storage
 
