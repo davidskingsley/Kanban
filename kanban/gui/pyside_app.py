@@ -62,6 +62,7 @@ from .dialogs import (
     CardDialog,
     CardTypeDialog,
     CardTypesBrowserDialog,
+    CommandLineGuideDialog,
     ColumnDialog,
     DueDateViewDialog,
     OptionalDateField,  # noqa: F401
@@ -274,6 +275,7 @@ class MultiBoardGUI:
 
         help_menu = menu_bar.addMenu('Help')
         help_menu.addAction(self._action('About Kanban', self.show_about_dialog, 'F1'))
+        help_menu.addAction(self._action('Command Line Guide', self.show_command_line_guide_dialog))
 
     def _set_window_title_summary(self, board_name: str, stats_text: str = ''):
         """Update the native window title with board summary details."""
@@ -302,6 +304,11 @@ class MultiBoardGUI:
     def show_about_dialog(self):
         """Show the application about and help dialog."""
         dialog = AboutDialog(parent=self.window, version='2.0')
+        dialog.exec()
+
+    def show_command_line_guide_dialog(self):
+        """Show detailed command-line usage help."""
+        dialog = CommandLineGuideDialog(parent=self.window)
         dialog.exec()
 
     def _refresh_history_actions(self, board: Optional[KanbanBoard] = None):

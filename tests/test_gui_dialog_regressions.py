@@ -8,10 +8,11 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 from PySide6.QtCore import QPoint, QPointF, QSize, Qt
 from PySide6.QtGui import QColor, QContextMenuEvent, QMouseEvent, QPixmap
-from PySide6.QtWidgets import QAbstractItemView, QLabel, QListWidget, QMessageBox, QPushButton, QScrollArea, QToolBar
+from PySide6.QtWidgets import QApplication, QAbstractItemView, QLabel, QListWidget, QMessageBox, QPushButton, QScrollArea, QSizePolicy, QTextBrowser, QToolBar
 
 from gui_test_case import GuiTestCase
 from kanban.gui.board_statistics import BoardStatisticsDialog
+from kanban.gui.common import WINDOW_STYLE
 from kanban.gui.pyside_app import (
     AboutDialog,
     BoardDialog,
@@ -21,6 +22,7 @@ from kanban.gui.pyside_app import (
     CardTypesBrowserDialog,
     ColumnAddButton,
     ColumnTitleButton,
+    CommandLineGuideDialog,
     DueDateViewDialog,
     MultiBoardGUI,
     OptionalDateField,
@@ -73,6 +75,15 @@ class GuiDialogRegressionTests(GuiTestCase):
         for dialog in dialogs:
             scroll_areas = dialog.findChildren(QScrollArea, 'DialogScrollArea')
             self.assertTrue(scroll_areas, f'{type(dialog).__name__} should include a scroll area')
+            self.assertEqual(dialog.layout().spacing(), 8)
+            self.assertEqual(scroll_areas[0].sizePolicy().verticalPolicy(), QSizePolicy.Policy.Expanding)
+            self.assertEqual(scroll_areas[0].widget().sizePolicy().verticalPolicy(), QSizePolicy.Policy.Preferred)
+            self.assertEqual(scroll_areas[0].widget().layout().count(), 1)
+            dialog.resize(520, 360)
+            dialog.show()
+            QApplication.processEvents()
+            self.assertGreater(scroll_areas[0].verticalScrollBar().maximum(), 0)
+            dialog.close()
 
     def test_drag_hotspot_is_clamped_to_preview_bounds(self):
         self.assertEqual(clamp_drag_hotspot(QPoint(12, 18), QSize(100, 80)), QPoint(12, 18))
@@ -218,7 +229,7 @@ class GuiDialogRegressionTests(GuiTestCase):
 
         self.assertNotIn('Filters', menu_titles)
 
-    def test_menu_bar_includes_help_menu_with_about_action(self):
+    def test_menu_bar_includes_help_menu_actions(self):
         self.board_manager.create_board('Help Menu Board')
         self.gui = MultiBoardGUI(self.board_manager)
 
@@ -230,6 +241,7 @@ class GuiDialogRegressionTests(GuiTestCase):
 
         self.assertIn('Help', menu_titles)
         self.assertIn('About Kanban', help_titles)
+        self.assertIn('Command Line Guide', help_titles)
 
     def test_main_window_uses_project_icon(self):
         self.board_manager.create_board('Icon Board')
@@ -249,6 +261,28 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertTrue(dialog.findChildren(QScrollArea, 'DialogScrollArea'))
         self.assertIs(dialog.button_box.parentWidget(), dialog)
         self.assertIsNot(dialog.button_box.parentWidget(), scroll_area.widget())
+
+    def test_command_line_guide_dialog_shows_detailed_cli_help(self):
+        dialog = CommandLineGuideDialog()
+        guide_text = dialog.command_line_help.toPlainText()
+
+        self.assertEqual(dialog.windowTitle(), 'Kanban Command Line Guide')
+        self.assertIn('python main.py --cli', guide_text)
+        self.assertIn('--boards-dir DIR', guide_text)
+        self.assertIn('Open current board', guide_text)
+        self.assertIn('YYYY-MM-DD', guide_text)
+        self.assertIn('SQLite3 backend', guide_text)
+        self.assertFalse(dialog.findChildren(QScrollArea, 'DialogScrollArea'))
+        self.assertTrue(dialog.findChildren(QTextBrowser, 'CommandLineGuideBrowser'))
+        self.assertEqual(dialog.command_line_help.verticalScrollBarPolicy(), Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        self.assertNotIn('QScrollBar::handle:vertical', dialog.command_line_help.styleSheet())
+        self.assertIn('QScrollBar::handle:vertical', WINDOW_STYLE)
+        dialog.resize(620, 420)
+        dialog.show()
+        QApplication.processEvents()
+        self.assertGreater(dialog.command_line_help.verticalScrollBar().maximum(), 0)
+        dialog.close()
+        self.assertIs(dialog.button_box.parentWidget(), dialog)
 
     def test_board_summary_moves_to_title_bar(self):
         self.board_manager.create_board('Title Summary Board')

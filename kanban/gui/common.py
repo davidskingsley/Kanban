@@ -24,9 +24,11 @@ from PySide6.QtWidgets import (
 	QFrame,
 	QHBoxLayout,
 	QLabel,
+	QLayout,
 	QListWidget,
 	QPushButton,
 	QScrollArea,
+	QSizePolicy,
 	QTableWidget,
 	QTextEdit,
 	QVBoxLayout,
@@ -94,6 +96,58 @@ QScrollArea, QSplitter, QWidget#ColumnsContainer {
 }
 QScrollArea > QWidget > QWidget {
 	background: #f5efe4;
+}
+QScrollBar:vertical {
+	background: #efe2cf;
+	width: 18px;
+	margin: 6px 4px 6px 0;
+	border-radius: 9px;
+}
+QScrollBar::handle:vertical {
+	background: #9c4d1f;
+	min-height: 56px;
+	border-radius: 9px;
+	border: 2px solid #fffaf2;
+}
+QScrollBar::handle:vertical:hover {
+	background: #b35d28;
+}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+	height: 0px;
+	background: transparent;
+	border: none;
+}
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+	background: #d9c1a5;
+	border-radius: 9px;
+}
+QScrollBar:horizontal {
+	background: #efe2cf;
+	height: 18px;
+	margin: 0 6px 4px 6px;
+	border-radius: 9px;
+}
+QScrollBar::handle:horizontal {
+	background: #9c4d1f;
+	min-width: 56px;
+	border-radius: 9px;
+	border: 2px solid #fffaf2;
+}
+QScrollBar::handle:horizontal:hover {
+	background: #b35d28;
+}
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+	width: 0px;
+	background: transparent;
+	border: none;
+}
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {
+	background: #d9c1a5;
+	border-radius: 9px;
 }
 QToolBar#FilterToolbar {
 	background: #efe4d3;
@@ -172,7 +226,8 @@ QInputDialog QPushButton {
 }
 QDialog QDialogButtonBox {
 	border-top: 1px solid #eadcc6;
-	padding-top: 10px;
+	padding-top: 4px;
+	margin-top: 0;
 }
 QPushButton:disabled {
 	background: #d9cfbf;
@@ -577,11 +632,11 @@ class PropagatingTextEdit(QTextEdit):
 		handle_scrollable_wheel_event(self, event, lambda: super(PropagatingTextEdit, self).wheelEvent(event))
 
 
-def build_dialog_shell(dialog: QDialog, title: str, subtitle: str) -> QVBoxLayout:
+def build_dialog_shell(dialog: QDialog, title: str, subtitle: str, scrollable: bool = True) -> QVBoxLayout:
 	dialog.setObjectName('StandardDialog')
 	outer_layout = QVBoxLayout(dialog)
 	outer_layout.setContentsMargins(18, 18, 18, 18)
-	outer_layout.setSpacing(14)
+	outer_layout.setSpacing(8)
 
 	hero = QFrame()
 	hero.setObjectName('DialogHero')
@@ -599,26 +654,37 @@ def build_dialog_shell(dialog: QDialog, title: str, subtitle: str) -> QVBoxLayou
 	hero_layout.addWidget(subtitle_label)
 	outer_layout.addWidget(hero)
 
+	card = QFrame()
+	card.setObjectName('DialogCard')
+	card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+	card_layout = QVBoxLayout(card)
+	card_layout.setContentsMargins(18, 18, 18, 18)
+	card_layout.setSpacing(14)
+	card_layout.setSizeConstraint(QLayout.SizeConstraint.SetMinAndMaxSize)
+
+	if not scrollable:
+		card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+		outer_layout.addWidget(card, 1)
+		return card_layout
+
 	scroll_area = PropagatingScrollArea()
 	scroll_area.setObjectName('DialogScrollArea')
 	scroll_area.setWidgetResizable(True)
 	scroll_area.setFrameShape(QFrame.Shape.NoFrame)
 	scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+	scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 	outer_layout.addWidget(scroll_area, 1)
+	outer_layout.setStretchFactor(scroll_area, 1)
 
 	scroll_contents = QWidget()
+	scroll_contents.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 	scroll_area.setWidget(scroll_contents)
 	scroll_layout = QVBoxLayout(scroll_contents)
 	scroll_layout.setContentsMargins(0, 0, 0, 0)
 	scroll_layout.setSpacing(0)
-
-	card = QFrame()
-	card.setObjectName('DialogCard')
-	card_layout = QVBoxLayout(card)
-	card_layout.setContentsMargins(18, 18, 18, 18)
-	card_layout.setSpacing(14)
+	scroll_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+	scroll_layout.setSizeConstraint(QLayout.SizeConstraint.SetMinAndMaxSize)
 	scroll_layout.addWidget(card)
-	scroll_layout.addStretch(1)
 	return card_layout
 
 

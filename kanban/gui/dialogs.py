@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 	QStyle,
 	QStyledItemDelegate,
 	QTableWidgetItem,
+	QTextBrowser,
 	QVBoxLayout,
 	QWidget,
 )
@@ -360,6 +361,99 @@ class AboutDialog(QDialog):
 		content_layout.addWidget(self.shortcuts_label)
 
 		content_layout.addWidget(create_dialog_hint_label('Tip: click a column title or card first to make the relevant card and column actions available.'))
+
+		self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+		self.button_box.accepted.connect(self.accept)
+		self.layout().addWidget(self.button_box)
+
+
+def build_command_line_guide_html() -> str:
+	"""Return the HTML shown in the command-line guide dialog."""
+	return (
+		'<h3 style="margin: 0 0 8px 0; color: #6f3d1c;">Start From The Project Folder</h3>'
+		'<p style="margin: 0 0 10px 0;">Open a terminal in the Kanban project directory. Both direct Python and <b>uv</b> commands work. The GUI is the default launch mode, and the CLI is enabled with <b>--cli</b>.</p>'
+		'<pre style="background: #f7efe4; border: 1px solid #e2d2bb; border-radius: 10px; padding: 10px;">'
+		'python main.py\n'
+		'python main.py --cli\n'
+		'python main.py --boards-dir C:\\Boards\\Kanban\n\n'
+		'uv run python main.py\n'
+		'uv run python main.py --cli\n'
+		'uv run python main.py --boards-dir C:\\Boards\\Kanban\n'
+		'</pre>'
+		'<p style="margin: 10px 0 0 0;">Run <b>python main.py --help</b> or <b>uv run python main.py --help</b> to see the supported command-line options.</p>'
+		'<h3 style="margin: 16px 0 8px 0; color: #6f3d1c;">Top-Level CLI Options</h3>'
+		'<ul style="margin: 0 0 0 18px; padding: 0;">'
+		'<li><b>--cli</b>: start the interactive multi-board command-line interface instead of the GUI.</li>'
+		'<li><b>--boards-dir DIR</b>: use a different board storage directory for the session. This is useful when keeping work, demo, or archived boards in separate locations.</li>'
+		'<li><b>--help</b>: print the launcher help and exit.</li>'
+		'</ul>'
+		'<h3 style="margin: 16px 0 8px 0; color: #6f3d1c;">Multi-Board CLI Workflow</h3>'
+		'<p style="margin: 0 0 10px 0;">The first menu manages boards. If no boards exist, the CLI immediately prompts you to create one. When boards exist, the main menu exposes these actions:</p>'
+		'<ul style="margin: 0 0 0 18px; padding: 0;">'
+		'<li><b>1. Open current board</b>: enter the board-level card and column manager.</li>'
+		'<li><b>2. Switch board</b>: change the active board.</li>'
+		'<li><b>3. Create new board</b>: choose a name, optional description, storage backend, and target folder.</li>'
+		'<li><b>4. Rename board</b> and <b>5. Delete board</b>: maintain existing boards.</li>'
+		'<li><b>6. Board statistics</b>: review totals across every registered board.</li>'
+		'<li><b>7. Export current board</b> and <b>8. Export all boards</b>: write portable board data for backup or migration.</li>'
+		'<li><b>9. Import boards</b>: bring exported boards back into the manager.</li>'
+		'<li><b>10. Load board from folder</b>: register boards stored outside the default directory.</li>'
+		'<li><b>11. Undo</b> and <b>12. Redo</b>: reverse recent board-management operations.</li>'
+		'</ul>'
+		'<h3 style="margin: 16px 0 8px 0; color: #6f3d1c;">Creating Boards From The CLI</h3>'
+		'<p style="margin: 0 0 10px 0;">When you create a board, the CLI asks which backend to use. Choose <b>1</b> for the current JSON file backend or <b>2</b> for the SQLite3 backend. It then asks for a storage folder. If you keep the default folder, the board is created under the application boards directory. If you choose another folder, the board is still registered in the manager and can be reopened later.</p>'
+		'<p style="margin: 0 0 10px 0;">Load-board-from-folder works with a folder that contains <b>boards_metadata.json</b> or standalone board files. JSON board files and SQLite board files are both supported.</p>'
+		'<h3 style="margin: 16px 0 8px 0; color: #6f3d1c;">Board-Level CLI Workflow</h3>'
+		'<p style="margin: 0 0 10px 0;">After choosing <b>Open current board</b>, the terminal switches to the per-board menu. This view prints the board state, current card statistics, and these actions:</p>'
+		'<ul style="margin: 0 0 0 18px; padding: 0;">'
+		'<li><b>Cards</b>: create, edit, move, delete, search, filter by priority, filter by assignee, add tags, view card details, clear done cards, and add subcards.</li>'
+		'<li><b>Columns</b>: create, rename, delete, reorder, recolor, edit flags, and inspect the current column setup.</li>'
+		'<li><b>Card types</b>: view, create, edit, and delete reusable card type presets.</li>'
+		'<li><b>Maintenance</b>: create a backup, clean orphaned attachment files, undo, and redo.</li>'
+		'</ul>'
+		'<p style="margin: 10px 0 0 0;">When the CLI requests dates, use <b>YYYY-MM-DD</b>. If a board is locked by another process, the terminal offers three responses: open read only, delete the lock, or cancel opening the board.</p>'
+		'<h3 style="margin: 16px 0 8px 0; color: #6f3d1c;">Practical Notes</h3>'
+		'<ul style="margin: 0 0 0 18px; padding: 0;">'
+		'<li>Backups, imports, exports, and board loading work with both JSON and SQLite-backed boards.</li>'
+		'<li>The CLI is useful when running on a machine without PySide6 or when you want to manage boards entirely from a terminal session.</li>'
+		'<li>Press <b>Ctrl+C</b> to leave the CLI safely. The launcher handles this and exits cleanly.</li>'
+		'</ul>'
+	)
+
+
+class CommandLineGuideDialog(QDialog):
+	"""Dedicated dialog for command-line usage documentation."""
+
+	def __init__(self, parent: Optional[QWidget] = None):
+		super().__init__(parent)
+		self.setWindowTitle('Kanban Command Line Guide')
+		self.resize(760, 760)
+
+		content_layout = build_dialog_shell(
+			self,
+			'Command Line Guide',
+			'Detailed terminal usage for starting Kanban, managing multiple boards, and operating a board entirely from the command line.',
+			scrollable=False,
+		)
+
+		self.command_line_help = QTextBrowser()
+		self.command_line_help.setObjectName('CommandLineGuideBrowser')
+		self.command_line_help.setReadOnly(True)
+		self.command_line_help.setOpenExternalLinks(False)
+		self.command_line_help.setMinimumHeight(0)
+		self.command_line_help.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+		self.command_line_help.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+		self.command_line_help.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+		self.command_line_help.verticalScrollBar().setSingleStep(20)
+		self.command_line_help.setStyleSheet(
+			'QTextBrowser#CommandLineGuideBrowser {'
+			'background: #fffaf2; color: #4f4134; border: 1px solid #d8c6ab; border-radius: 12px; padding: 8px;'
+			'}'
+		)
+		self.command_line_help.setHtml(build_command_line_guide_html())
+		content_layout.addWidget(self.command_line_help)
+
+		content_layout.addWidget(create_dialog_hint_label('Tip: use the board-level CLI when you want backup, cleanup, and batch management tasks without opening the GUI.'))
 
 		self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
 		self.button_box.accepted.connect(self.accept)
