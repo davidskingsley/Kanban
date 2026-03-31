@@ -34,6 +34,7 @@ from kanban.gui.pyside_app import (
     ColumnAddButton,
     ColumnTitleButton,
     CommandLineGuideDialog,
+    DirectActionCliOptionsDialog,
     DueDateViewDialog,
     MultiBoardGUI,
     OptionalDateField,
@@ -253,6 +254,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIn('Help', menu_titles)
         self.assertIn('About Kanban', help_titles)
         self.assertIn('Command Line Guide', help_titles)
+        self.assertIn('Direct-Action CLI Options', help_titles)
 
     def test_main_window_uses_project_icon(self):
         self.board_manager.create_board('Icon Board')
@@ -292,6 +294,28 @@ class GuiDialogRegressionTests(GuiTestCase):
         dialog.show()
         QApplication.processEvents()
         self.assertGreater(dialog.command_line_help.verticalScrollBar().maximum(), 0)
+        dialog.close()
+        self.assertIs(dialog.button_box.parentWidget(), dialog)
+
+    def test_direct_action_cli_options_dialog_shows_command_reference(self):
+        dialog = DirectActionCliOptionsDialog()
+        guide_text = dialog.direct_action_help.toPlainText()
+
+        self.assertEqual(dialog.windowTitle(), 'Kanban Direct-Action CLI Options')
+        self.assertIn('Direct-Action CLI Options', guide_text)
+        self.assertIn('create-board --name NAME', guide_text)
+        self.assertIn('delete-board --board BOARD --force', guide_text)
+        self.assertIn('create-card', guide_text)
+        self.assertIn('edit-column-flags', guide_text)
+        self.assertIn('cleanup-orphaned-attachments', guide_text)
+        self.assertIn('YYYY-MM-DD', guide_text)
+        self.assertFalse(dialog.findChildren(QScrollArea, 'DialogScrollArea'))
+        self.assertTrue(dialog.findChildren(QTextBrowser, 'DirectActionCliOptionsBrowser'))
+        self.assertEqual(dialog.direct_action_help.verticalScrollBarPolicy(), Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        dialog.resize(680, 460)
+        dialog.show()
+        QApplication.processEvents()
+        self.assertGreater(dialog.direct_action_help.verticalScrollBar().maximum(), 0)
         dialog.close()
         self.assertIs(dialog.button_box.parentWidget(), dialog)
 

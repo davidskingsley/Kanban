@@ -438,6 +438,77 @@ def build_command_line_guide_html() -> str:
 	)
 
 
+def build_direct_action_cli_options_html() -> str:
+	"""Return the HTML shown in the direct-action CLI options dialog."""
+	return (
+		'<h3 style="margin: 0 0 8px 0; color: #6f3d1c;">Direct-Action CLI Options</h3>'
+		'<p style="margin: 0 0 10px 0;">These commands run one action immediately without entering the interactive CLI. Use them for scripts, scheduled jobs, and automation. Run <b>python main.py &lt;command&gt; --help</b> to inspect the exact flag set for one command.</p>'
+		'<h3 style="margin: 16px 0 8px 0; color: #6f3d1c;">Global Options</h3>'
+		'<ul style="margin: 0 0 0 18px; padding: 0;">'
+		'<li><b>--boards-dir DIR</b>: use a different board registry directory for the session.</li>'
+		'<li><b>--lock-action ACTION</b>: choose <b>cancel</b>, <b>open_read_only</b>, or <b>delete_lock</b> when a direct command hits a locked board.</li>'
+		'</ul>'
+		'<h3 style="margin: 16px 0 8px 0; color: #6f3d1c;">Board Management Commands</h3>'
+		'<pre style="background: #f7efe4; border: 1px solid #e2d2bb; border-radius: 10px; padding: 10px;">'
+		'list-boards\n'
+		'create-board --name NAME [--description TEXT] [--storage-backend json|sqlite] [--target-directory DIR] [--switch]\n'
+		'switch-board --board BOARD\n'
+		'rename-board --board BOARD --new-name NAME\n'
+		'delete-board --board BOARD --force\n'
+		'board-stats [--board BOARD]\n'
+		'export-board [--board BOARD] --output FILE\n'
+		'export-all-boards --output FILE\n'
+		'import-boards --input FILE --force\n'
+		'load-board-from-folder --path PATH [--board BOARD] [--name NAME] [--description TEXT] [--no-switch]\n'
+		'undo-board-management\n'
+		'redo-board-management\n'
+		'show-board [--board BOARD]\n'
+		'</pre>'
+		'<h3 style="margin: 16px 0 8px 0; color: #6f3d1c;">Card Commands</h3>'
+		'<pre style="background: #f7efe4; border: 1px solid #e2d2bb; border-radius: 10px; padding: 10px;">'
+		'create-card [--board BOARD] --title TITLE [--description TEXT] [--priority low|medium|high|critical] [--column COLUMN] [--project NAME] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--color VALUE] [--card-type TYPE] [--assignee NAME] [--tags tag1,tag2]\n'
+		'edit-card [--board BOARD] --card CARD [--title TITLE] [--description TEXT | --clear-description] [--priority low|medium|high|critical] [--assignee NAME | --clear-assignee] [--project NAME | --clear-project] [--start-date YYYY-MM-DD | --clear-start-date] [--end-date YYYY-MM-DD | --clear-end-date] [--color VALUE | --clear-color] [--card-type TYPE] [--tags tag1,tag2 | --clear-tags]\n'
+		'add-subcard [--board BOARD] --parent-card CARD --title TITLE [--description TEXT] [--priority low|medium|high|critical] [--project NAME] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--color VALUE] [--card-type TYPE] [--assignee NAME] [--tags tag1,tag2]\n'
+		'move-card [--board BOARD] --card CARD --column COLUMN [--target-card CARD] [--insert-after]\n'
+		'delete-card [--board BOARD] --card CARD --force\n'
+		'search-cards [--board BOARD] --query TEXT\n'
+		'filter-priority [--board BOARD] --priority low|medium|high|critical\n'
+		'filter-assignee [--board BOARD] --assignee NAME\n'
+		'add-tag [--board BOARD] --card CARD --tag TAG\n'
+		'card-details [--board BOARD] --card CARD\n'
+		'clear-done-cards [--board BOARD] --force\n'
+		'</pre>'
+		'<h3 style="margin: 16px 0 8px 0; color: #6f3d1c;">Column Commands</h3>'
+		'<pre style="background: #f7efe4; border: 1px solid #e2d2bb; border-radius: 10px; padding: 10px;">'
+		'create-column [--board BOARD] --name NAME [--position INDEX] [--color VALUE] [--completed] [--can-add-card]\n'
+		'rename-column [--board BOARD] --column COLUMN --new-name NAME\n'
+		'delete-column [--board BOARD] --column COLUMN [--move-cards-to COLUMN]\n'
+		'reorder-columns [--board BOARD] --order COLUMN1 COLUMN2 COLUMN3\n'
+		'change-column-color [--board BOARD] --column COLUMN --color VALUE\n'
+		'edit-column-flags [--board BOARD] --column COLUMN [--completed | --not-completed] [--can-add-card | --cannot-add-card]\n'
+		'list-columns [--board BOARD]\n'
+		'</pre>'
+		'<h3 style="margin: 16px 0 8px 0; color: #6f3d1c;">Card Type And Maintenance Commands</h3>'
+		'<pre style="background: #f7efe4; border: 1px solid #e2d2bb; border-radius: 10px; padding: 10px;">'
+		'list-card-types [--board BOARD]\n'
+		'create-card-type [--board BOARD] --name NAME [--description TEXT] [--default-project NAME] [--default-color VALUE]\n'
+		'edit-card-type [--board BOARD] --card-type TYPE [--name NAME] [--description TEXT | --clear-description] [--default-project NAME | --clear-default-project] [--default-color VALUE | --clear-default-color]\n'
+		'delete-card-type [--board BOARD] --card-type TYPE [--delete-cards] [--replacement-card-type TYPE]\n'
+		'create-backup [--board BOARD] [--output FILE]\n'
+		'cleanup-orphaned-attachments [--board BOARD]\n'
+		'undo-current-board [--board BOARD]\n'
+		'redo-current-board [--board BOARD]\n'
+		'</pre>'
+		'<h3 style="margin: 16px 0 8px 0; color: #6f3d1c;">Notes</h3>'
+		'<ul style="margin: 0 0 0 18px; padding: 0;">'
+		'<li>Use a board id or an exact board name anywhere a command expects <b>BOARD</b>.</li>'
+		'<li>Use exact names or ids for cards, columns, and card types when there is any ambiguity.</li>'
+		'<li>Destructive commands require <b>--force</b> where shown.</li>'
+		'<li>Date values use <b>YYYY-MM-DD</b>.</li>'
+		'</ul>'
+	)
+
+
 class CommandLineGuideDialog(QDialog):
 	"""Dedicated dialog for command-line usage documentation."""
 
@@ -471,6 +542,45 @@ class CommandLineGuideDialog(QDialog):
 		content_layout.addWidget(self.command_line_help)
 
 		content_layout.addWidget(create_dialog_hint_label('Tip: use the board-level CLI when you want backup, cleanup, and batch management tasks without opening the GUI.'))
+
+		self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+		self.button_box.accepted.connect(self.accept)
+		self.layout().addWidget(self.button_box)
+
+
+class DirectActionCliOptionsDialog(QDialog):
+	"""Dedicated dialog for direct-action CLI option documentation."""
+
+	def __init__(self, parent: Optional[QWidget] = None):
+		super().__init__(parent)
+		self.setWindowTitle('Kanban Direct-Action CLI Options')
+		self.resize(860, 780)
+
+		content_layout = build_dialog_shell(
+			self,
+			'Direct-Action CLI Options',
+			'Command-by-command reference for the non-interactive automation interface.',
+			scrollable=False,
+		)
+
+		self.direct_action_help = QTextBrowser()
+		self.direct_action_help.setObjectName('DirectActionCliOptionsBrowser')
+		self.direct_action_help.setReadOnly(True)
+		self.direct_action_help.setOpenExternalLinks(False)
+		self.direct_action_help.setMinimumHeight(0)
+		self.direct_action_help.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+		self.direct_action_help.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+		self.direct_action_help.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+		self.direct_action_help.verticalScrollBar().setSingleStep(20)
+		self.direct_action_help.setStyleSheet(
+			'QTextBrowser#DirectActionCliOptionsBrowser {'
+			'background: #fffaf2; color: #4f4134; border: 1px solid #d8c6ab; border-radius: 12px; padding: 8px;'
+			'}'
+		)
+		self.direct_action_help.setHtml(build_direct_action_cli_options_html())
+		content_layout.addWidget(self.direct_action_help)
+
+		content_layout.addWidget(create_dialog_hint_label('Tip: start with main.py <command> --help when you need the live argparse output for one action.'))
 
 		self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
 		self.button_box.accepted.connect(self.accept)
