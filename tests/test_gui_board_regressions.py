@@ -408,6 +408,7 @@ class GuiBoardRegressionTests(GuiTestCase):
                     'card_type_id': board.get_default_card_type_id(),
                     'start_date': None,
                     'end_date': None,
+                    'todo_items': [],
                 }
 
         with patch('kanban.gui.pyside_app.CardDialog', FakeCardDialog):
@@ -418,6 +419,60 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertEqual(subcards[0].title, 'Child Task')
         self.assertEqual(subcards[0].parent_id, parent_card.id)
         self.assertEqual(subcards[0].priority, Priority.HIGH)
+
+    def test_board_card_checklist_persists_through_create_and_edit(self):
+        self.board_manager.create_board('Checklist Persistence Board')
+        board = self.board_manager.get_current_board()
+        column_id = board.get_columns_ordered()[0].id
+
+        card = board.create_card(
+            'Checklist Card',
+            'desc',
+            Priority.MEDIUM,
+            column_id,
+            todo_items=[
+                {'text': 'Draft copy', 'completed': False},
+                {'text': 'Review with QA', 'completed': True},
+            ],
+        )
+
+        created = board.find_card(card.id)
+        self.assertEqual(created.get_todo_progress(), (1, 2))
+
+        board.edit_card(
+            card.id,
+            todo_items=[
+                {'text': 'Draft copy', 'completed': True},
+                {'text': 'Ship to production', 'completed': False},
+            ],
+        )
+
+        updated = board.find_card(card.id)
+        self.assertEqual(updated.get_todo_progress(), (1, 2))
+        self.assertEqual([item.text for item in updated.todo_items], ['Draft copy', 'Ship to production'])
+        exported_card = next(item for item in board.export_data()['cards'] if item['id'] == card.id)
+        self.assertEqual(len(exported_card['todo_items']), 2)
+
+    def test_gui_can_toggle_card_checklist_item_inline(self):
+        self.board_manager.create_board('Inline Checklist Toggle Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        column_id = board.get_columns_ordered()[0].id
+        card = board.create_card(
+            'Inline toggle',
+            'desc',
+            Priority.MEDIUM,
+            column_id,
+            todo_items=[{'text': 'Flip me', 'completed': False}],
+        )
+        todo_item = card.todo_items[0]
+
+        self.gui.handle_card_tile_todo_toggle(column_id, card.id, todo_item.id, True)
+
+        updated = board.find_card(card.id)
+        self.assertTrue(updated.todo_items[0].completed)
+        self.assertEqual(self.gui.selected_column_id, column_id)
+        self.assertEqual(self.gui.selected_card_id, card.id)
 
     def test_card_list_has_no_default_container_frame(self):
         list_widget = CardListWidget()

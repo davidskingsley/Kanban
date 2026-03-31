@@ -9,7 +9,7 @@ A Python Kanban application with three ways to work: a PySide6 desktop GUI, an i
 - Direct-action CLI subcommands for non-interactive automation and scheduled jobs
 - JSON and SQLite storage backends for boards
 - External board loading by reference from folders containing `boards_metadata.json`, `.json`, or `.sqlite3` board files
-- Card priorities, assignees, tags, projects, custom colors, reusable card types, real subcards, and attachment cleanup tools
+- Card priorities, assignees, tags, projects, custom colors, reusable card types, real subcards, per-card checklists, and attachment cleanup tools
 - Undo and redo support for board-management actions and current-board actions
 - Lock handling that can open boards read-only, delete stale locks, or cancel access
 
@@ -83,7 +83,7 @@ Run `uv run python main.py --help` for launcher help, or `uv run python main.py 
 The direct CLI covers the same major workflows as the interactive CLI, but without prompts.
 
 - Board management: `list-boards`, `create-board`, `switch-board`, `rename-board`, `delete-board`, `board-stats`, `export-board`, `export-all-boards`, `import-boards`, `load-board-from-folder`, `undo-board-management`, `redo-board-management`, `show-board`
-- Card actions: `create-card`, `edit-card`, `add-subcard`, `move-card`, `delete-card`, `search-cards`, `filter-priority`, `filter-assignee`, `add-tag`, `card-details`, `clear-done-cards`
+- Card actions: `create-card`, `edit-card`, `add-subcard`, `move-card`, `delete-card`, `search-cards`, `filter-priority`, `filter-assignee`, `add-tag`, `add-todo-item`, `check-todo-item`, `uncheck-todo-item`, `toggle-todo-item`, `remove-todo-item`, `card-details`, `clear-done-cards`
 - Column actions: `create-column`, `rename-column`, `delete-column`, `reorder-columns`, `change-column-color`, `edit-column-flags`, `list-columns`
 - Card type and maintenance actions: `list-card-types`, `create-card-type`, `edit-card-type`, `delete-card-type`, `create-backup`, `cleanup-orphaned-attachments`, `undo-current-board`, `redo-current-board`
 
@@ -92,6 +92,24 @@ Safety notes:
 - Destructive direct commands require `--force`
 - Locked-board behavior in direct mode is controlled with `--lock-action`
 - Date arguments use `YYYY-MM-DD`
+- Checklist item commands accept exact item text or checklist item ids printed by `card-details`
+
+## Checklist Workflows
+
+Cards can include an optional checklist with individual completion state.
+
+- GUI: open the card dialog to add, remove, or edit checklist entries, or tick checklist boxes directly on a card tile for quick progress updates.
+- Interactive CLI: provide checklist items when creating or editing cards with pipe-delimited text such as `[x] Draft notes | Validate migrations`.
+- Direct CLI: use repeated `--todo` flags on `create-card`, `edit-card`, and `add-subcard`, or mutate one item at a time with dedicated commands.
+
+Examples:
+
+```bash
+uv run python main.py create-card --board "Automation" --title "Ship release" --todo "Draft notes" --todo "[x] Cut release candidate"
+uv run python main.py add-todo-item --board "Automation" --card "Ship release" --text "Publish announcement"
+uv run python main.py toggle-todo-item --board "Automation" --card "Ship release" --item "Publish announcement"
+uv run python main.py card-details --board "Automation" --card "Ship release"
+```
 
 ## Storage Backends
 
@@ -150,7 +168,7 @@ Common GUI actions:
 4. Double-click a card to edit it.
 5. Use Help to open the About dialog or the Command Line Guide.
 
-Visual cues include priority indicators, assignee labels, tags, custom card colors, subcard progress, and read-only state when a lock is held elsewhere.
+Visual cues include priority indicators, assignee labels, tags, custom card colors, checklist progress, subcard progress, and read-only state when a lock is held elsewhere.
 
 ## Interactive CLI Workflow
 
@@ -169,7 +187,7 @@ Board-management capabilities include:
 
 Board-level capabilities include:
 
-- card creation, editing, moving, deleting, searching, filtering, tag management, card details, clear-done, and subcards
+- card creation, editing, moving, deleting, searching, filtering, tag management, checklist entry, card details, clear-done, and subcards
 - column creation, rename, deletion, reorder, recolor, flag editing, and listing
 - card type listing, creation, editing, and deletion
 - maintenance actions such as backup creation, orphaned attachment cleanup, undo, and redo

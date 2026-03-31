@@ -819,6 +819,7 @@ class MultiBoardGUI:
                     select_callback=lambda card_id, cid=column_id: self.select_card_from_tile(cid, card_id),
                     edit_callback=lambda card_id, cid=column_id: self.edit_card_from_tile(cid, card_id),
                     context_action_callback=lambda card_id, action, cid=column_id: self.handle_card_tile_action(cid, card_id, action),
+                    todo_toggle_callback=lambda card_id, todo_item_id, completed, cid=column_id: self.handle_card_tile_todo_toggle(cid, card_id, todo_item_id, completed),
                 )
                 row_widget = CardListItemContainer(card_widget)
                 item.setSizeHint(row_widget.sizeHint())
@@ -870,6 +871,17 @@ class MultiBoardGUI:
         self.selected_card_id = card_id
         if action == 'add_subcard':
             self.add_subcard_to_selected_card()
+
+    def handle_card_tile_todo_toggle(self, column_id: str, card_id: str, todo_item_id: str, completed: bool):
+        """Apply an inline checklist toggle requested from a card tile."""
+        board = self.ensure_writable_board()
+        if board is None:
+            return
+        if board.update_card_todo_item(card_id, todo_item_id, completed=completed) is None:
+            return
+        self.selected_column_id = column_id
+        self.selected_card_id = card_id
+        self.refresh_ui()
 
     def select_column(self, column_id: str):
         """Track the selected column."""
@@ -1599,6 +1611,7 @@ class MultiBoardGUI:
             values['card_type_id'],
             values['assignee'] or None,
             values['tags'],
+            values['todo_items'],
         )
         self.refresh_ui()
 
@@ -1639,6 +1652,7 @@ class MultiBoardGUI:
                 values['end_date'],
                 values['assignee'] or None,
                 values['tags'],
+                values['todo_items'],
             )
         except ValueError as error:
             QMessageBox.warning(self.window, 'Add Subcard', str(error))
@@ -1681,6 +1695,7 @@ class MultiBoardGUI:
             color=values['color'],
             tags=values['tags'],
             card_type_id=values['card_type_id'],
+            todo_items=values['todo_items'],
         )
         if values['column_id'] != original_column_id:
             board.move_card(card.id, values['column_id'])

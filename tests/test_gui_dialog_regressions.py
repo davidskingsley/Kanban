@@ -11,6 +11,7 @@ from PySide6.QtGui import QColor, QContextMenuEvent, QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QCheckBox,
     QLabel,
     QListWidget,
     QMessageBox,
@@ -177,6 +178,97 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIn('Roadmap', project_options)
         self.assertTrue(dialog.project_edit.isEditable())
 
+    def test_card_dialog_collects_checklist_values(self):
+        self.board_manager.create_board('Checklist Dialog Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        dialog = CardDialog(board, parent=self.gui.window)
+
+        self.assertEqual(dialog.todo_list.count(), 1)
+        self.assertEqual(dialog.todo_list.item(0).text(), 'No checklist items yet.')
+
+        dialog.todo_entry.setText('Draft release notes')
+        dialog.add_todo_item()
+        dialog.todo_entry.setText('Share build with QA')
+        dialog.add_todo_item()
+        dialog.todo_list.item(1).setCheckState(Qt.CheckState.Checked)
+
+        values = dialog.values()
+
+        self.assertEqual(len(values['todo_items']), 2)
+        self.assertEqual(values['todo_items'][0]['text'], 'Draft release notes')
+        self.assertFalse(values['todo_items'][0]['completed'])
+        self.assertEqual(values['todo_items'][1]['text'], 'Share build with QA')
+        self.assertTrue(values['todo_items'][1]['completed'])
+
+    def test_card_dialog_uses_matching_section_borders_for_checklist_attachments_and_subcards(self):
+        self.board_manager.create_board('Matching Section Borders Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        column_id = board.get_columns_ordered()[0].id
+        parent_card = board.create_card('Parent', 'desc', Priority.MEDIUM, column_id)
+        board.create_subcard(parent_card.id, 'Child', 'subcard desc')
+
+        dialog = CardDialog(board, card=parent_card, parent=self.gui.window)
+        expected_border = 'border: 1px solid #dcc7a7;'
+
+        self.assertIn(expected_border, dialog.checklist_frame.styleSheet())
+        self.assertIn(expected_border, dialog.attachment_drop_frame.styleSheet())
+        subcards_frame = dialog.subcards_list.parentWidget()
+        self.assertIsNotNone(subcards_frame)
+        self.assertIn(expected_border, subcards_frame.styleSheet())
+
+    def test_card_tile_shows_checklist_progress_and_preview(self):
+        self.board_manager.create_board('Checklist Tile Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        column_id = board.get_columns_ordered()[0].id
+        card = board.create_card(
+            'Release prep',
+            'desc',
+            Priority.HIGH,
+            column_id,
+            todo_items=[
+                {'text': 'Draft notes', 'completed': True},
+                {'text': 'Validate migrations', 'completed': False},
+            ],
+        )
+
+        tile = CardTile(board, card)
+        todo_checkboxes = tile.findChildren(QCheckBox)
+
+        self.assertEqual(tile.schedule_label.text(), 'Checklist 1/2')
+        self.assertEqual(len(todo_checkboxes), 2)
+        self.assertEqual(todo_checkboxes[0].text(), 'Draft notes')
+        self.assertTrue(todo_checkboxes[0].isChecked())
+        self.assertEqual(todo_checkboxes[1].text(), 'Validate migrations')
+        self.assertFalse(todo_checkboxes[1].isChecked())
+
+    def test_card_tile_checkbox_toggle_routes_through_callback(self):
+        self.board_manager.create_board('Checklist Callback Tile Board')
+        board = self.board_manager.get_current_board()
+        column_id = board.get_columns_ordered()[0].id
+        card = board.create_card(
+            'Toggle inline',
+            'desc',
+            Priority.MEDIUM,
+            column_id,
+            todo_items=[{'text': 'Flip me', 'completed': False}],
+        )
+        calls = []
+
+        tile = CardTile(
+            board,
+            card,
+            todo_toggle_callback=lambda card_id, todo_item_id, completed: calls.append((card_id, todo_item_id, completed)),
+        )
+        checkbox = tile.findChild(QCheckBox)
+
+        self.assertIsNotNone(checkbox)
+        checkbox.setChecked(True)
+
+        self.assertEqual(calls, [(card.id, card.todo_items[0].id, True)])
+
     def test_optional_date_field_enables_editor_when_checked(self):
         field = OptionalDateField('Start Date')
 
@@ -283,6 +375,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIn('python main.py --cli', guide_text)
         self.assertIn('--boards-dir DIR', guide_text)
         self.assertIn('Convert board backend', guide_text)
+        self.assertIn('manage checklists', guide_text)
         self.assertIn('Open current board', guide_text)
         self.assertIn('YYYY-MM-DD', guide_text)
         self.assertIn('SQLite3 backend', guide_text)
@@ -308,6 +401,9 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIn('convert-board --board BOARD --storage-backend json|sqlite', guide_text)
         self.assertIn('delete-board --board BOARD --force', guide_text)
         self.assertIn('create-card', guide_text)
+        self.assertIn('add-todo-item [--board BOARD] --card CARD --text TEXT [--completed]', guide_text)
+        self.assertIn('toggle-todo-item [--board BOARD] --card CARD --item ITEM', guide_text)
+        self.assertIn('card-details prints checklist item ids', guide_text)
         self.assertIn('edit-column-flags', guide_text)
         self.assertIn('cleanup-orphaned-attachments', guide_text)
         self.assertIn('YYYY-MM-DD', guide_text)
@@ -525,6 +621,7 @@ class GuiDialogRegressionTests(GuiTestCase):
                     'card_type_id': board.get_default_card_type_id(),
                     'start_date': None,
                     'end_date': None,
+                    'todo_items': [],
                 }
 
         with patch('kanban.gui.dialogs.CardDialog', FakeCardDialog):

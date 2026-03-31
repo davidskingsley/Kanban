@@ -3,7 +3,7 @@
 """Board-level command-line interface for the Kanban board application."""
 
 from datetime import date
-from typing import Optional
+from typing import Dict, List, Optional
 
 from .board import KanbanBoard
 from .models import Priority
@@ -26,6 +26,24 @@ class BoardCLI:
             return date.fromisoformat(text)
         except ValueError as error:
             raise ValueError(f"{field_name} must use YYYY-MM-DD format.") from error
+
+    def parse_todo_items(self, value: str) -> List[Dict[str, object]]:
+        """Parse a pipe-delimited checklist string into structured items."""
+        items: List[Dict[str, object]] = []
+        for raw_item in value.split('|'):
+            text = raw_item.strip()
+            if not text:
+                continue
+            completed = False
+            lowered = text.lower()
+            if lowered.startswith('[x]'):
+                completed = True
+                text = text[3:].strip()
+            elif lowered.startswith('[ ]'):
+                text = text[3:].strip()
+            if text:
+                items.append({'text': text, 'completed': completed})
+        return items
     
     def run(self):
         """Main CLI loop."""
@@ -198,6 +216,8 @@ class BoardCLI:
             priority = Priority.MEDIUM
         
         assignee = input("Assignee (optional): ").strip() or None
+        checklist_text = input("Checklist items (optional, separate with |, prefix completed items with [x]): ").strip()
+        todo_items = self.parse_todo_items(checklist_text)
         
         column_id = None
         columns = self.board.get_columns_ordered()
@@ -235,6 +255,7 @@ class BoardCLI:
                 color=color,
                 card_type_id=card_type.id,
                 assignee=assignee,
+                todo_items=todo_items,
             )
             
             print(f"✅ Card '{title}' created successfully!")
@@ -296,6 +317,12 @@ class BoardCLI:
         end_input = input(f"End date [{end_default}] (blank to keep, 'none' to clear): ").strip()
 
         new_color = input(f"Color [{card.color or 'default'}]: ").strip()
+        if card.todo_items:
+            print("Current checklist:")
+            for todo_item in card.todo_items:
+                tick = '[x]' if todo_item.completed else '[ ]'
+                print(f"  {tick} {todo_item.text}")
+        checklist_input = input("Checklist items (blank to keep, 'none' to clear, separate with |, prefix completed items with [x]): ").strip()
 
         edit_kwargs = {}
         if start_input:
@@ -328,6 +355,8 @@ class BoardCLI:
             edit_kwargs['color'] = new_color
         if new_card_type is not None:
             edit_kwargs['card_type_id'] = new_card_type.id
+        if checklist_input:
+            edit_kwargs['todo_items'] = [] if checklist_input.lower() == 'none' else self.parse_todo_items(checklist_input)
 
         self.board.edit_card(card_id, new_title, new_description, new_priority, new_assignee, new_project, **edit_kwargs)
         print("✅ Card updated successfully!")
@@ -387,6 +416,9 @@ class BoardCLI:
         except (ValueError, IndexError):
             priority = Priority.MEDIUM
 
+        checklist_text = input("Checklist items (optional, separate with |, prefix completed items with [x]): ").strip()
+        todo_items = self.parse_todo_items(checklist_text)
+
         assignee = input("Assignee (optional): ").strip() or None
         tags_text = input("Tags (comma-separated, optional): ").strip()
         tags = [tag.strip() for tag in tags_text.split(',') if tag.strip()] if tags_text else []
@@ -404,6 +436,7 @@ class BoardCLI:
                 end_date,
                 assignee,
                 tags,
+                todo_items,
             )
             print(f"✅ Subcard '{title}' created successfully!")
         except ValueError as error:
@@ -615,6 +648,14 @@ class BoardCLI:
         print(f"Late: {'yes' if card.has_past_end_date() and not self.board.is_card_done(card) else 'no'}")
         print(f"Color: {card.color or '(default)'}")
         print(f"Tags: {', '.join(card.tags) if card.tags else '(no tags)'}")
+        todo_completed, todo_total = card.get_todo_progress()
+        if todo_total:
+            print(f"Checklist: {todo_completed}/{todo_total} done")
+            for todo_item in card.todo_items:
+                tick = '[x]' if todo_item.completed else '[ ]'
+                print(f"  {tick} {todo_item.text}")
+        else:
+            print("Checklist: (none)")
 
         parent_card = self.board.get_parent_card(card)
         if parent_card:

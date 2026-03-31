@@ -11,6 +11,7 @@ from PySide6.QtCore import QMimeData, QPoint, QPointF, QSize, Qt
 from PySide6.QtGui import QColor, QCursor, QDrag, QPainter, QPen
 from PySide6.QtWidgets import (
 	QApplication,
+	QCheckBox,
 	QFrame,
 	QGraphicsDropShadowEffect,
 	QGroupBox,
@@ -48,6 +49,7 @@ class CardTile(QFrame):
 	def __init__(self, board: KanbanBoard, card, selected: bool = False,
 				 file_drop_callback=None, select_callback=None,
 				 edit_callback=None, context_action_callback=None,
+				 todo_toggle_callback=None,
 				 parent: Optional[QWidget] = None):
 		super().__init__(parent)
 		self.board = board
@@ -57,6 +59,7 @@ class CardTile(QFrame):
 		self.select_callback = select_callback
 		self.edit_callback = edit_callback
 		self.context_action_callback = context_action_callback
+		self.todo_toggle_callback = todo_toggle_callback
 		self.compact_text = False
 		self._drop_highlight = False
 
@@ -191,10 +194,36 @@ class CardTile(QFrame):
 		else:
 			self.description_label = None
 
+		todo_completed, todo_total = self.card.get_todo_progress()
+		if todo_total:
+			self.checklist_container = QWidget()
+			checklist_layout = QVBoxLayout(self.checklist_container)
+			checklist_layout.setContentsMargins(0, 0, 0, 0)
+			checklist_layout.setSpacing(6)
+			self.checklist_checkboxes = []
+			for todo_item in self.card.todo_items:
+				text = todo_item.text
+				display_text = text[:39] + '...' if len(text) > 42 else text
+				checkbox = QCheckBox(display_text)
+				checkbox.setChecked(todo_item.completed)
+				checkbox.setEnabled(not self.board.is_read_only())
+				checkbox.setToolTip(text)
+				checkbox.stateChanged.connect(
+					lambda state, item_id=todo_item.id: self._handle_todo_checkbox_state_change(item_id, state)
+				)
+				self.checklist_checkboxes.append(checkbox)
+				checklist_layout.addWidget(checkbox)
+			layout.addWidget(self.checklist_container)
+		else:
+			self.checklist_container = None
+			self.checklist_checkboxes = []
+
 		schedule_parts = []
 		schedule_text = schedule_summary(self.card)
 		if schedule_text:
 			schedule_parts.append(schedule_text)
+		if todo_total:
+			schedule_parts.append(f'Checklist {todo_completed}/{todo_total}')
 		if self.card.has_past_end_date() and not self.board.is_card_done(self.card):
 			schedule_parts.append('Late')
 		if parent_card is None:
@@ -264,6 +293,15 @@ class CardTile(QFrame):
 			self.description_label.setStyleSheet(
 				f'color: {self.muted}; background: transparent; font-size: {body_size};'
 			)
+		if self.checklist_container is not None:
+			self.checklist_container.setStyleSheet(
+				f'background: {rgba_color(self.foreground, 0.04)}; '
+				f'border: 1px solid {rgba_color(self.foreground, 0.08)}; border-radius: 10px; padding: 7px 9px;'
+			)
+			for checkbox in self.checklist_checkboxes:
+				checkbox.setStyleSheet(
+					f'color: {self.foreground}; background: transparent; font-size: {body_size}; spacing: 8px;'
+				)
 		if self.schedule_label is not None:
 			self.schedule_label.setStyleSheet(
 				f'color: {self.foreground}; background: {rgba_color(self.foreground, 0.055)}; '
@@ -333,6 +371,11 @@ class CardTile(QFrame):
 			event.ignore()
 			return
 		super().mousePressEvent(event)
+
+	def _handle_todo_checkbox_state_change(self, todo_item_id: str, state: int):
+		if self.todo_toggle_callback is None:
+			return
+		self.todo_toggle_callback(self.card.id, todo_item_id, state == Qt.CheckState.Checked.value)
 
 	def mouseDoubleClickEvent(self, event):
 		if event.button() == Qt.MouseButton.LeftButton and self.edit_callback is not None:

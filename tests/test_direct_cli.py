@@ -79,6 +79,113 @@ class DirectCliRegressionTests(unittest.TestCase):
         self.assertIn('Assignee: Alex', detail_output)
         self.assertIn('Tags: cli, automation', detail_output)
 
+    def test_direct_cli_can_create_and_replace_card_checklists(self):
+        self.invoke_direct(['create-board', '--name', 'Checklist Board'])
+        exit_code, output = self.invoke_direct([
+            'create-card',
+            '--board', 'Checklist Board',
+            '--title', 'Ship release',
+            '--todo', 'Write release notes',
+            '--todo', '[x] Cut release candidate',
+        ])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Created card 'Ship release'", output)
+
+        _, detail_output = self.invoke_direct([
+            'card-details',
+            '--board', 'Checklist Board',
+            '--card', 'Ship release',
+        ])
+        self.assertIn('Checklist: 1/2 done', detail_output)
+        self.assertIn('[ ] Write release notes', detail_output)
+        self.assertIn('[x] Cut release candidate', detail_output)
+
+        exit_code, output = self.invoke_direct([
+            'edit-card',
+            '--board', 'Checklist Board',
+            '--card', 'Ship release',
+            '--todo', '[x] Write release notes',
+            '--todo', 'Publish announcement',
+        ])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Updated card 'Ship release'", output)
+
+        _, detail_output = self.invoke_direct([
+            'card-details',
+            '--board', 'Checklist Board',
+            '--card', 'Ship release',
+        ])
+        self.assertIn('Checklist: 1/2 done', detail_output)
+        self.assertIn('[x] Write release notes', detail_output)
+        self.assertIn('[ ] Publish announcement', detail_output)
+
+    def test_direct_cli_can_mutate_single_checklist_items(self):
+        self.invoke_direct(['create-board', '--name', 'Item Commands Board'])
+        self.invoke_direct([
+            'create-card',
+            '--board', 'Item Commands Board',
+            '--title', 'Operate checklist',
+            '--todo', 'Initial task',
+        ])
+
+        exit_code, output = self.invoke_direct([
+            'add-todo-item',
+            '--board', 'Item Commands Board',
+            '--card', 'Operate checklist',
+            '--text', 'Follow-up task',
+        ])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Added checklist item 'Follow-up task'", output)
+
+        manager = BoardManager(self.temp_dir)
+        try:
+            board_info = next(board for board in manager.get_board_list() if board['name'] == 'Item Commands Board')
+            manager.switch_board(board_info['id'])
+            board = manager.get_current_board()
+            card = next(card for card in board.get_all_cards() if card.title == 'Operate checklist')
+            follow_up_id = next(item.id for item in card.todo_items if item.text == 'Follow-up task')
+        finally:
+            manager.close()
+
+        exit_code, output = self.invoke_direct([
+            'check-todo-item',
+            '--board', 'Item Commands Board',
+            '--card', 'Operate checklist',
+            '--item', 'Initial task',
+        ])
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Marked checklist item 'Initial task'", output)
+
+        exit_code, output = self.invoke_direct([
+            'toggle-todo-item',
+            '--board', 'Item Commands Board',
+            '--card', 'Operate checklist',
+            '--item', follow_up_id,
+        ])
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Toggled checklist item 'Follow-up task'", output)
+
+        exit_code, output = self.invoke_direct([
+            'remove-todo-item',
+            '--board', 'Item Commands Board',
+            '--card', 'Operate checklist',
+            '--item', 'Initial task',
+        ])
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Removed checklist item 'Initial task'", output)
+
+        _, detail_output = self.invoke_direct([
+            'card-details',
+            '--board', 'Item Commands Board',
+            '--card', 'Operate checklist',
+        ])
+        self.assertIn('Checklist: 1/1 done', detail_output)
+        self.assertIn('[x] Follow-up task', detail_output)
+        self.assertNotIn('Initial task', detail_output)
+
     def test_edit_card_can_clear_optional_fields_directly(self):
         self.invoke_direct(['create-board', '--name', 'Automation Board'])
         self.invoke_direct([

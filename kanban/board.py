@@ -8,7 +8,7 @@ from copy import deepcopy
 from datetime import date, datetime
 from typing import Dict, List, Optional, Set, Union
 
-from .models import UNSET, Card, CardAttachment, CardType, Column, CustomColumn, Priority, Project, Status
+from .models import UNSET, Card, CardAttachment, CardTodoItem, CardType, Column, CustomColumn, Priority, Project, Status
 from .storage import DataStorage, LockHandler, get_default_single_board_file
 
 
@@ -594,7 +594,8 @@ class KanbanBoard:
                    column_id: str = None, project: str = None, start_date: date = None,
                    end_date: date = None, parent_id: str = None, color: str = None,
                    card_type_id: str = None, assignee: str = None,
-                   tags: Optional[List[str]] = None) -> Card:
+                   tags: Optional[List[str]] = None,
+                   todo_items: Optional[List[object]] = None) -> Card:
         """Create a new card and add it to the specified column (or first column if none specified)."""
         self._ensure_writable()
         card_type = self._resolve_card_type(card_type_id)
@@ -623,6 +624,7 @@ class KanbanBoard:
             card.assignee = assignee
             if tags:
                 card.tags = list(dict.fromkeys(tags))
+            card.todo_items = card._coerce_todo_items(todo_items or [])
             self.custom_columns[column_id].add_card(card)
         else:
             # Legacy mode
@@ -638,6 +640,7 @@ class KanbanBoard:
             card.assignee = assignee
             if tags:
                 card.tags = list(dict.fromkeys(tags))
+            card.todo_items = card._coerce_todo_items(todo_items or [])
             self.columns[Status.TODO].add_card(card)
 
         self.last_used_card_type_id = card_type.id
@@ -648,7 +651,8 @@ class KanbanBoard:
                   priority: Priority = None, assignee: str = None, project: str = None,
                   start_date=UNSET, end_date=UNSET, parent_id: str = None, color=UNSET,
                   tags=UNSET,
-                  card_type_id=UNSET) -> Optional[Card]:
+                  card_type_id=UNSET,
+                  todo_items=UNSET) -> Optional[Card]:
         """Edit an existing card."""
         self._ensure_writable()
 
@@ -660,7 +664,7 @@ class KanbanBoard:
                 resolved_type_id = resolved_type.id
                 self.last_used_card_type_id = resolved_type.id
             self._push_undo_state(f"Edit card '{card.title}'")
-            card.update(title, description, priority, assignee, project, start_date, end_date, parent_id, color, resolved_type_id)
+            card.update(title, description, priority, assignee, project, start_date, end_date, parent_id, color, resolved_type_id, todo_items)
             if project is not None:
                 self._ensure_project_exists(project)
             if tags is not UNSET:
@@ -696,6 +700,66 @@ class KanbanBoard:
         card.add_tag(tag)
         self.save_board()
         return True
+
+    def add_card_todo_item(self, card_id: str, text: str, completed: bool = False) -> Optional[CardTodoItem]:
+        """Add a single checklist item to a card in a reversible way."""
+        self._ensure_writable()
+
+        card = self.find_card(card_id)
+        normalized_text = (text or '').strip()
+        if not card or not normalized_text:
+            return None
+
+        self._push_undo_state(f"Add checklist item to '{card.title}'")
+        todo_item = CardTodoItem(normalized_text, completed)
+        card.todo_items.append(todo_item)
+        card.updated_at = datetime.now()
+        self.save_board()
+        return todo_item
+
+    def update_card_todo_item(self, card_id: str, todo_item_id: str, text=UNSET, completed=UNSET) -> Optional[CardTodoItem]:
+        """Update a single checklist item on a card in a reversible way."""
+        self._ensure_writable()
+
+        card = self.find_card(card_id)
+        if not card:
+            return None
+
+        todo_item = next((item for item in card.todo_items if item.id == todo_item_id), None)
+        if todo_item is None:
+            return None
+
+        new_text = todo_item.text if text is UNSET else (text or '').strip()
+        new_completed = todo_item.completed if completed is UNSET else bool(completed)
+        if not new_text:
+            return None
+        if new_text == todo_item.text and new_completed == todo_item.completed:
+            return todo_item
+
+        self._push_undo_state(f"Update checklist item on '{card.title}'")
+        todo_item.text = new_text
+        todo_item.completed = new_completed
+        card.updated_at = datetime.now()
+        self.save_board()
+        return todo_item
+
+    def delete_card_todo_item(self, card_id: str, todo_item_id: str) -> bool:
+        """Delete a single checklist item from a card in a reversible way."""
+        self._ensure_writable()
+
+        card = self.find_card(card_id)
+        if not card:
+            return False
+
+        for index, todo_item in enumerate(card.todo_items):
+            if todo_item.id != todo_item_id:
+                continue
+            self._push_undo_state(f"Remove checklist item from '{card.title}'")
+            card.todo_items.pop(index)
+            card.updated_at = datetime.now()
+            self.save_board()
+            return True
+        return False
 
     def get_all_cards(self) -> List[Card]:
         """Return every card currently on the board."""
@@ -914,7 +978,8 @@ class KanbanBoard:
                        priority: Priority = Priority.MEDIUM, project: str = None,
                        color: str = None, card_type_id: str = None, start_date: date = None,
                        end_date: date = None, assignee: str = None,
-                       tags: Optional[List[str]] = None) -> Card:
+                       tags: Optional[List[str]] = None,
+                       todo_items: Optional[List[object]] = None) -> Card:
         """Create a child card under an existing parent card."""
         parent_card = self.find_card(parent_id)
         if not parent_card:
@@ -936,6 +1001,7 @@ class KanbanBoard:
             card_type_id if card_type_id is not None else parent_card.card_type_id,
             assignee,
             tags,
+            todo_items,
         )
     
     def _delete_card_internal(self, card_id: str) -> bool:
@@ -1331,6 +1397,14 @@ class KanbanBoard:
                                 output.append(f"     Description: {card.description}")
                             if card.project:
                                 output.append(f"     Project: {card.project}")
+                            todo_completed, todo_total = card.get_todo_progress()
+                            if todo_total:
+                                output.append(f"     Checklist: [{todo_completed}/{todo_total} done]")
+                                for todo_item in card.todo_items[:3]:
+                                    tick = '[x]' if todo_item.completed else '[ ]'
+                                    output.append(f"       {tick} {todo_item.text}")
+                                if todo_total > 3:
+                                    output.append(f"       ... {todo_total - 3} more item(s)")
                             parent_card = self.get_parent_card(card)
                             if parent_card:
                                 output.append(f"     Parent: {parent_card.title}")
@@ -1352,6 +1426,14 @@ class KanbanBoard:
                                 output.append(f"     Description: {card.description}")
                             if card.project:
                                 output.append(f"     Project: {card.project}")
+                            todo_completed, todo_total = card.get_todo_progress()
+                            if todo_total:
+                                output.append(f"     Checklist: [{todo_completed}/{todo_total} done]")
+                                for todo_item in card.todo_items[:3]:
+                                    tick = '[x]' if todo_item.completed else '[ ]'
+                                    output.append(f"       {tick} {todo_item.text}")
+                                if todo_total > 3:
+                                    output.append(f"       ... {todo_total - 3} more item(s)")
                             parent_card = self.get_parent_card(card)
                             if parent_card:
                                 output.append(f"     Parent: {parent_card.title}")

@@ -332,7 +332,7 @@ class AboutDialog(QDialog):
 			'<b>1.</b> Create or switch to a board, then shape the workflow with custom columns.<br>'
 			'<b>2.</b> Add cards into active columns and use selection to edit, move, or delete the current card.<br>'
 			'<b>3.</b> Use the toolbar filters and search field to narrow what is visible on the board.<br>'
-			'<b>4.</b> Open card details to manage descriptions, dates, tags, attachments, and subcards.<br>'
+			'<b>4.</b> Open card details to manage descriptions, dates, tags, checklists, attachments, and subcards.<br>'
 			'<b>5.</b> Use the Due Date View and Board Statistics screens to review progress and deadlines.'
 		)
 		self.usage_label.setObjectName('AboutUsage')
@@ -425,7 +425,7 @@ def build_command_line_guide_html() -> str:
 		'<h3 style="margin: 16px 0 8px 0; color: #6f3d1c;">Board-Level CLI Workflow</h3>'
 		'<p style="margin: 0 0 10px 0;">After choosing <b>Open current board</b>, the terminal switches to the per-board menu. This view prints the board state, current card statistics, and these actions:</p>'
 		'<ul style="margin: 0 0 0 18px; padding: 0;">'
-		'<li><b>Cards</b>: create, edit, move, delete, search, filter by priority, filter by assignee, add tags, view card details, clear done cards, and add subcards.</li>'
+		'<li><b>Cards</b>: create, edit, move, delete, search, filter by priority, filter by assignee, add tags, manage checklists, view card details, clear done cards, and add subcards.</li>'
 		'<li><b>Columns</b>: create, rename, delete, reorder, recolor, edit flags, and inspect the current column setup.</li>'
 		'<li><b>Card types</b>: view, create, edit, and delete reusable card type presets.</li>'
 		'<li><b>Maintenance</b>: create a backup, clean orphaned attachment files, undo, and redo.</li>'
@@ -469,15 +469,20 @@ def build_direct_action_cli_options_html() -> str:
 		'</pre>'
 		'<h3 style="margin: 16px 0 8px 0; color: #6f3d1c;">Card Commands</h3>'
 		'<pre style="background: #f7efe4; border: 1px solid #e2d2bb; border-radius: 10px; padding: 10px;">'
-		'create-card [--board BOARD] --title TITLE [--description TEXT] [--priority low|medium|high|critical] [--column COLUMN] [--project NAME] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--color VALUE] [--card-type TYPE] [--assignee NAME] [--tags tag1,tag2]\n'
-		'edit-card [--board BOARD] --card CARD [--title TITLE] [--description TEXT | --clear-description] [--priority low|medium|high|critical] [--assignee NAME | --clear-assignee] [--project NAME | --clear-project] [--start-date YYYY-MM-DD | --clear-start-date] [--end-date YYYY-MM-DD | --clear-end-date] [--color VALUE | --clear-color] [--card-type TYPE] [--tags tag1,tag2 | --clear-tags]\n'
-		'add-subcard [--board BOARD] --parent-card CARD --title TITLE [--description TEXT] [--priority low|medium|high|critical] [--project NAME] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--color VALUE] [--card-type TYPE] [--assignee NAME] [--tags tag1,tag2]\n'
+		'create-card [--board BOARD] --title TITLE [--description TEXT] [--priority low|medium|high|critical] [--column COLUMN] [--project NAME] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--color VALUE] [--card-type TYPE] [--assignee NAME] [--tags tag1,tag2] [--todo TEXT]\n'
+		'edit-card [--board BOARD] --card CARD [--title TITLE] [--description TEXT | --clear-description] [--priority low|medium|high|critical] [--assignee NAME | --clear-assignee] [--project NAME | --clear-project] [--start-date YYYY-MM-DD | --clear-start-date] [--end-date YYYY-MM-DD | --clear-end-date] [--color VALUE | --clear-color] [--card-type TYPE] [--tags tag1,tag2 | --clear-tags] [--todo TEXT | --clear-todo-list]\n'
+		'add-subcard [--board BOARD] --parent-card CARD --title TITLE [--description TEXT] [--priority low|medium|high|critical] [--project NAME] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--color VALUE] [--card-type TYPE] [--assignee NAME] [--tags tag1,tag2] [--todo TEXT]\n'
 		'move-card [--board BOARD] --card CARD --column COLUMN [--target-card CARD] [--insert-after]\n'
 		'delete-card [--board BOARD] --card CARD --force\n'
 		'search-cards [--board BOARD] --query TEXT\n'
 		'filter-priority [--board BOARD] --priority low|medium|high|critical\n'
 		'filter-assignee [--board BOARD] --assignee NAME\n'
 		'add-tag [--board BOARD] --card CARD --tag TAG\n'
+		'add-todo-item [--board BOARD] --card CARD --text TEXT [--completed]\n'
+		'check-todo-item [--board BOARD] --card CARD --item ITEM\n'
+		'uncheck-todo-item [--board BOARD] --card CARD --item ITEM\n'
+		'toggle-todo-item [--board BOARD] --card CARD --item ITEM\n'
+		'remove-todo-item [--board BOARD] --card CARD --item ITEM\n'
 		'card-details [--board BOARD] --card CARD\n'
 		'clear-done-cards [--board BOARD] --force\n'
 		'</pre>'
@@ -505,9 +510,10 @@ def build_direct_action_cli_options_html() -> str:
 		'<h3 style="margin: 16px 0 8px 0; color: #6f3d1c;">Notes</h3>'
 		'<ul style="margin: 0 0 0 18px; padding: 0;">'
 		'<li>Use a board id or an exact board name anywhere a command expects <b>BOARD</b>.</li>'
-		'<li>Use exact names or ids for cards, columns, and card types when there is any ambiguity.</li>'
+		'<li>Use exact names or ids for cards, checklist items, columns, and card types when there is any ambiguity.</li>'
 		'<li>Destructive commands require <b>--force</b> where shown.</li>'
 		'<li>Date values use <b>YYYY-MM-DD</b>.</li>'
+		'<li><b>card-details</b> prints checklist item ids so single-item checklist commands can target them exactly.</li>'
 		'</ul>'
 	)
 
@@ -1465,6 +1471,16 @@ class AttachmentDropFrame(QFrame):
 		self.dialog._attachment_drop_event(event)
 
 
+CARD_DIALOG_SECTION_FRAME_STYLESHEET = """
+	QFrame#DialogCard,
+	QFrame#AttachmentDropFrame {
+		background: #fff9f0;
+		border: 1px solid #dcc7a7;
+		border-radius: 14px;
+	}
+"""
+
+
 class CardDialog(QDialog):
 	"""Dialog for creating or editing a card."""
 
@@ -1521,12 +1537,45 @@ class CardDialog(QDialog):
 
 		self.start_date = OptionalDateField('Start Date', card.start_date if card else None)
 		self.end_date = OptionalDateField('End Date', card.end_date if card else None)
+		self.todo_list = PropagatingListWidget()
+		self.todo_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+		self.todo_list.setMinimumHeight(150)
+		self.todo_list.setEditTriggers(
+			QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.EditKeyPressed
+		)
+		self.todo_list.itemDoubleClicked.connect(self._edit_todo_item)
+		self.todo_list.itemSelectionChanged.connect(self._refresh_todo_controls)
+		self.todo_list.itemChanged.connect(lambda _item: self._refresh_todo_controls())
+		self.todo_entry = QLineEdit()
+		self.todo_entry.setPlaceholderText('Add a checklist item and press Enter')
+		self.todo_entry.returnPressed.connect(self.add_todo_item)
+		self.add_todo_button = QPushButton('Add Item')
+		self.add_todo_button.clicked.connect(self.add_todo_item)
+		self.remove_todo_button = QPushButton('Remove Selected')
+		self.remove_todo_button.clicked.connect(self.remove_selected_todo_item)
+		self.checklist_frame = QFrame()
+		self.checklist_frame.setObjectName('DialogCard')
+		self.checklist_frame.setStyleSheet(CARD_DIALOG_SECTION_FRAME_STYLESHEET)
+		checklist_layout = QVBoxLayout(self.checklist_frame)
+		checklist_layout.setContentsMargins(14, 14, 14, 14)
+		checklist_layout.setSpacing(10)
+		checklist_layout.addWidget(create_dialog_hint_label('Add optional checklist items. Tick items off as the card progresses.'))
+		checklist_layout.addWidget(self.todo_list)
+		todo_buttons = QWidget()
+		todo_button_layout = QHBoxLayout(todo_buttons)
+		todo_button_layout.setContentsMargins(0, 0, 0, 0)
+		todo_button_layout.setSpacing(8)
+		todo_button_layout.addWidget(self.todo_entry, 1)
+		todo_button_layout.addWidget(self.add_todo_button)
+		todo_button_layout.addWidget(self.remove_todo_button)
+		checklist_layout.addWidget(todo_buttons)
 		self.attachments_list = PropagatingListWidget()
 		self.attachments_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
 		self.attachments_list.setMinimumHeight(140)
 		self.attachments_list.itemDoubleClicked.connect(lambda _item: self.open_selected_attachment())
 
 		self.attachment_drop_frame = AttachmentDropFrame(self)
+		self.attachment_drop_frame.setStyleSheet(CARD_DIALOG_SECTION_FRAME_STYLESHEET)
 
 		drop_layout = QVBoxLayout(self.attachment_drop_frame)
 		drop_layout.setContentsMargins(14, 14, 14, 14)
@@ -1600,8 +1649,11 @@ class CardDialog(QDialog):
 		layout.addRow('', self.start_date)
 		layout.addRow('', self.end_date)
 		content_layout.addLayout(layout)
+		content_layout.addWidget(create_dialog_section_label('Checklist'))
+		content_layout.addWidget(self.checklist_frame)
 		content_layout.addWidget(create_dialog_section_label('Attachments'))
 		content_layout.addWidget(self.attachment_drop_frame)
+		self.refresh_todo_list()
 		self._set_attachment_drop_active(False)
 		self.refresh_attachments_list()
 
@@ -1610,12 +1662,8 @@ class CardDialog(QDialog):
 			subcards_frame = QFrame()
 			subcards_frame.setObjectName('DialogCard')
 			subcards_frame.setStyleSheet(
+				CARD_DIALOG_SECTION_FRAME_STYLESHEET +
 				"""
-				QFrame#DialogCard {
-					background: #fff9f0;
-					border: 1px solid #dcc7a7;
-					border-radius: 14px;
-				}
 				QLabel#SubcardsPanelTitle {
 					color: #3d2d20;
 					font-size: 11pt;
@@ -1733,17 +1781,97 @@ class CardDialog(QDialog):
 		buttons.rejected.connect(self.reject)
 		content_layout.addWidget(buttons)
 
+	def _append_todo_list_item(self, text: str, completed: bool = False, item_id: Optional[str] = None):
+		item = QListWidgetItem(text)
+		item.setFlags(
+			Qt.ItemFlag.ItemIsEnabled
+			| Qt.ItemFlag.ItemIsSelectable
+			| Qt.ItemFlag.ItemIsEditable
+			| Qt.ItemFlag.ItemIsUserCheckable
+		)
+		item.setCheckState(Qt.CheckState.Checked if completed else Qt.CheckState.Unchecked)
+		item.setData(Qt.ItemDataRole.UserRole, item_id)
+		self.todo_list.addItem(item)
+
+	def _selected_todo_item(self):
+		item = self.todo_list.currentItem()
+		if item is None:
+			return None
+		if not item.flags() & Qt.ItemFlag.ItemIsUserCheckable:
+			return None
+		return item
+
+	def _ensure_todo_placeholder(self):
+		if self.todo_list.count() > 0:
+			return
+		placeholder = QListWidgetItem('No checklist items yet.')
+		placeholder.setFlags(Qt.ItemFlag.NoItemFlags)
+		placeholder.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+		self.todo_list.addItem(placeholder)
+
+	def _clear_todo_placeholder(self):
+		if self.todo_list.count() != 1:
+			return
+		item = self.todo_list.item(0)
+		if item is not None and not item.flags() & Qt.ItemFlag.ItemIsUserCheckable:
+			self.todo_list.clear()
+
+	def refresh_todo_list(self):
+		self.todo_list.clear()
+		for todo_item in (self.card.todo_items if self.card else []):
+			self._append_todo_list_item(todo_item.text, todo_item.completed, todo_item.id)
+		self._ensure_todo_placeholder()
+		self._refresh_todo_controls()
+
+	def _refresh_todo_controls(self):
+		self.remove_todo_button.setEnabled(self._selected_todo_item() is not None)
+
+	def add_todo_item(self):
+		text = self.todo_entry.text().strip()
+		if not text:
+			return
+		self._clear_todo_placeholder()
+		self._append_todo_list_item(text)
+		self.todo_entry.clear()
+		self.todo_list.setCurrentRow(self.todo_list.count() - 1)
+		self._refresh_todo_controls()
+
+	def _edit_todo_item(self, item: QListWidgetItem):
+		if item.flags() & Qt.ItemFlag.ItemIsUserCheckable:
+			self.todo_list.editItem(item)
+
+	def remove_selected_todo_item(self):
+		item = self._selected_todo_item()
+		if item is None:
+			return
+		self.todo_list.takeItem(self.todo_list.row(item))
+		self._ensure_todo_placeholder()
+		self._refresh_todo_controls()
+
+	def _todo_values(self) -> List[Dict[str, object]]:
+		values: List[Dict[str, object]] = []
+		for index in range(self.todo_list.count()):
+			item = self.todo_list.item(index)
+			if not item.flags() & Qt.ItemFlag.ItemIsUserCheckable:
+				continue
+			values.append({
+				'id': item.data(Qt.ItemDataRole.UserRole),
+				'text': item.text().strip(),
+				'completed': item.checkState() == Qt.CheckState.Checked,
+			})
+		return values
+
 	def _supports_subcard_management(self) -> bool:
 		return self.card is not None and not self.card.parent_id
 
 	def _set_attachment_drop_active(self, active: bool):
-		border_color = '#3e7a5e' if active else '#d2ba97'
-		background = '#eef7f0' if active else '#fffaf2'
+		border_color = '#3e7a5e' if active else '#dcc7a7'
+		background = '#eef7f0' if active else '#fff9f0'
 		self.attachment_drop_frame.setStyleSheet(
 			f"""
 			QFrame#AttachmentDropFrame {{
 				background: {background};
-				border: 2px dashed {border_color};
+				border: 1px solid {border_color};
 				border-radius: 14px;
 			}}
 			QListWidget {{
@@ -2038,6 +2166,7 @@ class CardDialog(QDialog):
 				values['end_date'],
 				values['assignee'] or None,
 				values['tags'],
+				values['todo_items'],
 			)
 		except ValueError as error:
 			QMessageBox.warning(self, 'Add Subcard', str(error))
@@ -2071,6 +2200,7 @@ class CardDialog(QDialog):
 			color=values['color'],
 			tags=values['tags'],
 			card_type_id=values['card_type_id'],
+			todo_items=values['todo_items'],
 		)
 		if values['column_id'] != original_column_id:
 			self.board.move_card(subcard.id, values['column_id'])
@@ -2105,6 +2235,7 @@ class CardDialog(QDialog):
 			'assignee': self.assignee_edit.text().strip(),
 			'project': self.project_edit.currentText().strip(),
 			'tags': parse_tags(self.tags_edit.text()),
+			'todo_items': self._todo_values(),
 			'color': self.color_field.color(),
 			'card_type_id': self.card_type_combo.currentData(),
 			'start_date': self.start_date.value(),
@@ -2114,6 +2245,9 @@ class CardDialog(QDialog):
 	def accept(self):
 		if not self.title_edit.text().strip():
 			QMessageBox.warning(self, 'Missing Title', 'Card title is required.')
+			return
+		if any(not todo_item['text'] for todo_item in self._todo_values()):
+			QMessageBox.warning(self, 'Checklist Item Required', 'Checklist items cannot be blank.')
 			return
 		super().accept()
 

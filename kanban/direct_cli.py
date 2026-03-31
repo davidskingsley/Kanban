@@ -97,6 +97,7 @@ def add_direct_action_subcommands(subparsers: argparse._SubParsersAction):
     create_card.add_argument('--card-type', help='Card type id or exact card type name')
     create_card.add_argument('--assignee', help='Assignee name')
     create_card.add_argument('--tags', help='Comma-separated tag list')
+    create_card.add_argument('--todo', action='append', help='Checklist item text; prefix with [x] to create it completed')
     create_card.set_defaults(command='create-card')
 
     edit_card = subparsers.add_parser('edit-card', help='Edit an existing card without prompts')
@@ -119,6 +120,8 @@ def add_direct_action_subcommands(subparsers: argparse._SubParsersAction):
     edit_card.add_argument('--card-type', help='Updated card type id or exact name')
     edit_card.add_argument('--tags', help='Replacement comma-separated tag list')
     edit_card.add_argument('--clear-tags', action='store_true', help='Clear all tags')
+    edit_card.add_argument('--todo', action='append', help='Replacement checklist item text; prefix with [x] to mark completed')
+    edit_card.add_argument('--clear-todo-list', action='store_true', help='Clear the checklist for the card')
     edit_card.set_defaults(command='edit-card')
 
     add_subcard = subparsers.add_parser('add-subcard', help='Create a subcard without prompts')
@@ -134,6 +137,7 @@ def add_direct_action_subcommands(subparsers: argparse._SubParsersAction):
     add_subcard.add_argument('--card-type', help='Card type id or exact card type name')
     add_subcard.add_argument('--assignee', help='Assignee name')
     add_subcard.add_argument('--tags', help='Comma-separated tag list')
+    add_subcard.add_argument('--todo', action='append', help='Checklist item text; prefix with [x] to create it completed')
     add_subcard.set_defaults(command='add-subcard')
 
     move_card = subparsers.add_parser('move-card', help='Move a card to another column')
@@ -170,6 +174,37 @@ def add_direct_action_subcommands(subparsers: argparse._SubParsersAction):
     add_tag.add_argument('--card', required=True, help='Card id or exact card title')
     add_tag.add_argument('--tag', required=True, help='Tag to add')
     add_tag.set_defaults(command='add-tag')
+
+    add_todo_item = subparsers.add_parser('add-todo-item', help='Add a checklist item to a card')
+    add_todo_item.add_argument('--board', help='Board id or exact board name; omit to use the current board')
+    add_todo_item.add_argument('--card', required=True, help='Card id or exact card title')
+    add_todo_item.add_argument('--text', required=True, help='Checklist item text')
+    add_todo_item.add_argument('--completed', action='store_true', help='Create the checklist item as completed')
+    add_todo_item.set_defaults(command='add-todo-item')
+
+    check_todo_item = subparsers.add_parser('check-todo-item', help='Mark a checklist item as completed')
+    check_todo_item.add_argument('--board', help='Board id or exact board name; omit to use the current board')
+    check_todo_item.add_argument('--card', required=True, help='Card id or exact card title')
+    check_todo_item.add_argument('--item', required=True, help='Checklist item id or exact text')
+    check_todo_item.set_defaults(command='check-todo-item')
+
+    uncheck_todo_item = subparsers.add_parser('uncheck-todo-item', help='Mark a checklist item as not completed')
+    uncheck_todo_item.add_argument('--board', help='Board id or exact board name; omit to use the current board')
+    uncheck_todo_item.add_argument('--card', required=True, help='Card id or exact card title')
+    uncheck_todo_item.add_argument('--item', required=True, help='Checklist item id or exact text')
+    uncheck_todo_item.set_defaults(command='uncheck-todo-item')
+
+    toggle_todo_item = subparsers.add_parser('toggle-todo-item', help='Toggle the completed state of a checklist item')
+    toggle_todo_item.add_argument('--board', help='Board id or exact board name; omit to use the current board')
+    toggle_todo_item.add_argument('--card', required=True, help='Card id or exact card title')
+    toggle_todo_item.add_argument('--item', required=True, help='Checklist item id or exact text')
+    toggle_todo_item.set_defaults(command='toggle-todo-item')
+
+    remove_todo_item = subparsers.add_parser('remove-todo-item', help='Remove a checklist item from a card')
+    remove_todo_item.add_argument('--board', help='Board id or exact board name; omit to use the current board')
+    remove_todo_item.add_argument('--card', required=True, help='Card id or exact card title')
+    remove_todo_item.add_argument('--item', required=True, help='Checklist item id or exact text')
+    remove_todo_item.set_defaults(command='remove-todo-item')
 
     card_details = subparsers.add_parser('card-details', help='Show detailed information about a card')
     card_details.add_argument('--board', help='Board id or exact board name; omit to use the current board')
@@ -433,6 +468,7 @@ class DirectActionCLI:
         start_date = self._parse_date(args.start_date, 'start-date') if args.start_date else None
         end_date = self._parse_date(args.end_date, 'end-date') if args.end_date else None
         tags = self._parse_tags(args.tags)
+        todo_items = self._parse_todo_items(args.todo)
         priority = self._parse_priority(args.priority)
         card = board.create_card(
             args.title,
@@ -446,6 +482,7 @@ class DirectActionCLI:
             card_type_id=card_type_id,
             assignee=args.assignee,
             tags=tags,
+            todo_items=todo_items,
         )
         print(f"Created card '{card.title}' ({card.id}) on board '{board_info['name']}'.")
 
@@ -459,6 +496,7 @@ class DirectActionCLI:
         start_date = self._pick_optional_date(args.start_date, args.clear_start_date, 'start-date')
         end_date = self._pick_optional_date(args.end_date, args.clear_end_date, 'end-date')
         tags = self._pick_optional_tags(args.tags, args.clear_tags)
+        todo_items = self._pick_optional_todo_items(args.todo, args.clear_todo_list)
         card_type_id = self._resolve_card_type(board, args.card_type).id if args.card_type else UNSET
         priority = self._parse_priority(args.priority) if args.priority else None
 
@@ -488,6 +526,8 @@ class DirectActionCLI:
             board.last_used_card_type_id = card_type_id
         if tags is not UNSET:
             card.tags = list(dict.fromkeys(tags or []))
+        if todo_items is not UNSET:
+            card.todo_items = card._coerce_todo_items(todo_items)
 
         card.updated_at = datetime.now()
         board.save_board()
@@ -500,6 +540,7 @@ class DirectActionCLI:
         start_date = self._parse_date(args.start_date, 'start-date') if args.start_date else None
         end_date = self._parse_date(args.end_date, 'end-date') if args.end_date else None
         tags = self._parse_tags(args.tags)
+        todo_items = self._parse_todo_items(args.todo)
         priority = self._parse_priority(args.priority)
         child = board.create_subcard(
             parent.id,
@@ -513,6 +554,7 @@ class DirectActionCLI:
             end_date,
             args.assignee,
             tags,
+            todo_items,
         )
         print(f"Created subcard '{child.title}' ({child.id}) under '{parent.title}' on board '{board_info['name']}'.")
 
@@ -554,6 +596,48 @@ class DirectActionCLI:
         if not board.add_card_tag(card.id, args.tag):
             raise ValueError(f"Unable to add tag '{args.tag}' to card '{card.title}'.")
         print(f"Added tag '{args.tag}' to card '{card.title}' on board '{board_info['name']}'.")
+
+    def cmd_add_todo_item(self, args: argparse.Namespace):
+        _, board_info, board = self._load_board(args.board)
+        card = self._resolve_card(board, args.card)
+        todo_item = board.add_card_todo_item(card.id, args.text, completed=args.completed)
+        if todo_item is None:
+            raise ValueError(f"Unable to add a checklist item to card '{card.title}'.")
+        state = 'completed' if todo_item.completed else 'open'
+        print(
+            f"Added checklist item '{todo_item.text}' ({todo_item.id}) to card '{card.title}' "
+            f"on board '{board_info['name']}' as {state}."
+        )
+
+    def cmd_check_todo_item(self, args: argparse.Namespace):
+        self._set_todo_item_completed(args, True)
+
+    def cmd_uncheck_todo_item(self, args: argparse.Namespace):
+        self._set_todo_item_completed(args, False)
+
+    def cmd_toggle_todo_item(self, args: argparse.Namespace):
+        _, board_info, board = self._load_board(args.board)
+        card = self._resolve_card(board, args.card)
+        todo_item = self._resolve_todo_item(card, args.item)
+        updated = board.update_card_todo_item(card.id, todo_item.id, completed=not todo_item.completed)
+        if updated is None:
+            raise ValueError(f"Unable to toggle checklist item '{todo_item.text}' on card '{card.title}'.")
+        state = 'completed' if updated.completed else 'open'
+        print(
+            f"Toggled checklist item '{updated.text}' ({updated.id}) on card '{card.title}' "
+            f"on board '{board_info['name']}' to {state}."
+        )
+
+    def cmd_remove_todo_item(self, args: argparse.Namespace):
+        _, board_info, board = self._load_board(args.board)
+        card = self._resolve_card(board, args.card)
+        todo_item = self._resolve_todo_item(card, args.item)
+        if not board.delete_card_todo_item(card.id, todo_item.id):
+            raise ValueError(f"Unable to remove checklist item '{todo_item.text}' from card '{card.title}'.")
+        print(
+            f"Removed checklist item '{todo_item.text}' ({todo_item.id}) from card '{card.title}' "
+            f"on board '{board_info['name']}'."
+        )
 
     def cmd_card_details(self, args: argparse.Namespace):
         _, _, board = self._load_board(args.board)
@@ -780,6 +864,19 @@ class DirectActionCLI:
             raise ValueError(f"Multiple card types match '{identifier}'. Use a card type id instead.")
         raise ValueError(f"Card type '{identifier}' was not found.")
 
+    def _resolve_todo_item(self, card: Card, identifier: str):
+        for todo_item in card.todo_items:
+            if todo_item.id == identifier:
+                return todo_item
+
+        normalized = identifier.strip().lower()
+        matches = [todo_item for todo_item in card.todo_items if todo_item.text.strip().lower() == normalized]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise ValueError(f"Multiple checklist items match '{identifier}'. Use the checklist item id instead.")
+        raise ValueError(f"Checklist item '{identifier}' was not found on card '{card.title}'.")
+
     def _select_external_board(self, path: str, identifier: Optional[str]) -> Dict[str, object]:
         absolute_path = os.path.abspath(path)
         if os.path.isfile(absolute_path):
@@ -870,6 +967,14 @@ class DirectActionCLI:
         print(f"End Date: {card.end_date.isoformat() if card.end_date else '(none)'}")
         print(f"Color: {card.color or '(default)'}")
         print(f"Tags: {', '.join(card.tags) if card.tags else '(no tags)'}")
+        todo_completed, todo_total = card.get_todo_progress()
+        if todo_total:
+            print(f"Checklist: {todo_completed}/{todo_total} done")
+            for todo_item in card.todo_items:
+                tick = '[x]' if todo_item.completed else '[ ]'
+                print(f"  {tick} {todo_item.text} ({todo_item.id})")
+        else:
+            print('Checklist: (none)')
         parent_card = board.get_parent_card(card)
         if parent_card is not None:
             print(f"Parent Card: {parent_card.title}")
@@ -910,6 +1015,13 @@ class DirectActionCLI:
             return self._parse_tags(tags_text)
         return UNSET
 
+    def _pick_optional_todo_items(self, todo_values: Optional[Sequence[str]], clear: bool):
+        if clear:
+            return []
+        if todo_values is not None:
+            return self._parse_todo_items(todo_values)
+        return UNSET
+
     def _normalize_order_tokens(self, values: Sequence[str]) -> List[str]:
         if len(values) == 1 and ',' in values[0]:
             return [token.strip() for token in values[0].split(',') if token.strip()]
@@ -933,6 +1045,37 @@ class DirectActionCLI:
             if tag and tag not in tags:
                 tags.append(tag)
         return tags
+
+    def _parse_todo_items(self, values: Optional[Sequence[str]]) -> List[Dict[str, object]]:
+        items: List[Dict[str, object]] = []
+        for raw_value in values or []:
+            text = raw_value.strip()
+            if not text:
+                continue
+            completed = False
+            lowered = text.lower()
+            if lowered.startswith('[x]'):
+                completed = True
+                text = text[3:].strip()
+            elif lowered.startswith('[ ]'):
+                text = text[3:].strip()
+            if text:
+                items.append({'text': text, 'completed': completed})
+        return items
+
+    def _set_todo_item_completed(self, args: argparse.Namespace, completed: bool):
+        _, board_info, board = self._load_board(args.board)
+        card = self._resolve_card(board, args.card)
+        todo_item = self._resolve_todo_item(card, args.item)
+        updated = board.update_card_todo_item(card.id, todo_item.id, completed=completed)
+        if updated is None:
+            state_text = 'completed' if completed else 'open'
+            raise ValueError(f"Unable to mark checklist item '{todo_item.text}' as {state_text} on card '{card.title}'.")
+        state_text = 'completed' if updated.completed else 'open'
+        print(
+            f"Marked checklist item '{updated.text}' ({updated.id}) on card '{card.title}' "
+            f"on board '{board_info['name']}' as {state_text}."
+        )
 
     def _write_json(self, output_path: str, payload: Dict[str, object]):
         directory = os.path.dirname(os.path.abspath(output_path))

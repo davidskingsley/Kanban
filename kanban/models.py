@@ -85,6 +85,32 @@ class CardAttachment:
         )
 
 
+class CardTodoItem:
+    """Represents a checklist item attached to a card."""
+
+    def __init__(self, text: str, completed: bool = False, todo_id: str = None):
+        self.id = todo_id if todo_id else str(uuid.uuid4())
+        self.text = (text or '').strip()
+        self.completed = bool(completed)
+
+    def to_dict(self):
+        """Convert checklist item to dictionary for serialization."""
+        return {
+            'id': self.id,
+            'text': self.text,
+            'completed': self.completed,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        """Create checklist item from dictionary."""
+        return cls(
+            data.get('text', ''),
+            data.get('completed', False),
+            data.get('id'),
+        )
+
+
 ## @brief Represents a reusable board-level card type with optional presets.
 class CardType:
     """Represents a configurable card type with optional project and color presets."""
@@ -315,13 +341,14 @@ class Card:
         self.tags = []
         self.notes: List[CardNote] = []
         self.attachments: List[CardAttachment] = []
+        self.todo_items: List[CardTodoItem] = []
         self.start_date: Optional[date] = None
         self.end_date: Optional[date] = None
 
     def update(self, title: str = None, description: str = None,
              priority: Priority = None, assignee: str = None, project: str = None,
              start_date=UNSET, end_date=UNSET, parent_id: str = None, color=UNSET,
-             card_type_id=UNSET):
+               card_type_id=UNSET, todo_items=UNSET):
         """Update card properties."""
         if title is not None:
             self.title = title
@@ -343,7 +370,33 @@ class Card:
             self.color = color
         if card_type_id is not UNSET:
             self.card_type_id = card_type_id
+        if todo_items is not UNSET:
+            self.todo_items = self._coerce_todo_items(todo_items)
         self.updated_at = datetime.now()
+
+    @staticmethod
+    def _coerce_todo_items(todo_items) -> List[CardTodoItem]:
+        """Normalize checklist items from model objects, dicts, or plain text."""
+        normalized: List[CardTodoItem] = []
+        for todo_item in todo_items or []:
+            if isinstance(todo_item, CardTodoItem):
+                item = todo_item
+            elif isinstance(todo_item, dict):
+                item = CardTodoItem.from_dict(todo_item)
+            elif isinstance(todo_item, str):
+                item = CardTodoItem(todo_item)
+            else:
+                raise TypeError('todo_items must contain CardTodoItem, dict, or string values')
+
+            if item.text:
+                normalized.append(item)
+        return normalized
+
+    def get_todo_progress(self) -> tuple[int, int]:
+        """Return completed and total checklist counts for this card."""
+        total = len(self.todo_items)
+        completed = sum(1 for todo_item in self.todo_items if todo_item.completed)
+        return completed, total
 
     def has_past_end_date(self, today: Optional[date] = None) -> bool:
         """Return whether the card's end date is before today."""
@@ -446,6 +499,7 @@ class Card:
             'tags': self.tags,
             'notes': [note.to_dict() for note in self.notes],
             'attachments': [attachment.to_dict() for attachment in self.attachments],
+            'todo_items': [todo_item.to_dict() for todo_item in self.todo_items],
         }
     
     @classmethod
@@ -476,6 +530,7 @@ class Card:
         card.tags = data.get('tags', [])
         card.notes = [CardNote.from_dict(note_data) for note_data in data.get('notes', [])]
         card.attachments = [CardAttachment.from_dict(item) for item in data.get('attachments', [])]
+        card.todo_items = [CardTodoItem.from_dict(item) for item in data.get('todo_items', []) if item.get('text')]
         return card
     
     def __str__(self):
