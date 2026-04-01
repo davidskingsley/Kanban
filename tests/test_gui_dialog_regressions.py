@@ -227,6 +227,46 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(values['todo_items'][1]['text'], 'Share build with QA')
         self.assertTrue(values['todo_items'][1]['completed'])
 
+    def test_card_dialog_can_add_edit_and_delete_notes_for_existing_card(self):
+        self.board_manager.create_board('Card Notes Dialog Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        column_id = board.get_columns_ordered()[0].id
+        card = board.create_card('Notes Card', 'desc', Priority.MEDIUM, column_id)
+
+        dialog = CardDialog(board, card=card, parent=self.gui.window)
+
+        self.assertEqual(dialog.notes_list.count(), 1)
+        self.assertEqual(dialog.notes_list.item(0).text(), 'No notes added yet.')
+
+        dialog.note_entry.setPlainText('First release note')
+        dialog.save_note()
+
+        reloaded = board.find_card(card.id)
+        self.assertTrue(dialog.did_mutate_board)
+        self.assertEqual(len(reloaded.notes), 1)
+        self.assertEqual(reloaded.notes[0].text, 'First release note')
+
+        dialog.notes_list.setCurrentRow(0)
+        dialog.edit_selected_note()
+        self.assertEqual(dialog.note_entry.toPlainText(), 'First release note')
+
+        dialog.note_entry.setPlainText('Updated release note')
+        dialog.save_note()
+
+        reloaded = board.find_card(card.id)
+        self.assertEqual(len(reloaded.notes), 1)
+        self.assertEqual(reloaded.notes[0].text, 'Updated release note')
+
+        dialog.notes_list.setCurrentRow(0)
+        with patch('kanban.gui.dialogs.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes):
+            dialog.delete_selected_note()
+
+        reloaded = board.find_card(card.id)
+        self.assertEqual(reloaded.notes, [])
+        self.assertEqual(dialog.notes_list.count(), 1)
+        self.assertEqual(dialog.notes_list.item(0).text(), 'No notes added yet.')
+
     def test_card_dialog_uses_matching_section_borders_for_checklist_attachments_and_subcards(self):
         self.board_manager.create_board('Matching Section Borders Board')
         self.gui = MultiBoardGUI(self.board_manager)

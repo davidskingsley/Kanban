@@ -1810,6 +1810,7 @@ class CardDialog(QDialog):
 		self.card = card
 		self.parent_card = parent_card
 		self.did_mutate_board = False
+		self.editing_note_id: Optional[str] = None
 		self.subcards: List[object] = []
 		self.setWindowTitle('Edit Card' if card else ('Add Subcard' if parent_card else 'Create Card'))
 		self.resize(720, 700)
@@ -1921,6 +1922,43 @@ class CardDialog(QDialog):
 		attachment_button_layout.addStretch(1)
 		drop_layout.addWidget(attachment_buttons)
 
+		self.notes_list = PropagatingListWidget()
+		self.notes_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+		self.notes_list.setMinimumHeight(150)
+		self.notes_list.itemSelectionChanged.connect(self._refresh_note_controls)
+		self.notes_list.itemDoubleClicked.connect(lambda _item: self.edit_selected_note())
+		self.note_entry = PropagatingTextEdit()
+		self.note_entry.setPlaceholderText('Write a timestamped note for this card')
+		self.note_entry.setFixedHeight(100)
+		self.note_entry.textChanged.connect(self._refresh_note_controls)
+		self.add_note_button = QPushButton('Add Note')
+		self.add_note_button.clicked.connect(self.save_note)
+		self.edit_note_button = QPushButton('Load Selected')
+		self.edit_note_button.clicked.connect(self.edit_selected_note)
+		self.clear_note_button = QPushButton('Clear Editor')
+		self.clear_note_button.clicked.connect(self.clear_note_editor)
+		self.delete_note_button = QPushButton('Remove Selected')
+		self.delete_note_button.clicked.connect(self.delete_selected_note)
+		self.notes_frame = QFrame()
+		self.notes_frame.setObjectName('DialogCard')
+		self.notes_frame.setStyleSheet(CARD_DIALOG_SECTION_FRAME_STYLESHEET)
+		notes_layout = QVBoxLayout(self.notes_frame)
+		notes_layout.setContentsMargins(14, 14, 14, 14)
+		notes_layout.setSpacing(10)
+		notes_layout.addWidget(create_dialog_hint_label('Notes are timestamped and saved immediately to the card. Double-click a note to load it back into the editor.'))
+		notes_layout.addWidget(self.notes_list)
+		notes_layout.addWidget(self.note_entry)
+		note_buttons = QWidget()
+		note_button_layout = QHBoxLayout(note_buttons)
+		note_button_layout.setContentsMargins(0, 0, 0, 0)
+		note_button_layout.setSpacing(8)
+		note_button_layout.addWidget(self.add_note_button)
+		note_button_layout.addWidget(self.edit_note_button)
+		note_button_layout.addWidget(self.clear_note_button)
+		note_button_layout.addWidget(self.delete_note_button)
+		note_button_layout.addStretch(1)
+		notes_layout.addWidget(note_buttons)
+
 		self.card_type_combo = QComboBox()
 		for card_type in board.get_card_types_ordered():
 			self.card_type_combo.addItem(card_type.name, card_type.id)
@@ -1974,6 +2012,10 @@ class CardDialog(QDialog):
 		self.refresh_todo_list()
 		self._set_attachment_drop_active(False)
 		self.refresh_attachments_list()
+		if self.card is not None:
+			content_layout.addWidget(create_dialog_section_label('Notes'))
+			content_layout.addWidget(self.notes_frame)
+			self.refresh_notes_list()
 
 		if self._supports_subcard_management():
 			content_layout.addWidget(create_dialog_section_label('Subcards'))
@@ -2254,6 +2296,137 @@ class CardDialog(QDialog):
 		if item is None:
 			return None
 		return item.data(Qt.ItemDataRole.UserRole)
+
+	def _note_preview(self, text: str, limit: int = 120) -> str:
+		single_line = ' '.join((text or '').split())
+		if not single_line:
+			return '(empty note)'
+		if len(single_line) <= limit:
+			return single_line
+		return single_line[: limit - 3] + '...'
+
+	def refresh_notes_list(self, selected_note_id: Optional[str] = None):
+		if not hasattr(self, 'notes_list') or self.card is None:
+			return
+		self.notes_list.clear()
+		notes = sorted(self.card.notes, key=lambda note: note.created_at, reverse=True)
+		if not notes:
+			placeholder = QListWidgetItem('No notes added yet.')
+			placeholder.setFlags(Qt.ItemFlag.NoItemFlags)
+			placeholder.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+			self.notes_list.addItem(placeholder)
+			self._refresh_note_controls()
+			return
+		for note in notes:
+			created_label = note.created_at.strftime('%Y-%m-%d %H:%M')
+			item = QListWidgetItem(f'{created_label}\n{self._note_preview(note.text)}')
+			item.setData(Qt.ItemDataRole.UserRole, note.id)
+			item.setToolTip(note.text)
+			self.notes_list.addItem(item)
+			if selected_note_id and note.id == selected_note_id:
+				self.notes_list.setCurrentItem(item)
+		self._refresh_note_controls()
+
+	def _selected_note_id(self) -> Optional[str]:
+		if not hasattr(self, 'notes_list'):
+			return None
+		item = self.notes_list.currentItem()
+		if item is None:
+			return None
+		return item.data(Qt.ItemDataRole.UserRole)
+
+	def _selected_note(self):
+		note_id = self._selected_note_id()
+		if not note_id or self.card is None:
+			return None
+		for note in self.card.notes:
+			if note.id == note_id:
+				return note
+		return None
+
+	def _refresh_note_controls(self):
+		if not hasattr(self, 'notes_list'):
+			return
+		editable = self.card is not None and not self.board.is_read_only()
+		has_text = bool(self.note_entry.toPlainText().strip())
+		has_selection = self._selected_note() is not None
+		self.note_entry.setEnabled(editable)
+		self.add_note_button.setEnabled(editable and has_text)
+		self.add_note_button.setText('Update Note' if self.editing_note_id else 'Add Note')
+		self.edit_note_button.setEnabled(editable and has_selection)
+		self.clear_note_button.setEnabled(editable and (has_text or self.editing_note_id is not None))
+		self.delete_note_button.setEnabled(editable and has_selection)
+
+	def clear_note_editor(self):
+		if not hasattr(self, 'note_entry'):
+			return
+		self.editing_note_id = None
+		self.note_entry.clear()
+		if hasattr(self, 'notes_list'):
+			self.notes_list.clearSelection()
+		self._refresh_note_controls()
+
+	def edit_selected_note(self):
+		note = self._selected_note()
+		if note is None:
+			QMessageBox.information(self, 'No Note Selected', 'Select a note first.')
+			return
+		self.editing_note_id = note.id
+		self.note_entry.setPlainText(note.text)
+		self.note_entry.setFocus(Qt.FocusReason.TabFocusReason)
+		self._refresh_note_controls()
+
+	def save_note(self):
+		if self.card is None:
+			QMessageBox.information(self, 'Create Card First', 'Save the card before adding notes.')
+			return
+		if self.board.is_read_only():
+			QMessageBox.warning(self, 'Read Only Board', self.board.get_read_only_message())
+			return
+		text = self.note_entry.toPlainText().strip()
+		if not text:
+			return
+		if self.editing_note_id:
+			note = self.board.edit_card_note(self.card.id, self.editing_note_id, text)
+			if note is None:
+				QMessageBox.warning(self, 'Edit Note', 'Unable to update the selected note.')
+				return
+		else:
+			note = self.board.add_card_note(self.card.id, text)
+			if note is None:
+				QMessageBox.warning(self, 'Add Note', 'Unable to add the note to this card.')
+				return
+		self.card = self.board.find_card(self.card.id)
+		self.did_mutate_board = True
+		self.editing_note_id = None
+		self.note_entry.clear()
+		self.refresh_notes_list(selected_note_id=note.id)
+
+	def delete_selected_note(self):
+		if self.card is None:
+			return
+		if self.board.is_read_only():
+			QMessageBox.warning(self, 'Read Only Board', self.board.get_read_only_message())
+			return
+		note = self._selected_note()
+		if note is None:
+			QMessageBox.information(self, 'No Note Selected', 'Select a note first.')
+			return
+		result = QMessageBox.question(
+			self,
+			'Remove Note',
+			'Remove the selected note from this card?',
+			QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+		)
+		if result != QMessageBox.StandardButton.Yes:
+			return
+		if not self.board.delete_card_note(self.card.id, note.id):
+			QMessageBox.warning(self, 'Remove Note', 'Unable to remove the selected note.')
+			return
+		self.card = self.board.find_card(self.card.id)
+		self.did_mutate_board = True
+		self.clear_note_editor()
+		self.refresh_notes_list()
 
 	def add_attachments_via_picker(self):
 		if self.card is None:
