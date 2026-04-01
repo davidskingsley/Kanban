@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 	QVBoxLayout,
 	QWidget,
 )
+
 from ..board import KanbanBoard
 from ..models import CardType, CustomColumn, Priority, Project
 from ..storage import JSON_STORAGE_BACKEND, SQLITE_STORAGE_BACKEND
@@ -378,83 +379,6 @@ class AboutDialog(QDialog):
 		self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
 		self.button_box.accepted.connect(self.accept)
 		add_dialog_footer(self, self.button_box)
-
-
-class ArchivedCardsDialog(QDialog):
-
-	def _restore_selected_card(self):
-		card = self._selected_card()
-		if card is None:
-			QMessageBox.information(self, 'Restore Archived Card', 'Select an archived card first.')
-			return
-		# Extra safety: double-check card is archived and not deleted
-		if not card.is_archived():
-			QMessageBox.warning(self, 'Restore Archived Card', 'This card is not archived.')
-			return
-		if not self.board.find_card(card.id, include_archived=True):
-			QMessageBox.critical(self, 'Restore Archived Card', 'This card no longer exists.')
-			return
-		if self.board.restore_archived_card(card.id):
-			self._populate_table()
-			QMessageBox.information(self, 'Restore Archived Card', f"Restored '{card.title}'.")
-		else:
-			QMessageBox.warning(self, 'Restore Archived Card', f"Unable to restore '{card.title}'.")
-
-	def _delete_selected_card(self):
-		card = self._selected_card()
-		if card is None:
-			QMessageBox.information(self, 'Delete Archived Card', 'Select an archived card first.')
-			return
-		result = QMessageBox.question(
-			self,
-			'Delete Archived Card',
-			f"Permanently delete archived card '{card.title}'?",
-			QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-		)
-		if result != QMessageBox.StandardButton.Yes:
-			return
-		if self.board.delete_card(card.id):
-			self._populate_table()
-			QMessageBox.information(self, 'Delete Archived Card', f"Deleted '{card.title}'.")
-		else:
-			QMessageBox.warning(self, 'Delete Archived Card', f"Unable to delete '{card.title}'.")
-		self.shortcuts_label = QLabel(
-			'<b>Ctrl+N</b> New board<br>'
-			'<b>Ctrl+Shift+O</b> Load board from folder<br>'
-			'<b>Ctrl+Shift+S</b> Export current board<br>'
-			'<b>Ctrl+O</b> Switch board<br>'
-			'<b>F5</b> Refresh boards<br>'
-			'<b>Ctrl+R</b> Rename current board<br>'
-			'<b>Ctrl+Shift+D</b> Delete current board<br>'
-			'<b>Ctrl+Shift+T</b> Due Date View<br>'
-			'<b>Ctrl+I</b> Board statistics<br>'
-			'<b>Ctrl+Shift+N</b> New card<br>'
-			'<b>Ctrl+Shift+J</b> Add subcard to the selected card<br>'
-			'<b>Ctrl+E</b> Edit selected card<br>'
-			'<b>Ctrl+M</b> Move selected card<br>'
-			'<b>Ctrl+D</b> Delete selected card<br>'
-			'<b>Ctrl+Shift+K</b> Archive done cards<br>'
-			'<b>Ctrl+Shift+C</b> New column<br>'
-			'<b>Ctrl+Alt+R</b> Edit selected column<br>'
-			'<b>Ctrl+Alt+O</b> Reorder columns<br>'
-			'<b>Ctrl+Z</b> Undo current board action<br>'
-			'<b>Ctrl+Y</b> Redo current board action<br>'
-			'<b>Ctrl+Shift+Z</b> Undo board-management action<br>'
-			'<b>Ctrl+Shift+Y</b> Redo board-management action<br>'
-			'<b>F1</b> About Kanban'
-		)
-		self.shortcuts_label.setObjectName('AboutShortcuts')
-		self.shortcuts_label.setWordWrap(True)
-		self.shortcuts_label.setTextFormat(Qt.TextFormat.RichText)
-		self.shortcuts_label.setStyleSheet('color: #4f4134;')
-		content_layout.addWidget(self.shortcuts_label)
-
-		content_layout.addWidget(create_dialog_hint_label('Tip: click a column title or card first to make the relevant card and column actions available.'))
-
-		self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
-		self.button_box.accepted.connect(self.accept)
-		add_dialog_footer(self, self.button_box)
-
 
 def build_command_line_guide_html() -> str:
 	"""Return the HTML shown in the command-line guide dialog."""
