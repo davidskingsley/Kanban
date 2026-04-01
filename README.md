@@ -83,7 +83,7 @@ Run `uv run python main.py --help` for launcher help, or `uv run python main.py 
 The direct CLI covers the same major workflows as the interactive CLI, but without prompts.
 
 - Board management: `list-boards`, `create-board`, `switch-board`, `rename-board`, `delete-board`, `board-stats`, `export-board`, `export-all-boards`, `import-boards`, `load-board-from-folder`, `undo-board-management`, `redo-board-management`, `show-board`
-- Card actions: `create-card`, `edit-card`, `add-subcard`, `move-card`, `delete-card`, `search-cards`, `filter-priority`, `filter-assignee`, `add-tag`, `add-todo-item`, `check-todo-item`, `uncheck-todo-item`, `toggle-todo-item`, `remove-todo-item`, `card-details`, `clear-done-cards`
+- Card actions: `create-card`, `edit-card`, `add-subcard`, `move-card`, `delete-card`, `search-cards`, `filter-priority`, `filter-assignee`, `add-tag`, `add-todo-item`, `check-todo-item`, `uncheck-todo-item`, `toggle-todo-item`, `remove-todo-item`, `card-details`, `archive-done-cards`, `list-archived-cards`, `restore-archived-card`, `delete-archived-card`
 - Column actions: `create-column`, `rename-column`, `delete-column`, `reorder-columns`, `change-column-color`, `edit-column-flags`, `list-columns`
 - Card type and maintenance actions: `list-card-types`, `create-card-type`, `edit-card-type`, `delete-card-type`, `create-backup`, `cleanup-orphaned-attachments`, `undo-current-board`, `redo-current-board`
 
@@ -187,7 +187,7 @@ Board-management capabilities include:
 
 Board-level capabilities include:
 
-- card creation, editing, moving, deleting, searching, filtering, tag management, checklist entry, card details, clear-done, and subcards
+- card creation, editing, moving, deleting, searching, filtering, tag management, checklist entry, card details, archive-done, archived-card management, and subcards
 - column creation, rename, deletion, reorder, recolor, flag editing, and listing
 - card type listing, creation, editing, and deletion
 - maintenance actions such as backup creation, orphaned attachment cleanup, undo, and redo
@@ -214,7 +214,7 @@ Board-level capabilities include:
 | `Ctrl+E` | Edit selected card |
 | `Ctrl+M` | Move selected card |
 | `Ctrl+D` | Delete selected card |
-| `Ctrl+Shift+K` | Clear done cards |
+| `Ctrl+Shift+K` | Archive done cards |
 | `Ctrl+Shift+C` | Create column |
 | `Ctrl+Alt+R` | Edit selected column |
 | `Ctrl+Alt+D` | Delete selected column |

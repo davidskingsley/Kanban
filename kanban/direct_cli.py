@@ -211,10 +211,25 @@ def add_direct_action_subcommands(subparsers: argparse._SubParsersAction):
     card_details.add_argument('--card', required=True, help='Card id or exact card title')
     card_details.set_defaults(command='card-details')
 
-    clear_done = subparsers.add_parser('clear-done-cards', help='Delete all cards from completed columns')
-    clear_done.add_argument('--board', help='Board id or exact board name; omit to use the current board')
-    clear_done.add_argument('--force', action='store_true', help='Confirm deletion of done cards')
-    clear_done.set_defaults(command='clear-done-cards')
+    archive_done = subparsers.add_parser('archive-done-cards', help='Archive all active cards from completed columns')
+    archive_done.add_argument('--board', help='Board id or exact board name; omit to use the current board')
+    archive_done.add_argument('--force', action='store_true', help='Confirm archiving done cards')
+    archive_done.set_defaults(command='archive-done-cards')
+
+    list_archived = subparsers.add_parser('list-archived-cards', help='List archived cards for a board')
+    list_archived.add_argument('--board', help='Board id or exact board name; omit to use the current board')
+    list_archived.set_defaults(command='list-archived-cards')
+
+    restore_archived = subparsers.add_parser('restore-archived-card', help='Restore an archived card')
+    restore_archived.add_argument('--board', help='Board id or exact board name; omit to use the current board')
+    restore_archived.add_argument('--card', required=True, help='Archived card id or exact card title')
+    restore_archived.set_defaults(command='restore-archived-card')
+
+    delete_archived = subparsers.add_parser('delete-archived-card', help='Permanently delete an archived card')
+    delete_archived.add_argument('--board', help='Board id or exact board name; omit to use the current board')
+    delete_archived.add_argument('--card', required=True, help='Archived card id or exact card title')
+    delete_archived.add_argument('--force', action='store_true', help='Confirm permanent deletion of the archived card')
+    delete_archived.set_defaults(command='delete-archived-card')
 
     create_column = subparsers.add_parser('create-column', help='Create a new column')
     create_column.add_argument('--board', help='Board id or exact board name; omit to use the current board')
@@ -644,11 +659,39 @@ class DirectActionCLI:
         card = self._resolve_card(board, args.card)
         self._print_card_details(board, card)
 
-    def cmd_clear_done_cards(self, args: argparse.Namespace):
-        self._require_force(args.force, 'Clearing done cards requires --force.')
+    def cmd_archive_done_cards(self, args: argparse.Namespace):
+        self._require_force(args.force, 'Archiving done cards requires --force.')
         _, board_info, board = self._load_board(args.board)
-        cleared = board.clear_done_cards()
-        print(f"Cleared {cleared} done card(s) from board '{board_info['name']}'.")
+        archived = board.archive_done_cards()
+        print(f"Archived {archived} done card(s) from board '{board_info['name']}'.")
+
+    def cmd_list_archived_cards(self, args: argparse.Namespace):
+        _, _, board = self._load_board(args.board)
+        cards = board.get_archived_cards()
+        if not cards:
+            print('No archived cards found.')
+            return
+        for card in cards:
+            archived_label = card.archived_at.isoformat(sep=' ', timespec='seconds') if card.archived_at else '(unknown)'
+            print(
+                f"{card.title} ({card.id}) "
+                f"[{board.get_card_location_label(card)}] archived={archived_label} assignee={card.assignee or '(none)'}"
+            )
+
+    def cmd_restore_archived_card(self, args: argparse.Namespace):
+        _, board_info, board = self._load_board(args.board)
+        card = self._resolve_card(board, args.card, include_archived=True, archived_only=True)
+        if not board.restore_archived_card(card.id):
+            raise ValueError(f"Unable to restore archived card '{card.title}'.")
+        print(f"Restored archived card '{card.title}' on board '{board_info['name']}'.")
+
+    def cmd_delete_archived_card(self, args: argparse.Namespace):
+        self._require_force(args.force, 'Deleting an archived card requires --force.')
+        _, board_info, board = self._load_board(args.board)
+        card = self._resolve_card(board, args.card, include_archived=True, archived_only=True)
+        if not board.delete_card(card.id):
+            raise ValueError(f"Unable to delete archived card '{card.title}'.")
+        print(f"Deleted archived card '{card.title}' from board '{board_info['name']}'.")
 
     def cmd_create_column(self, args: argparse.Namespace):
         _, board_info, board = self._load_board(args.board)
@@ -712,7 +755,7 @@ class DirectActionCLI:
             if column.is_completed:
                 markers.append('done')
             marker_text = f" [{' | '.join(markers)}]" if markers else ''
-            print(f"{column.name} ({column.id}){marker_text} color={column.color} cards={len(column.cards)}")
+            print(f"{column.name} ({column.id}){marker_text} color={column.color} cards={len(board.get_column_cards(column))}")
 
     def cmd_list_card_types(self, args: argparse.Namespace):
         _, _, board = self._load_board(args.board)
@@ -838,17 +881,31 @@ class DirectActionCLI:
             raise ValueError(f"Multiple columns match '{identifier}'. Use a column id instead.")
         raise ValueError(f"Column '{identifier}' was not found.")
 
-    def _resolve_card(self, board: KanbanBoard, identifier: str) -> Card:
-        card = board.find_card(identifier)
+    def _resolve_card(
+        self,
+        board: KanbanBoard,
+        identifier: str,
+        include_archived: bool = False,
+        archived_only: bool = False,
+    ) -> Card:
+        card = board.find_card(identifier, include_archived=include_archived)
         if card is not None:
+            if archived_only and not card.is_archived():
+                raise ValueError(f"Card '{identifier}' is not archived.")
             return card
 
         normalized = identifier.strip().lower()
-        matches = [candidate for candidate in board.get_all_cards() if candidate.title.strip().lower() == normalized]
+        matches = [
+            candidate
+            for candidate in board.get_all_cards(include_archived=include_archived)
+            if candidate.title.strip().lower() == normalized and (not archived_only or candidate.is_archived())
+        ]
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
             raise ValueError(f"Multiple cards match '{identifier}'. Use a card id instead.")
+        if archived_only:
+            raise ValueError(f"Archived card '{identifier}' was not found.")
         raise ValueError(f"Card '{identifier}' was not found.")
 
     def _resolve_card_type(self, board: KanbanBoard, identifier: str) -> CardType:
@@ -965,6 +1022,7 @@ class DirectActionCLI:
         print(f"Assignee: {card.assignee or '(unassigned)'}")
         print(f"Start Date: {card.start_date.isoformat() if card.start_date else '(none)'}")
         print(f"End Date: {card.end_date.isoformat() if card.end_date else '(none)'}")
+        print(f"Archived: {card.archived_at.isoformat(sep=' ', timespec='seconds') if card.archived_at else '(active)'}")
         print(f"Color: {card.color or '(default)'}")
         print(f"Tags: {', '.join(card.tags) if card.tags else '(no tags)'}")
         todo_completed, todo_total = card.get_todo_progress()

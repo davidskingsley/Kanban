@@ -761,23 +761,42 @@ class KanbanBoard:
             return True
         return False
 
-    def get_all_cards(self) -> List[Card]:
+    def get_all_cards(self, include_archived: bool = False) -> List[Card]:
         """Return every card currently on the board."""
         cards = []
         columns = self.custom_columns.values() if self.use_custom_columns else self.columns.values()
         for column in columns:
-            cards.extend(list(column))
+            for card in column:
+                if include_archived or not card.is_archived():
+                    cards.append(card)
         return cards
+
+    def get_column_cards(self, column: Union[str, CustomColumn], include_archived: bool = False) -> List[Card]:
+        """Return cards for one column, optionally including archived cards."""
+        target_column = column if isinstance(column, CustomColumn) else self.get_column_by_id(column)
+        if target_column is None:
+            return []
+        if include_archived:
+            return list(target_column.cards)
+        return [card for card in target_column.cards if not card.is_archived()]
+
+    def get_archived_cards(self) -> List[Card]:
+        """Return archived cards ordered by archive timestamp then title."""
+        cards = [card for card in self.get_all_cards(include_archived=True) if card.is_archived()]
+        return sorted(cards, key=lambda card: ((card.archived_at or card.updated_at), card.title.lower()))
 
     def get_parent_card(self, card: Card) -> Optional[Card]:
         """Return the direct parent card for the given card, if any."""
         if not card.parent_id:
             return None
-        return self.find_card(card.parent_id)
+        parent = self.find_card(card.parent_id)
+        if parent is not None:
+            return parent
+        return self.find_card(card.parent_id, include_archived=True)
 
-    def get_subcards(self, parent_id: str) -> List[Card]:
+    def get_subcards(self, parent_id: str, include_archived: bool = False) -> List[Card]:
         """Return the direct child cards of the given parent card."""
-        return [card for card in self.get_all_cards() if card.parent_id == parent_id]
+        return [card for card in self.get_all_cards(include_archived=include_archived) if card.parent_id == parent_id]
 
     def get_card_attachment(self, card_id: str, attachment_id: str) -> Optional[CardAttachment]:
         """Return a specific attachment linked to a card."""
@@ -1006,7 +1025,7 @@ class KanbanBoard:
     
     def _delete_card_internal(self, card_id: str) -> bool:
         """Delete a card without capturing a second undo snapshot."""
-        for subcard in list(self.get_subcards(card_id)):
+        for subcard in list(self.get_subcards(card_id, include_archived=True)):
             self._delete_card_internal(subcard.id)
 
         if self.use_custom_columns:
@@ -1025,7 +1044,7 @@ class KanbanBoard:
         """Delete a card from the board."""
         self._ensure_writable()
 
-        card = self.find_card(card_id)
+        card = self.find_card(card_id, include_archived=True)
         if not card:
             return False
 
@@ -1103,21 +1122,56 @@ class KanbanBoard:
         self._undo_stack.pop()
         return False
     
-    def find_card(self, card_id: str) -> Optional[Card]:
+    def find_card(self, card_id: str, include_archived: bool = False) -> Optional[Card]:
         """Find a card by its ID."""
         if self.use_custom_columns:
             for column in self.custom_columns.values():
                 card = column.get_card(card_id)
-                if card:
+                if card and (include_archived or not card.is_archived()):
                     return card
         else:
             for column in self.columns.values():
                 card = column.get_card(card_id)
-                if card:
+                if card and (include_archived or not card.is_archived()):
                     return card
         return None
+
+    def _set_card_archived_state(self, card: Card, archived: bool):
+        """Apply archived or restored state recursively to a card tree."""
+        for subcard in self.get_subcards(card.id, include_archived=True):
+            self._set_card_archived_state(subcard, archived)
+        if archived:
+            card.archive()
+        else:
+            card.restore()
+
+    def archive_card(self, card_id: str) -> bool:
+        """Archive a card and its child cards."""
+        self._ensure_writable()
+
+        card = self.find_card(card_id, include_archived=True)
+        if not card or card.is_archived():
+            return False
+
+        self._push_undo_state(f"Archive card '{card.title}'")
+        self._set_card_archived_state(card, archived=True)
+        self.save_board()
+        return True
+
+    def restore_archived_card(self, card_id: str) -> bool:
+        """Restore an archived card and its child cards."""
+        self._ensure_writable()
+
+        card = self.find_card(card_id, include_archived=True)
+        if not card or not card.is_archived():
+            return False
+
+        self._push_undo_state(f"Restore archived card '{card.title}'")
+        self._set_card_archived_state(card, archived=False)
+        self.save_board()
+        return True
     
-    def search_cards(self, query: str) -> List[Card]:
+    def search_cards(self, query: str, include_archived: bool = False) -> List[Card]:
         """Search for cards by title, description, project, tags, and child-card titles."""
         results = []
         query_lower = query.lower()
@@ -1126,33 +1180,39 @@ class KanbanBoard:
         
         for column in columns:
             for card in column:
+                if card.is_archived() and not include_archived:
+                    continue
                 if (query_lower in card.title.lower() or 
                     query_lower in card.description.lower() or
                     (card.project and query_lower in card.project.lower()) or
-                    any(query_lower in subcard.title.lower() for subcard in self.get_subcards(card.id)) or
+                    any(query_lower in subcard.title.lower() for subcard in self.get_subcards(card.id, include_archived=include_archived)) or
                     any(query_lower in tag.lower() for tag in card.tags)):
                     results.append(card)
         
         return results
     
-    def get_cards_by_priority(self, priority: Priority) -> List[Card]:
+    def get_cards_by_priority(self, priority: Priority, include_archived: bool = False) -> List[Card]:
         """Get all cards with a specific priority."""
         results = []
         columns = self.custom_columns.values() if self.use_custom_columns else self.columns.values()
         
         for column in columns:
             for card in column:
+                if card.is_archived() and not include_archived:
+                    continue
                 if card.priority == priority:
                     results.append(card)
         return results
     
-    def get_cards_by_assignee(self, assignee: str) -> List[Card]:
+    def get_cards_by_assignee(self, assignee: str, include_archived: bool = False) -> List[Card]:
         """Get all cards assigned to a specific person."""
         results = []
         columns = self.custom_columns.values() if self.use_custom_columns else self.columns.values()
         
         for column in columns:
             for card in column:
+                if card.is_archived() and not include_archived:
+                    continue
                 if card.assignee and card.assignee.lower() == assignee.lower():
                     results.append(card)
         return results
@@ -1160,8 +1220,8 @@ class KanbanBoard:
     def get_board_stats(self) -> Dict:
         """Get statistics about the board."""
         if self.use_custom_columns:
-            total_cards = sum(len(column) for column in self.custom_columns.values())
-            column_stats = {column.name: len(column) for column in self.custom_columns.values()}
+            total_cards = sum(len(self.get_column_cards(column)) for column in self.custom_columns.values())
+            column_stats = {column.name: len(self.get_column_cards(column)) for column in self.custom_columns.values()}
         else:
             total_cards = sum(len(column) for column in self.columns.values())
             column_stats = {
@@ -1176,33 +1236,52 @@ class KanbanBoard:
         
         for column in columns:
             for card in column:
+                if card.is_archived():
+                    continue
                 priority_counts[card.priority] += 1
+
+        done_cards = sum(1 for card in self.get_all_cards() if self.is_card_done(card))
         
         stats = {
             'total_cards': total_cards,
+            'done': done_cards,
             'priority_counts': priority_counts,
-            'use_custom_columns': self.use_custom_columns
+            'use_custom_columns': self.use_custom_columns,
+            'archived_cards': len(self.get_archived_cards()),
         }
         stats.update(column_stats)
         
         return stats
     
-    def clear_done_cards(self) -> int:
-        """Remove all cards from done columns."""
+    def archive_done_cards(self) -> int:
+        """Archive all active cards currently in completed columns."""
         self._ensure_writable()
 
         if not self.custom_columns:
             return 0
 
         completed_columns = [column for column in self.custom_columns.values() if column.is_completed]
-        card_count = sum(len(column.cards) for column in completed_columns)
-        if card_count == 0:
-            return 0
-        self._push_undo_state("Clear done cards")
+        cards_to_archive: List[Card] = []
+        seen_ids: Set[str] = set()
         for column in completed_columns:
-            column.cards.clear()
+            for card in self.get_column_cards(column):
+                if card.id in seen_ids:
+                    continue
+                cards_to_archive.append(card)
+                seen_ids.add(card.id)
+
+        if not cards_to_archive:
+            return 0
+
+        self._push_undo_state("Archive done cards")
+        for card in cards_to_archive:
+            self._set_card_archived_state(card, archived=True)
         self.save_board()
-        return card_count
+        return len(cards_to_archive)
+
+    def clear_done_cards(self) -> int:
+        """Backward-compatible alias for archiving cards in completed columns."""
+        return self.archive_done_cards()
     
     def load_board(self):
         """Load board data from storage."""

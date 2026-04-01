@@ -152,7 +152,7 @@ class BoardStatisticsDialog(QDialog):
 		completed = sum(1 for card in cards if board.is_card_done(card))
 		overdue = sum(1 for card in cards if card.end_date and card.end_date < date.today() and not board.is_card_done(card))
 		due_soon = sum(1 for card in cards if card.end_date and 0 <= (card.end_date - date.today()).days <= 7 and not board.is_card_done(card))
-		column_counts = {column.name: len(column.cards) for column in board.get_columns_ordered()}
+		column_counts = {column.name: len(board.get_column_cards(column)) for column in board.get_columns_ordered()}
 		priority_counts = {
 			priority_label(priority): sum(1 for card in cards if card.priority == priority)
 			for priority in Priority

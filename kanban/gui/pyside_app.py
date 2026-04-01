@@ -58,6 +58,7 @@ from .common import (
 )
 from .dialogs import (
     AboutDialog,
+    ArchivedCardsDialog,
     BoardDialog,
     CardDialog,
     CardTypeDialog,
@@ -255,7 +256,8 @@ class MultiBoardGUI:
         card_menu.addAction(self._action('Move Selected Card', self.move_selected_card, 'Ctrl+M'))
         card_menu.addAction(self._action('Delete Selected Card', self.delete_selected_card, 'Ctrl+D'))
         card_menu.addSection('Cleanup')
-        card_menu.addAction(self._action('Clear Done Cards', self.clear_done_cards, 'Ctrl+Shift+K'))
+        card_menu.addAction(self._action('Archive Done Cards', self.archive_done_cards, 'Ctrl+Shift+K'))
+        card_menu.addAction(self._action('Manage Archived Cards', self.manage_archived_cards))
         card_menu.addSection('Card Types')
         card_menu.addAction(self._action('View Card Types', self.show_card_types_browser))
         card_menu.addAction(self._action('Create Card Type', self.create_card_type))
@@ -803,8 +805,9 @@ class MultiBoardGUI:
         layout.addWidget(header_row)
 
         def populate_cards(search_text: str):
+            active_cards = board.get_column_cards(column)
             filtered_cards = [
-                card for card in self._filter_cards(board, list(column.cards))
+                card for card in self._filter_cards(board, active_cards)
                 if self._card_matches_column_search(card, search_text)
             ]
             list_widget.clear()
@@ -828,8 +831,8 @@ class MultiBoardGUI:
                 if card.id == self.selected_card_id:
                     item.setSelected(True)
             count_text = f"{len(filtered_cards)} card" + ('' if len(filtered_cards) == 1 else 's')
-            if search_text.strip() or (self._filters_active() and len(filtered_cards) != len(column.cards)):
-                count_text = f"{len(filtered_cards)} of {len(column.cards)} cards"
+            if search_text.strip() or (self._filters_active() and len(filtered_cards) != len(active_cards)):
+                count_text = f"{len(filtered_cards)} of {len(active_cards)} cards"
             card_count_label.setText(count_text)
             QTimer.singleShot(0, lambda lw=list_widget: lw.refresh_card_sizes() if isValid(lw) else None)
 
@@ -1742,13 +1745,37 @@ class MultiBoardGUI:
                 self.refresh_ui()
                 return
 
-    def clear_done_cards(self):
-        """Clear cards from completed columns."""
+    def archive_done_cards(self):
+        """Archive cards from completed columns."""
         board = self.ensure_writable_board()
         if board is None:
             return
-        removed_count = board.clear_done_cards()
-        QMessageBox.information(self.window, 'Clear Done Cards', f'Removed {removed_count} cards.')
+        done_count = board.get_board_stats().get('done', 0)
+        if done_count == 0:
+            QMessageBox.information(self.window, 'Archive Done Cards', 'No active cards in completed columns to archive.')
+            return
+        result = QMessageBox.question(
+            self.window,
+            'Archive Done Cards',
+            f'Archive {done_count} card(s) from completed columns?',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if result != QMessageBox.StandardButton.Yes:
+            return
+        archived_count = board.archive_done_cards()
+        self.selected_card_id = None
+        QMessageBox.information(self.window, 'Archive Done Cards', f'Archived {archived_count} card(s).')
+        self.refresh_ui()
+
+    def manage_archived_cards(self):
+        """Open the archived-card browser for the current board."""
+        board = self.ensure_board()
+        if board is None:
+            return
+        dialog = ArchivedCardsDialog(board, self._current_board_name(), self.window)
+        dialog.exec()
+        if self.selected_card_id and board.find_card(self.selected_card_id) is None:
+            self.selected_card_id = None
         self.refresh_ui()
 
     def _selected_column(self) -> Optional[CustomColumn]:

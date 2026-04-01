@@ -104,29 +104,30 @@ class BoardCLI:
         print("7. Filter by assignee")
         print("8. Add tag to card")
         print("9. Card details")
-        print("10. Clear done cards")
-        print("11. Add subcard")
+        print("10. Archive done cards")
+        print("11. Manage archived cards")
+        print("12. Add subcard")
         
         print("\nCOLUMN ACTIONS:")
-        print("12. Create new column")
-        print("13. Rename column")
-        print("14. Delete column")
-        print("15. Reorder columns")
-        print("16. Change column color")
-        print("17. Edit column flags")
-        print("18. View columns")
+        print("13. Create new column")
+        print("14. Rename column")
+        print("15. Delete column")
+        print("16. Reorder columns")
+        print("17. Change column color")
+        print("18. Edit column flags")
+        print("19. View columns")
 
         print("\nCARD TYPE ACTIONS:")
-        print("19. View card types")
-        print("20. Create card type")
-        print("21. Edit card type")
-        print("22. Delete card type")
+        print("20. View card types")
+        print("21. Create card type")
+        print("22. Edit card type")
+        print("23. Delete card type")
         
         print("\nOTHER:")
-        print("23. Create backup")
-        print("24. Clean up orphaned attachment files")
-        print("25. Undo last change")
-        print("26. Redo last undone change")
+        print("24. Create backup")
+        print("25. Clean up orphaned attachment files")
+        print("26. Undo last change")
+        print("27. Redo last undone change")
         print("0. Exit")
         print()
     
@@ -142,23 +143,24 @@ class BoardCLI:
             '7': self.filter_by_assignee,
             '8': self.add_tag_to_card,
             '9': self.show_card_details,
-            '10': self.clear_done_cards,
-            '11': self.add_subcard,
-            '12': self.create_column,
-            '13': self.rename_column,
-            '14': self.delete_column,
-            '15': self.reorder_columns,
-            '16': self.change_column_color,
-            '17': self.edit_column_flags,
-            '18': self.view_columns,
-            '19': self.view_card_types,
-            '20': self.create_card_type,
-            '21': self.edit_card_type,
-            '22': self.delete_card_type,
-            '23': self.create_backup,
-            '24': self.cleanup_orphaned_attachment_files,
-            '25': self.undo_last_change,
-            '26': self.redo_last_change,
+            '10': self.archive_done_cards,
+            '11': self.manage_archived_cards,
+            '12': self.add_subcard,
+            '13': self.create_column,
+            '14': self.rename_column,
+            '15': self.delete_column,
+            '16': self.reorder_columns,
+            '17': self.change_column_color,
+            '18': self.edit_column_flags,
+            '19': self.view_columns,
+            '20': self.view_card_types,
+            '21': self.create_card_type,
+            '22': self.edit_card_type,
+            '23': self.delete_card_type,
+            '24': self.create_backup,
+            '25': self.cleanup_orphaned_attachment_files,
+            '26': self.undo_last_change,
+            '27': self.redo_last_change,
             '0': self.exit_app
         }
         
@@ -671,27 +673,102 @@ class BoardCLI:
         print(f"Created: {card.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"Updated: {card.updated_at.strftime('%Y-%m-%d %H:%M:%S')}")
     
-    def clear_done_cards(self):
-        """Clear all cards from the Done column."""
+    def archive_done_cards(self):
+        """Archive all active cards from completed columns."""
         if not self.ensure_board_writable():
             return
 
-        print("\n--- CLEAR DONE CARDS ---")
+        print("\n--- ARCHIVE DONE CARDS ---")
         stats = self.board.get_board_stats()
         done_count = stats['done']
         
         if done_count == 0:
-            print("No cards in Done column to clear.")
+            print("No active cards in completed columns to archive.")
             return
         
-        print(f"This will delete {done_count} card(s) from the Done column.")
+        print(f"This will archive {done_count} card(s) from completed columns.")
         confirm = input("Are you sure? (y/N): ").strip().lower()
         
         if confirm == 'y':
-            cleared = self.board.clear_done_cards()
-            print(f"✅ Cleared {cleared} card(s) from Done column!")
+            archived = self.board.archive_done_cards()
+            print(f"✅ Archived {archived} card(s) from completed columns!")
         else:
             print("Operation cancelled.")
+
+    def manage_archived_cards(self):
+        """List, restore, and permanently delete archived cards."""
+        if not self.ensure_board_writable():
+            return
+
+        while True:
+            archived_cards = self.board.get_archived_cards()
+            print("\n--- MANAGE ARCHIVED CARDS ---")
+            if not archived_cards:
+                print("No archived cards found.")
+                return
+
+            for index, card in enumerate(archived_cards, 1):
+                archived_label = card.archived_at.strftime('%Y-%m-%d %H:%M') if card.archived_at else 'unknown'
+                print(f"{index}. [{self.board.get_card_location_label(card)}] {card.title} (archived {archived_label})")
+
+            print("\nActions:")
+            print("1. View archived card details")
+            print("2. Restore archived card")
+            print("3. Delete archived card permanently")
+            print("0. Back")
+
+            action = input("Choose action: ").strip()
+            if action == '0':
+                return
+
+            card_id = self.select_card(archived_only=True)
+            if not card_id:
+                continue
+
+            card = self.board.find_card(card_id, include_archived=True)
+            if card is None or not card.is_archived():
+                print("Archived card not found!")
+                continue
+
+            if action == '1':
+                self._print_archived_card_details(card)
+            elif action == '2':
+                if self.board.restore_archived_card(card.id):
+                    print(f"✅ Restored '{card.title}'.")
+                else:
+                    print("❌ Failed to restore archived card!")
+            elif action == '3':
+                confirm = input(f"Permanently delete archived card '{card.title}'? (y/N): ").strip().lower()
+                if confirm == 'y':
+                    if self.board.delete_card(card.id):
+                        print(f"✅ Deleted archived card '{card.title}'.")
+                    else:
+                        print("❌ Failed to delete archived card!")
+                else:
+                    print("Deletion cancelled.")
+            else:
+                print("Invalid choice. Please try again.")
+
+    def _print_archived_card_details(self, card):
+        """Print details for an archived card."""
+        print("\n🗄️ Archived Card Details:")
+        print(f"ID: {card.id}")
+        print(f"Title: {card.title}")
+        print(f"Column: {self.board.get_card_location_label(card)}")
+        print(f"Archived: {card.archived_at.strftime('%Y-%m-%d %H:%M:%S') if card.archived_at else 'unknown'}")
+        print(f"Description: {card.description or '(no description)'}")
+        print(f"Priority: {card.priority.value}")
+        print(f"Assignee: {card.assignee or '(unassigned)'}")
+        print(f"Project: {card.project or '(none)'}")
+        print(f"Tags: {', '.join(card.tags) if card.tags else '(no tags)'}")
+        todo_completed, todo_total = card.get_todo_progress()
+        if todo_total:
+            print(f"Checklist: {todo_completed}/{todo_total} done")
+            for todo_item in card.todo_items:
+                tick = '[x]' if todo_item.completed else '[ ]'
+                print(f"  {tick} {todo_item.text}")
+        else:
+            print("Checklist: (none)")
     
     def create_backup(self):
         """Create a backup of the board data."""
@@ -880,13 +957,15 @@ class BoardCLI:
         print("Invalid selection!")
         return False
     
-    def select_card(self, top_level_only: bool = False) -> Optional[str]:
+    def select_card(self, top_level_only: bool = False, archived_only: bool = False) -> Optional[str]:
         """Helper method to select a card from the board."""
         # Show all cards with indices
         all_cards = []
         
         for column in self.board.get_columns_ordered():
-            for card in column:
+            for card in self.board.get_column_cards(column, include_archived=archived_only):
+                if archived_only and not card.is_archived():
+                    continue
                 if top_level_only and card.parent_id:
                     continue
                 all_cards.append((card, column.name))
@@ -898,7 +977,8 @@ class BoardCLI:
         print("\nAvailable cards:")
         for i, (card, column_name) in enumerate(all_cards, 1):
             parent_info = " <subcard>" if card.parent_id else ""
-            print(f"{i}. [{column_name}] {card.title}{parent_info}")
+            archive_info = " <archived>" if card.is_archived() else ""
+            print(f"{i}. [{column_name}] {card.title}{parent_info}{archive_info}")
         
         try:
             choice = int(input(f"Select card (1-{len(all_cards)}): "))
@@ -1206,12 +1286,16 @@ class BoardCLI:
             print(f"   Position: {column.position}")
             print(f"   Completed column: {'yes' if getattr(column, 'is_completed', False) else 'no'}")
             print(f"   Add-card column: {'yes' if getattr(column, 'can_add_card', False) else 'no'}")
-            print(f"   Cards: {len(column)} cards")
+            active_cards = self.board.get_column_cards(column)
+            archived_cards = [card for card in self.board.get_column_cards(column, include_archived=True) if card.is_archived()]
+            print(f"   Cards: {len(active_cards)} active")
+            if archived_cards:
+                print(f"   Archived: {len(archived_cards)}")
             print(f"   Created: {column.created_at.strftime('%Y-%m-%d %H:%M')}")
-            if column.cards:
+            if active_cards:
                 print("   Sample cards:")
-                for j, card in enumerate(column.cards[:3], 1):
+                for j, card in enumerate(active_cards[:3], 1):
                     print(f"     {j}. {card}")
-                if len(column.cards) > 3:
-                    print(f"     ... and {len(column.cards) - 3} more")
+                if len(active_cards) > 3:
+                    print(f"     ... and {len(active_cards) - 3} more")
             print()

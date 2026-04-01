@@ -186,6 +186,67 @@ class DirectCliRegressionTests(unittest.TestCase):
         self.assertIn('[x] Follow-up task', detail_output)
         self.assertNotIn('Initial task', detail_output)
 
+    def test_direct_cli_can_archive_restore_and_delete_archived_cards(self):
+        self.invoke_direct(['create-board', '--name', 'Archive Automation'])
+
+        manager = BoardManager(self.temp_dir)
+        try:
+            board_info = next(board for board in manager.get_board_list() if board['name'] == 'Archive Automation')
+            manager.switch_board(board_info['id'])
+            board = manager.get_current_board()
+            done_column_id = next(column.id for column in board.get_columns_ordered() if column.is_completed)
+        finally:
+            manager.close()
+
+        self.invoke_direct([
+            'create-card',
+            '--board', 'Archive Automation',
+            '--title', 'Ship archive flow',
+            '--column', done_column_id,
+            '--assignee', 'Alex',
+        ])
+
+        exit_code, output = self.invoke_direct([
+            'archive-done-cards',
+            '--board', 'Archive Automation',
+            '--force',
+        ])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Archived 1 done card(s) from board 'Archive Automation'.", output)
+
+        _, archived_output = self.invoke_direct(['list-archived-cards', '--board', 'Archive Automation'])
+        self.assertIn('Ship archive flow', archived_output)
+        self.assertIn('archived=', archived_output)
+
+        exit_code, output = self.invoke_direct([
+            'restore-archived-card',
+            '--board', 'Archive Automation',
+            '--card', 'Ship archive flow',
+        ])
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Restored archived card 'Ship archive flow' on board 'Archive Automation'.", output)
+
+        _, board_output = self.invoke_direct(['show-board', '--board', 'Archive Automation'])
+        self.assertIn('Ship archive flow', board_output)
+
+        self.invoke_direct([
+            'archive-done-cards',
+            '--board', 'Archive Automation',
+            '--force',
+        ])
+        exit_code, output = self.invoke_direct([
+            'delete-archived-card',
+            '--board', 'Archive Automation',
+            '--card', 'Ship archive flow',
+            '--force',
+        ])
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Deleted archived card 'Ship archive flow' from board 'Archive Automation'.", output)
+
+        _, archived_output = self.invoke_direct(['list-archived-cards', '--board', 'Archive Automation'])
+        self.assertIn('No archived cards found.', archived_output)
+
     def test_edit_card_can_clear_optional_fields_directly(self):
         self.invoke_direct(['create-board', '--name', 'Automation Board'])
         self.invoke_direct([

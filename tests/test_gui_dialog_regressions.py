@@ -26,8 +26,10 @@ from PySide6.QtWidgets import (
 from gui_test_case import GuiTestCase
 from kanban.gui.board_statistics import BoardStatisticsDialog
 from kanban.gui.common import WINDOW_STYLE
+from kanban.gui.dialogs import ArchivedCardInfoDialog
 from kanban.gui.pyside_app import (
     AboutDialog,
+    ArchivedCardsDialog,
     BoardDialog,
     CardDialog,
     CardTile,
@@ -388,6 +390,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIn('Ctrl+Shift+J', dialog.shortcuts_label.text())
         self.assertIn('Ctrl+Shift+O', dialog.shortcuts_label.text())
         self.assertIn('Ctrl+Shift+Z', dialog.shortcuts_label.text())
+        self.assertIn('Archive done cards', dialog.shortcuts_label.text())
         self.assertIn('Undo current board action', dialog.shortcuts_label.text())
         self.assertTrue(dialog.findChildren(QScrollArea, 'DialogScrollArea'))
         self.assertIs(dialog.button_box.parentWidget(), dialog)
@@ -404,6 +407,8 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIn('manage checklists', guide_text)
         self.assertIn('add-subcard', guide_text)
         self.assertIn('card-details', guide_text)
+        self.assertIn('archive done cards', guide_text)
+        self.assertIn('manage archived cards', guide_text)
         self.assertIn('Open current board', guide_text)
         self.assertIn('YYYY-MM-DD', guide_text)
         self.assertIn('SQLite3 backend', guide_text)
@@ -431,6 +436,8 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIn('create-card', guide_text)
         self.assertIn('add-todo-item [--board BOARD] --card CARD --text TEXT [--completed]', guide_text)
         self.assertIn('toggle-todo-item [--board BOARD] --card CARD --item ITEM', guide_text)
+        self.assertIn('archive-done-cards [--board BOARD] --force', guide_text)
+        self.assertIn('list-archived-cards [--board BOARD]', guide_text)
         self.assertIn('card-details prints checklist item ids', guide_text)
         self.assertIn('About and Command Line Guide dialogs', guide_text)
         self.assertIn('edit-column-flags', guide_text)
@@ -444,7 +451,54 @@ class GuiDialogRegressionTests(GuiTestCase):
         QApplication.processEvents()
         self.assertGreater(dialog.direct_action_help.verticalScrollBar().maximum(), 0)
         dialog.close()
+
+    def test_archived_cards_dialog_lists_and_restores_archived_cards(self):
+        self.board_manager.create_board('Archived Dialog Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        done_column_id = next(column.id for column in board.get_columns_ordered() if column.is_completed)
+        card = board.create_card('Archive Candidate', 'desc', Priority.HIGH, done_column_id)
+        board.archive_done_cards()
+
+        dialog = ArchivedCardsDialog(board, 'Archived Dialog Board', parent=self.gui.window)
+        self.assertEqual(dialog.table.rowCount(), 1)
+        self.assertIn('hidden from normal board views', dialog.summary_label.text())
+        dialog.table.setCurrentCell(0, 0)
+
+        with patch('kanban.gui.dialogs.QMessageBox.information') as information_mock:
+            dialog._restore_selected_card()
+
+        self.assertIsNotNone(board.find_card(card.id))
+        self.assertEqual(dialog.table.rowCount(), 0)
+        information_mock.assert_called_once()
         self.assertIs(dialog.button_box.parentWidget(), dialog)
+
+    def test_archived_card_info_dialog_uses_styled_shell_and_sections(self):
+        self.board_manager.create_board('Archived Info Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        done_column_id = next(column.id for column in board.get_columns_ordered() if column.is_completed)
+        card = board.create_card('Archived Snapshot', 'Investigate the failed sync before restoring.', Priority.CRITICAL, done_column_id)
+        card.assignee = 'Taylor'
+        card.project = 'Stability'
+        card.tags = ['incident', 'sync']
+        board.archive_done_cards()
+
+        archived_card = board.find_card(card.id, include_archived=True)
+        dialog = ArchivedCardInfoDialog(archived_card, board.get_card_location_label(archived_card), parent=self.gui.window)
+
+        self.assertEqual(dialog.objectName(), 'StandardDialog')
+        self.assertEqual(dialog.findChild(QLabel, 'DialogTitle').text(), 'Archived Snapshot')
+        self.assertFalse(dialog.findChildren(QScrollArea, 'DialogScrollArea'))
+
+        badge_text = {label.text() for label in dialog.findChildren(QLabel, 'ArchivedInfoBadge')}
+        self.assertIn('Archived', badge_text)
+        self.assertIn('Critical Priority', badge_text)
+        self.assertIn('Checklist 0/0', badge_text)
+
+        description = dialog.findChild(QTextBrowser, 'ArchivedInfoDescription')
+        self.assertIsNotNone(description)
+        self.assertEqual(description.toPlainText(), 'Investigate the failed sync before restoring.')
 
     def test_board_summary_moves_to_title_bar(self):
         self.board_manager.create_board('Title Summary Board')

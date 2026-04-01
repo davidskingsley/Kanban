@@ -344,6 +344,7 @@ class Card:
         self.todo_items: List[CardTodoItem] = []
         self.start_date: Optional[date] = None
         self.end_date: Optional[date] = None
+        self.archived_at: Optional[datetime] = None
 
     def update(self, title: str = None, description: str = None,
              priority: Priority = None, assignee: str = None, project: str = None,
@@ -373,6 +374,21 @@ class Card:
         if todo_items is not UNSET:
             self.todo_items = self._coerce_todo_items(todo_items)
         self.updated_at = datetime.now()
+
+    def archive(self):
+        """Mark the card as archived."""
+        now = datetime.now()
+        self.archived_at = now
+        self.updated_at = now
+
+    def restore(self):
+        """Mark the card as active again."""
+        self.archived_at = None
+        self.updated_at = datetime.now()
+
+    def is_archived(self) -> bool:
+        """Return whether the card is archived."""
+        return self.archived_at is not None
 
     @staticmethod
     def _coerce_todo_items(todo_items) -> List[CardTodoItem]:
@@ -500,6 +516,7 @@ class Card:
             'notes': [note.to_dict() for note in self.notes],
             'attachments': [attachment.to_dict() for attachment in self.attachments],
             'todo_items': [todo_item.to_dict() for todo_item in self.todo_items],
+            'archived_at': self.archived_at.isoformat() if self.archived_at else None,
         }
     
     @classmethod
@@ -531,6 +548,7 @@ class Card:
         card.notes = [CardNote.from_dict(note_data) for note_data in data.get('notes', [])]
         card.attachments = [CardAttachment.from_dict(item) for item in data.get('attachments', [])]
         card.todo_items = [CardTodoItem.from_dict(item) for item in data.get('todo_items', []) if item.get('text')]
+        card.archived_at = datetime.fromisoformat(data['archived_at']) if data.get('archived_at') else None
         return card
     
     def __str__(self):

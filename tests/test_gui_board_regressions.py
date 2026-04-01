@@ -6,7 +6,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 from PySide6.QtCore import QPoint, QPointF, QSize, Qt
 from PySide6.QtGui import QPixmap, QWheelEvent
-from PySide6.QtWidgets import QListWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QListWidgetItem, QMessageBox, QVBoxLayout, QWidget
 
 from gui_test_case import GuiTestCase
 from kanban.board_manager import BoardManager
@@ -277,6 +277,37 @@ class GuiBoardRegressionTests(GuiTestCase):
         file_menu = menu_actions[0].menu()
         file_action_texts = [action.text().replace('&', '') for action in file_menu.actions()]
         self.assertIn('Exit', file_action_texts)
+
+    def test_cards_menu_exposes_archive_management_actions(self):
+        self.board_manager.create_board('Archive Menu Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+
+        cards_action = next(action for action in self.gui.window.menuBar().actions() if action.text().replace('&', '') == 'Cards')
+        cards_menu = cards_action.menu()
+        card_action_texts = [action.text().replace('&', '') for action in cards_menu.actions() if action.text()]
+
+        self.assertIn('Archive Done Cards', card_action_texts)
+        self.assertIn('Manage Archived Cards', card_action_texts)
+
+    def test_gui_archive_done_cards_moves_cards_out_of_active_board_view(self):
+        self.board_manager.create_board('Archive Done GUI Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        done_column_id = next(column.id for column in board.get_columns_ordered() if column.is_completed)
+        card = board.create_card('Archive Me', 'completed work', Priority.MEDIUM, done_column_id)
+        self.gui.selected_card_id = card.id
+
+        with patch('kanban.gui.pyside_app.QMessageBox.question', return_value=QMessageBox.StandardButton.Yes), patch(
+            'kanban.gui.pyside_app.QMessageBox.information'
+        ) as information_mock:
+            self.gui.archive_done_cards()
+
+        self.assertIsNone(board.find_card(card.id))
+        archived = board.find_card(card.id, include_archived=True)
+        self.assertIsNotNone(archived)
+        self.assertTrue(archived.is_archived())
+        self.assertIsNone(self.gui.selected_card_id)
+        information_mock.assert_called_once()
 
     def test_export_current_board_writes_standalone_board_json(self):
         self.board_manager.create_board('Exportable Board')
