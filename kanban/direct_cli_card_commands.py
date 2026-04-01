@@ -196,6 +196,42 @@ class DirectCliCardCommandsMixin:
         card = self._resolve_card(board, args.card)
         self._print_card_details(board, card)
 
+    def cmd_list_notes(self, args: argparse.Namespace):
+        _, _, board = self._load_board(args.board)
+        card = self._resolve_card(board, args.card)
+        self._print_card_notes(card, include_full_text=True)
+
+    def cmd_add_note(self, args: argparse.Namespace):
+        _, board_info, board = self._load_board(args.board)
+        card = self._resolve_card(board, args.card)
+        note = board.add_card_note(card.id, args.text)
+        if note is None:
+            raise ValueError(f"Unable to add a note to card '{card.title}'.")
+        print(
+            f"Added note ({note.id}) to card '{card.title}' on board '{board_info['name']}'."
+        )
+
+    def cmd_edit_note(self, args: argparse.Namespace):
+        _, board_info, board = self._load_board(args.board)
+        card = self._resolve_card(board, args.card)
+        note = self._resolve_note(card, args.note)
+        updated = board.edit_card_note(card.id, note.id, args.text)
+        if updated is None:
+            raise ValueError(f"Unable to edit note '{note.id}' on card '{card.title}'.")
+        print(
+            f"Updated note ({updated.id}) on card '{card.title}' on board '{board_info['name']}'."
+        )
+
+    def cmd_delete_note(self, args: argparse.Namespace):
+        _, board_info, board = self._load_board(args.board)
+        card = self._resolve_card(board, args.card)
+        note = self._resolve_note(card, args.note)
+        if not board.delete_card_note(card.id, note.id):
+            raise ValueError(f"Unable to delete note '{note.id}' from card '{card.title}'.")
+        print(
+            f"Deleted note ({note.id}) from card '{card.title}' on board '{board_info['name']}'."
+        )
+
     def cmd_archive_done_cards(self, args: argparse.Namespace):
         self._require_force(args.force, 'Archiving done cards requires --force.')
         _, board_info, board = self._load_board(args.board)

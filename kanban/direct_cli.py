@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+from typing import Any
 
 from .board_manager import BoardManager
 from .direct_cli_board_commands import DirectCliBoardCommandsMixin
@@ -13,7 +14,7 @@ from .direct_cli_structure_commands import DirectCliStructureCommandsMixin
 from .direct_cli_support import DirectCliSupportMixin
 
 
-def add_direct_action_subcommands(subparsers: argparse._SubParsersAction):
+def add_direct_action_subcommands(subparsers: Any) -> None:
     """Register non-interactive direct-action subcommands on an argparse parser."""
     list_boards = subparsers.add_parser('list-boards', help='List all registered boards')
     list_boards.set_defaults(command='list-boards')
@@ -208,6 +209,30 @@ def add_direct_action_subcommands(subparsers: argparse._SubParsersAction):
     card_details.add_argument('--board', help='Board id or exact board name; omit to use the current board')
     card_details.add_argument('--card', required=True, help='Card id or exact card title')
     card_details.set_defaults(command='card-details')
+
+    list_notes = subparsers.add_parser('list-notes', help='List notes recorded on a card')
+    list_notes.add_argument('--board', help='Board id or exact board name; omit to use the current board')
+    list_notes.add_argument('--card', required=True, help='Card id or exact card title')
+    list_notes.set_defaults(command='list-notes')
+
+    add_note = subparsers.add_parser('add-note', help='Add a note to a card')
+    add_note.add_argument('--board', help='Board id or exact board name; omit to use the current board')
+    add_note.add_argument('--card', required=True, help='Card id or exact card title')
+    add_note.add_argument('--text', required=True, help='Note text')
+    add_note.set_defaults(command='add-note')
+
+    edit_note = subparsers.add_parser('edit-note', help='Edit an existing note on a card')
+    edit_note.add_argument('--board', help='Board id or exact board name; omit to use the current board')
+    edit_note.add_argument('--card', required=True, help='Card id or exact card title')
+    edit_note.add_argument('--note', required=True, help='Note id or exact note text')
+    edit_note.add_argument('--text', required=True, help='Replacement note text')
+    edit_note.set_defaults(command='edit-note')
+
+    delete_note = subparsers.add_parser('delete-note', help='Delete a note from a card')
+    delete_note.add_argument('--board', help='Board id or exact board name; omit to use the current board')
+    delete_note.add_argument('--card', required=True, help='Card id or exact card title')
+    delete_note.add_argument('--note', required=True, help='Note id or exact note text')
+    delete_note.set_defaults(command='delete-note')
 
     archive_done = subparsers.add_parser('archive-done-cards', help='Archive all active cards from completed columns')
     archive_done.add_argument('--board', help='Board id or exact board name; omit to use the current board')

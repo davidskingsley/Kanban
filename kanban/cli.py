@@ -9,6 +9,9 @@ from .board import KanbanBoard
 from .models import Priority
 
 
+EMPTY_NOTE_LABEL = '(empty note)'
+
+
 ## @brief Provide menu-driven access to a selected board from the multi-board CLI.
 class BoardCLI:
     """Command line interface for an individual board."""
@@ -44,6 +47,13 @@ class BoardCLI:
             if text:
                 items.append({'text': text, 'completed': completed})
         return items
+
+    def note_preview(self, text: str, limit: int = 80) -> str:
+        """Return a compact single-line note preview for CLI listings."""
+        preview = ' '.join((text or '').split()) or EMPTY_NOTE_LABEL
+        if len(preview) <= limit:
+            return preview
+        return preview[: limit - 3] + '...'
     
     def run(self):
         """Main CLI loop."""
@@ -104,30 +114,31 @@ class BoardCLI:
         print("7. Filter by assignee")
         print("8. Add tag to card")
         print("9. Card details")
-        print("10. Archive done cards")
-        print("11. Manage archived cards")
-        print("12. Add subcard")
+        print("10. Manage card notes")
+        print("11. Archive done cards")
+        print("12. Manage archived cards")
+        print("13. Add subcard")
         
         print("\nCOLUMN ACTIONS:")
-        print("13. Create new column")
-        print("14. Rename column")
-        print("15. Delete column")
-        print("16. Reorder columns")
-        print("17. Change column color")
-        print("18. Edit column flags")
-        print("19. View columns")
+        print("14. Create new column")
+        print("15. Rename column")
+        print("16. Delete column")
+        print("17. Reorder columns")
+        print("18. Change column color")
+        print("19. Edit column flags")
+        print("20. View columns")
 
         print("\nCARD TYPE ACTIONS:")
-        print("20. View card types")
-        print("21. Create card type")
-        print("22. Edit card type")
-        print("23. Delete card type")
+        print("21. View card types")
+        print("22. Create card type")
+        print("23. Edit card type")
+        print("24. Delete card type")
         
         print("\nOTHER:")
-        print("24. Create backup")
-        print("25. Clean up orphaned attachment files")
-        print("26. Undo last change")
-        print("27. Redo last undone change")
+        print("25. Create backup")
+        print("26. Clean up orphaned attachment files")
+        print("27. Undo last change")
+        print("28. Redo last undone change")
         print("0. Exit")
         print()
     
@@ -143,24 +154,25 @@ class BoardCLI:
             '7': self.filter_by_assignee,
             '8': self.add_tag_to_card,
             '9': self.show_card_details,
-            '10': self.archive_done_cards,
-            '11': self.manage_archived_cards,
-            '12': self.add_subcard,
-            '13': self.create_column,
-            '14': self.rename_column,
-            '15': self.delete_column,
-            '16': self.reorder_columns,
-            '17': self.change_column_color,
-            '18': self.edit_column_flags,
-            '19': self.view_columns,
-            '20': self.view_card_types,
-            '21': self.create_card_type,
-            '22': self.edit_card_type,
-            '23': self.delete_card_type,
-            '24': self.create_backup,
-            '25': self.cleanup_orphaned_attachment_files,
-            '26': self.undo_last_change,
-            '27': self.redo_last_change,
+            '10': self.manage_card_notes,
+            '11': self.archive_done_cards,
+            '12': self.manage_archived_cards,
+            '13': self.add_subcard,
+            '14': self.create_column,
+            '15': self.rename_column,
+            '16': self.delete_column,
+            '17': self.reorder_columns,
+            '18': self.change_column_color,
+            '19': self.edit_column_flags,
+            '20': self.view_columns,
+            '21': self.view_card_types,
+            '22': self.create_card_type,
+            '23': self.edit_card_type,
+            '24': self.delete_card_type,
+            '25': self.create_backup,
+            '26': self.cleanup_orphaned_attachment_files,
+            '27': self.undo_last_change,
+            '28': self.redo_last_change,
             '0': self.exit_app
         }
         
@@ -658,6 +670,13 @@ class BoardCLI:
                 print(f"  {tick} {todo_item.text}")
         else:
             print("Checklist: (none)")
+        if card.notes:
+            print(f"Notes: {len(card.notes)}")
+            for note in sorted(card.notes, key=lambda item: item.created_at, reverse=True):
+                created_label = note.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                print(f"  - {created_label}: {self.note_preview(note.text)}")
+        else:
+            print("Notes: (none)")
 
         parent_card = self.board.get_parent_card(card)
         if parent_card:
@@ -672,6 +691,140 @@ class BoardCLI:
 
         print(f"Created: {card.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"Updated: {card.updated_at.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    def manage_card_notes(self):
+        """View, add, edit, and delete notes recorded on a card."""
+        print("\n--- MANAGE CARD NOTES ---")
+        card_id = self.select_card()
+        if not card_id:
+            return
+
+        while True:
+            card = self.board.find_card(card_id)
+            if card is None:
+                print("Card not found!")
+                return
+
+            print(f"\nNotes for: {card.title}")
+            if card.notes:
+                for index, note in enumerate(sorted(card.notes, key=lambda item: item.created_at, reverse=True), 1):
+                    created_label = note.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                    print(f"{index}. {created_label} | {self.note_preview(note.text)}")
+            else:
+                print("No notes added yet.")
+
+            print("\nActions:")
+            print("1. View note")
+            print("2. Add note")
+            print("3. Edit note")
+            print("4. Delete note")
+            print("0. Back")
+
+            action = input("Choose action: ").strip()
+            if action == '0':
+                return
+
+            if action == '1':
+                note = self.select_note(card)
+                if note is not None:
+                    self._print_note(note)
+                continue
+
+            if action == '2':
+                if not self.ensure_board_writable():
+                    continue
+                note_text = self.prompt_note_text('Enter note text. Finish with a blank line:')
+                if not note_text:
+                    print('Note creation cancelled.')
+                    continue
+                note = self.board.add_card_note(card.id, note_text)
+                if note is None:
+                    print('❌ Failed to add note!')
+                else:
+                    print('✅ Note added successfully!')
+                continue
+
+            if action == '3':
+                if not self.ensure_board_writable():
+                    continue
+                note = self.select_note(card)
+                if note is None:
+                    continue
+                note_text = self.prompt_note_text('Enter replacement note text. Finish with a blank line:', existing_text=note.text)
+                if not note_text:
+                    print('Note update cancelled.')
+                    continue
+                updated = self.board.edit_card_note(card.id, note.id, note_text)
+                if updated is None:
+                    print('❌ Failed to update note!')
+                else:
+                    print('✅ Note updated successfully!')
+                continue
+
+            if action == '4':
+                if not self.ensure_board_writable():
+                    continue
+                note = self.select_note(card)
+                if note is None:
+                    continue
+                confirm = input('Delete this note? (y/N): ').strip().lower()
+                if confirm != 'y':
+                    print('Deletion cancelled.')
+                    continue
+                if self.board.delete_card_note(card.id, note.id):
+                    print('✅ Note deleted successfully!')
+                else:
+                    print('❌ Failed to delete note!')
+                continue
+
+            print('Invalid choice. Please try again.')
+
+    def prompt_note_text(self, prompt: str, existing_text: Optional[str] = None) -> Optional[str]:
+        """Prompt for note text, allowing multi-line input until a blank line is entered."""
+        print(prompt)
+        if existing_text is not None:
+            print('Current note text:')
+            for line in (existing_text.splitlines() or [EMPTY_NOTE_LABEL]):
+                print(f'  {line}')
+        print('(Press Enter on a blank line to finish.)')
+        lines: List[str] = []
+        while True:
+            line = input()
+            if line == '':
+                break
+            lines.append(line)
+        note_text = '\n'.join(lines).strip()
+        return note_text or None
+
+    def select_note(self, card) -> Optional[object]:
+        """Prompt the user to select a note from a card."""
+        ordered_notes = sorted(card.notes, key=lambda item: item.created_at, reverse=True)
+        if not ordered_notes:
+            print('No notes available!')
+            return None
+
+        print('\nAvailable notes:')
+        for index, note in enumerate(ordered_notes, 1):
+            created_label = note.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            print(f"{index}. {created_label} | {self.note_preview(note.text)}")
+
+        try:
+            choice = int(input(f"Select note (1-{len(ordered_notes)}): "))
+            if 1 <= choice <= len(ordered_notes):
+                return ordered_notes[choice - 1]
+        except ValueError:
+            pass
+
+        print('Invalid note selection!')
+        return None
+
+    def _print_note(self, note):
+        """Print one note with full text."""
+        print(f"\n📝 Note {note.id}")
+        print(f"Created: {note.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
+        print('Text:')
+        for line in (note.text.splitlines() or [EMPTY_NOTE_LABEL]):
+            print(f'  {line}')
     
     def archive_done_cards(self):
         """Archive all active cards from completed columns."""

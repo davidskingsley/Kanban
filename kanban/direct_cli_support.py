@@ -121,6 +121,26 @@ class DirectCliSupportMixin:
             raise ValueError(f"Multiple checklist items match '{identifier}'. Use the checklist item id instead.")
         raise ValueError(f"Checklist item '{identifier}' was not found on card '{card.title}'.")
 
+    def _resolve_note(self, card: Card, identifier: str):
+        for note in card.notes:
+            if note.id == identifier:
+                return note
+
+        normalized = identifier.strip()
+        exact_matches = [note for note in card.notes if note.text.strip() == normalized]
+        if len(exact_matches) == 1:
+            return exact_matches[0]
+        if len(exact_matches) > 1:
+            raise ValueError(f"Multiple notes match '{identifier}'. Use the note id instead.")
+
+        lowered = normalized.lower()
+        matches = [note for note in card.notes if note.text.strip().lower() == lowered]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise ValueError(f"Multiple notes match '{identifier}'. Use the note id instead.")
+        raise ValueError(f"Note '{identifier}' was not found on card '{card.title}'.")
+
     def _select_external_board(self, path: str, identifier: Optional[str]) -> Dict[str, object]:
         absolute_path = os.path.abspath(path)
         if os.path.isfile(absolute_path):
@@ -220,12 +240,33 @@ class DirectCliSupportMixin:
                 print(f'  {tick} {todo_item.text} ({todo_item.id})')
         else:
             print('Checklist: (none)')
+        self._print_card_notes(card)
         parent_card = board.get_parent_card(card)
         if parent_card is not None:
             print(f'Parent Card: {parent_card.title}')
         completed, total = board.get_subcard_progress(card.id)
         if total:
             print(f'Subcards: {completed}/{total} done')
+
+    def _print_card_notes(self, card: Card, include_full_text: bool = False):
+        if not card.notes:
+            print('Notes: (none)')
+            return
+
+        ordered_notes = sorted(card.notes, key=lambda note: note.created_at, reverse=True)
+        print(f'Notes: {len(ordered_notes)}')
+        for note in ordered_notes:
+            created_label = note.created_at.isoformat(sep=' ', timespec='seconds')
+            print(f'  - {created_label} ({note.id})')
+            note_lines = (note.text or '').splitlines() or ['(empty note)']
+            if include_full_text:
+                for line in note_lines:
+                    print(f'      {line}')
+            else:
+                preview = ' '.join((note.text or '').split()) or '(empty note)'
+                if len(preview) > 120:
+                    preview = preview[:117] + '...'
+                print(f'      {preview}')
 
     def _format_board_stat_lines(self, stats: Dict[str, object]) -> List[str]:
         if all(key in stats for key in ('todo', 'in_progress', 'review', 'done')):

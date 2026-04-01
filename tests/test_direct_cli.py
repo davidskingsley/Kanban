@@ -186,6 +186,76 @@ class DirectCliRegressionTests(unittest.TestCase):
         self.assertIn('[x] Follow-up task', detail_output)
         self.assertNotIn('Initial task', detail_output)
 
+    def test_direct_cli_can_add_edit_list_and_delete_notes(self):
+        self.invoke_direct(['create-board', '--name', 'Notes Board'])
+        self.invoke_direct([
+            'create-card',
+            '--board', 'Notes Board',
+            '--title', 'Document release',
+        ])
+
+        exit_code, output = self.invoke_direct([
+            'add-note',
+            '--board', 'Notes Board',
+            '--card', 'Document release',
+            '--text', 'Drafted the release notes',
+        ])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Added note (", output)
+
+        manager = BoardManager(self.temp_dir)
+        try:
+            board_info = next(board for board in manager.get_board_list() if board['name'] == 'Notes Board')
+            manager.switch_board(board_info['id'])
+            board = manager.get_current_board()
+            card = next(card for card in board.get_all_cards() if card.title == 'Document release')
+            note_id = card.notes[0].id
+        finally:
+            manager.close()
+
+        _, list_output = self.invoke_direct([
+            'list-notes',
+            '--board', 'Notes Board',
+            '--card', 'Document release',
+        ])
+        self.assertIn('Drafted the release notes', list_output)
+        self.assertIn(note_id, list_output)
+
+        exit_code, output = self.invoke_direct([
+            'edit-note',
+            '--board', 'Notes Board',
+            '--card', 'Document release',
+            '--note', note_id,
+            '--text', 'Updated release notes draft',
+        ])
+        self.assertEqual(exit_code, 0)
+        self.assertIn('Updated note', output)
+
+        _, detail_output = self.invoke_direct([
+            'card-details',
+            '--board', 'Notes Board',
+            '--card', 'Document release',
+        ])
+        self.assertIn('Notes: 1', detail_output)
+        self.assertIn('Updated release notes draft', detail_output)
+
+        exit_code, output = self.invoke_direct([
+            'delete-note',
+            '--board', 'Notes Board',
+            '--card', 'Document release',
+            '--note', note_id,
+        ])
+        self.assertEqual(exit_code, 0)
+        self.assertIn('Deleted note', output)
+
+        _, list_output = self.invoke_direct([
+            'list-notes',
+            '--board', 'Notes Board',
+            '--card', 'Document release',
+        ])
+        self.assertIn('Notes: (none)', list_output)
+
     def test_direct_cli_can_archive_restore_and_delete_archived_cards(self):
         self.invoke_direct(['create-board', '--name', 'Archive Automation'])
 

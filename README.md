@@ -1,15 +1,15 @@
 # Multi-Board Kanban Manager
 
-A Python Kanban application with three ways to work: a PySide6 desktop GUI, an interactive multi-board terminal UI, and a direct-action CLI for scripting and automation. The current codebase supports JSON and SQLite board storage, external board registration, reusable card types, subcards, attachments, backups, import and export flows, and lock-aware read-only handling when a board is already open elsewhere.
+A Python Kanban application with three ways to work: a PySide6 desktop GUI, an interactive multi-board terminal UI, and a direct-action CLI for scripting and automation. The current codebase supports JSON and SQLite board storage, external board registration, reusable card types, managed projects, timestamped card notes, subcards, attachments, due-date and archive views, backups, import and export flows, and lock-aware read-only handling when a board is already open elsewhere.
 
 ## Highlights
 
-- Multi-board PySide6 GUI with board creation, switching, rename, delete, import, export, statistics, and Help dialogs
+- Multi-board PySide6 GUI with board creation, switching, rename, delete, import, export, due-date and archive views, statistics, toolbar filters, and Help dialogs
 - Interactive CLI for full terminal-driven board management and board-level card and column operations
 - Direct-action CLI subcommands for non-interactive automation and scheduled jobs
 - JSON and SQLite storage backends for boards
 - External board loading by reference from folders containing `boards_metadata.json`, `.json`, or `.sqlite3` board files
-- Card priorities, assignees, tags, projects, custom colors, reusable card types, real subcards, per-card checklists, and attachment cleanup tools
+- Card priorities, assignees, tags, managed projects, custom colors, reusable card types, timestamped card notes, real subcards, per-card checklists, and attachment cleanup tools
 - Undo and redo support for board-management actions and current-board actions
 - Lock handling that can open boards read-only, delete stale locks, or cancel access
 
@@ -38,7 +38,7 @@ This installs the runtime dependency set plus development tools such as Ruff.
 uv run python main.py
 ```
 
-This is the default launch mode. The GUI provides the board list, embedded board view, dialogs for cards and columns, board statistics, due-date views, Help dialogs, and keyboard shortcuts.
+This is the default launch mode. The GUI provides the board list, embedded board view, search and filter controls, dialogs for cards and columns, timestamped card notes, project and card-type management, archived-card inspection, board statistics, due-date views, Help dialogs, and keyboard shortcuts.
 
 ### Interactive CLI
 
@@ -83,7 +83,7 @@ Run `uv run python main.py --help` for launcher help, or `uv run python main.py 
 The direct CLI covers the same major workflows as the interactive CLI, but without prompts.
 
 - Board management: `list-boards`, `create-board`, `switch-board`, `rename-board`, `delete-board`, `board-stats`, `export-board`, `export-all-boards`, `import-boards`, `load-board-from-folder`, `undo-board-management`, `redo-board-management`, `show-board`
-- Card actions: `create-card`, `edit-card`, `add-subcard`, `move-card`, `delete-card`, `search-cards`, `filter-priority`, `filter-assignee`, `add-tag`, `add-todo-item`, `check-todo-item`, `uncheck-todo-item`, `toggle-todo-item`, `remove-todo-item`, `card-details`, `archive-done-cards`, `list-archived-cards`, `restore-archived-card`, `delete-archived-card`
+- Card actions: `create-card`, `edit-card`, `add-subcard`, `move-card`, `delete-card`, `search-cards`, `filter-priority`, `filter-assignee`, `add-tag`, `add-todo-item`, `check-todo-item`, `uncheck-todo-item`, `toggle-todo-item`, `remove-todo-item`, `card-details`, `list-notes`, `add-note`, `edit-note`, `delete-note`, `archive-done-cards`, `list-archived-cards`, `restore-archived-card`, `delete-archived-card`
 - Column actions: `create-column`, `rename-column`, `delete-column`, `reorder-columns`, `change-column-color`, `edit-column-flags`, `list-columns`
 - Card type and maintenance actions: `list-card-types`, `create-card-type`, `edit-card-type`, `delete-card-type`, `create-backup`, `cleanup-orphaned-attachments`, `undo-current-board`, `redo-current-board`
 
@@ -93,6 +93,7 @@ Safety notes:
 - Locked-board behavior in direct mode is controlled with `--lock-action`
 - Date arguments use `YYYY-MM-DD`
 - Checklist item commands accept exact item text or checklist item ids printed by `card-details`
+- Managed project CRUD remains a GUI workflow; interactive and direct CLI flows can assign project names on cards and card types, and both CLI modes can now view and manipulate timestamped card notes
 
 ## Checklist Workflows
 
@@ -110,6 +111,16 @@ uv run python main.py add-todo-item --board "Automation" --card "Ship release" -
 uv run python main.py toggle-todo-item --board "Automation" --card "Ship release" --item "Publish announcement"
 uv run python main.py card-details --board "Automation" --card "Ship release"
 ```
+
+## Notes And Projects
+
+Cards support timestamped notes across the GUI and CLI, and boards support managed project records in the GUI Cards menu.
+
+- GUI card dialogs can add, edit, and delete timestamped notes on existing cards
+- Interactive CLI board menus can view, add, edit, and delete notes on cards
+- Direct CLI automation can use `list-notes`, `add-note`, `edit-note`, and `delete-note`
+- GUI project management can view, create, edit, and delete managed projects, with updates propagated to cards and card-type presets that reference them
+- Interactive and direct CLI flows can assign project names when creating or editing cards and card types, but managed project CRUD is still GUI-only
 
 ## Storage Backends
 
@@ -153,22 +164,25 @@ The interactive CLI prompts for that choice. The direct CLI uses `--lock-action`
 The desktop application includes:
 
 - board list and current-board switching
+- board-level search plus priority, assignee, card type, tag, and due-state filters
 - embedded multi-column board view
-- board statistics and due-date views
+- board statistics, due-date views, and archived-card management
 - create, edit, move, and delete actions for cards
 - create, rename, delete, recolor, reorder, and flag editing for columns
-- reusable card type management
+- reusable card type management and managed project CRUD
+- card dialogs for checklist items, notes, attachments, subcards, dates, assignees, tags, colors, and card types
 - About, Command Line Guide, and Direct-Action CLI Options dialogs under Help
 
 Common GUI actions:
 
 1. Create a board from the Boards menu and choose JSON or SQLite storage.
 2. Load an external board from another folder without copying the source board into the default registry.
-3. Use the Cards and Columns menus after selecting a card or column in the board view.
-4. Double-click a card to edit it.
-5. Use Help to open the About dialog, the Command Line Guide, or the Direct-Action CLI Options reference.
+3. Use the filter toolbar to narrow visible cards by text, priority, assignee, card type, tag, or due state.
+4. Use the Cards and Columns menus after selecting a card or column in the board view.
+5. Double-click a card to edit it, update notes, manage attachments, and work with subcards.
+6. Use Help to open the About dialog, the Command Line Guide, or the Direct-Action CLI Options reference.
 
-Visual cues include priority indicators, assignee labels, tags, custom card colors, checklist progress, subcard progress, and read-only state when a lock is held elsewhere.
+Visual cues include priority indicators, assignee labels, tags, custom card colors, checklist progress, subcard progress, due-state filtering, and read-only state when a lock is held elsewhere.
 
 ## Interactive CLI Workflow
 
@@ -187,10 +201,12 @@ Board-management capabilities include:
 
 Board-level capabilities include:
 
-- card creation, editing, moving, deleting, searching, filtering, tag management, checklist entry, card details, archive-done, archived-card management, and subcards
+- card creation, editing, moving, deleting, searching, filtering, tag management, checklist entry, note management, card details, archive-done, archived-card management, and subcards
 - column creation, rename, deletion, reorder, recolor, flag editing, and listing
 - card type listing, creation, editing, and deletion
 - maintenance actions such as backup creation, orphaned attachment cleanup, undo, and redo
+
+The interactive CLI can set project names on cards and card types and can manage timestamped card notes, but managed project CRUD remains a GUI workflow.
 
 ## Keyboard Shortcuts
 
@@ -259,9 +275,6 @@ uv run pyinstaller Kanban.spec
 ```text
 Kanban/
 ├── assets/
-├── build/
-├── dist/
-├── .github/workflows/
 ├── tests/
 │   ├── gui_test_case.py
 │   ├── test_direct_cli.py
@@ -269,16 +282,34 @@ Kanban/
 │   └── test_gui_dialog_regressions.py
 ├── kanban/
 │   ├── gui/
+│   │   ├── board_actions.py
+│   │   ├── board_filters.py
+│   │   ├── board_navigation.py
+│   │   ├── dialog_card.py
+│   │   ├── dialog_help.py
+│   │   ├── dialog_management.py
+│   │   ├── dialog_overview.py
+│   │   ├── dialog_primitives.py
+│   │   ├── dialogs.py
+│   │   └── pyside_app.py
 │   ├── board.py
+│   ├── board_cards.py
+│   ├── board_catalog.py
+│   ├── board_columns.py
+│   ├── board_core.py
+│   ├── board_persistence.py
 │   ├── board_manager.py
 │   ├── cli.py
 │   ├── direct_cli.py
+│   ├── direct_cli_board_commands.py
+│   ├── direct_cli_card_commands.py
+│   ├── direct_cli_structure_commands.py
+│   ├── direct_cli_support.py
 │   ├── models.py
 │   ├── multi_board_cli.py
 │   ├── multi_board_gui.py
 │   └── storage.py
 ├── demo_kanban.json
-├── demo_multiboard.py
 ├── example_kanban.json
 ├── example_usage.py
 ├── Kanban.spec
