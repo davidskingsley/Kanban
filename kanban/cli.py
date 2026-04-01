@@ -8,7 +8,6 @@ from typing import Dict, List, Optional
 from .board import KanbanBoard
 from .models import Priority
 
-
 EMPTY_NOTE_LABEL = '(empty note)'
 
 
