@@ -1,6 +1,6 @@
 ## @file
 #  @brief Persistence and import/export mixins for the board domain.
-"""Persistence and import/export mixins for the board domain."""
+"""!Persistence and import/export mixins for the board domain."""
 
 from __future__ import annotations
 
@@ -11,13 +11,15 @@ from .models import Card, CardType, CustomColumn, Project, Status
 
 
 class BoardPersistenceMixin:
-    """Persistence and export helpers for a Kanban board."""
+    """!Persistence and export helpers for a Kanban board."""
 
     def load_board(self):
+        """!Load board."""
         data = self.storage.load()
         self._load_from_data(data, persist_defaults=not self.is_read_only())
 
     def _load_from_data(self, data: Dict, persist_defaults: bool = True):
+        """!Load from data."""
         self.custom_columns.clear()
         self.card_types.clear()
         self.projects.clear()
@@ -38,6 +40,7 @@ class BoardPersistenceMixin:
             self._init_default_custom_columns(persist=persist_defaults)
 
     def _load_custom_columns(self, data: Dict):
+        """!Load custom columns."""
         self.custom_columns.clear()
         self.card_types.clear()
         self.projects.clear()
@@ -63,6 +66,7 @@ class BoardPersistenceMixin:
         self._sync_projects_from_references()
 
     def _load_legacy_data(self, data: Dict):
+        """!Load legacy data."""
         self.card_types.clear()
         self.projects.clear()
         self._ensure_default_card_type()
@@ -78,6 +82,7 @@ class BoardPersistenceMixin:
         self._sync_projects_from_references()
 
     def _convert_legacy_to_custom(self, data: Dict, persist: bool = True):
+        """!Convert legacy to custom."""
         self.custom_columns.clear()
         self.card_types.clear()
         self.projects.clear()
@@ -103,6 +108,7 @@ class BoardPersistenceMixin:
             self.save_board()
 
     def _init_default_custom_columns(self, persist: bool = True):
+        """!Init default custom columns."""
         self._ensure_default_card_type()
         if not self.last_used_card_type_id:
             self.last_used_card_type_id = self.get_default_card_type_id()
@@ -115,9 +121,11 @@ class BoardPersistenceMixin:
             self.save_board()
 
     def save_board(self):
+        """!Save board."""
         self.storage.save(self.export_data())
 
     def _apply_missing_column_defaults(self, columns_data: List[Dict]):
+        """!Apply missing column defaults."""
         if not self.custom_columns:
             return
         if not any('is_completed' in column_data for column_data in columns_data):
@@ -130,6 +138,7 @@ class BoardPersistenceMixin:
                 ordered_columns[0].set_can_add_card(True)
 
     def export_board(self, format_type: str = 'text') -> str:
+        """!Export board."""
         if format_type == 'text':
             output = []
             output.append('=' * 60)

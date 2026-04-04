@@ -1,6 +1,6 @@
 ## @file
 #  @brief PySide6-based multi-board GUI for the Kanban application.
-"""PySide6 GUI implementation for the multi-board Kanban manager."""
+"""!PySide6 GUI implementation for the multi-board Kanban manager."""
 
 from __future__ import annotations
 
@@ -107,7 +107,7 @@ __all__ = [
 
 
 def resolve_app_asset_path(*parts: str) -> str:
-    """Return an absolute path to an application asset for source and bundled runs."""
+    """!Return an absolute path to an application asset for source and bundled runs."""
     if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
         base_dir = sys._MEIPASS
     else:
@@ -116,9 +116,10 @@ def resolve_app_asset_path(*parts: str) -> str:
 
 
 class MultiBoardGUI(BoardActionsMixin, BoardFiltersMixin, BoardNavigationMixin):
-    """PySide6 multi-board GUI wrapper."""
+    """!PySide6 multi-board GUI wrapper."""
 
     def __init__(self, board_manager: BoardManager):
+        """!Init."""
         self.board_manager = board_manager
         self.board_manager.set_lock_handler(self.prompt_for_locked_board_action)
         self.app = QApplication.instance() or QApplication(sys.argv)
@@ -147,7 +148,7 @@ class MultiBoardGUI(BoardActionsMixin, BoardFiltersMixin, BoardNavigationMixin):
         self.refresh_ui()
 
     def _build_ui(self):
-        """Create the main window widgets."""
+        """!Create the main window widgets."""
         self._build_menu()
         self._build_filter_toolbar()
 
@@ -169,7 +170,7 @@ class MultiBoardGUI(BoardActionsMixin, BoardFiltersMixin, BoardNavigationMixin):
         root_layout.addWidget(self.scroll_area, 1)
 
     def _build_filter_toolbar(self):
-        """Create the card search and filter toolbar."""
+        """!Create the card search and filter toolbar."""
         toolbar = QToolBar('Card Filters')
         toolbar.setObjectName('FilterToolbar')
         toolbar.setMovable(False)
@@ -234,7 +235,7 @@ class MultiBoardGUI(BoardActionsMixin, BoardFiltersMixin, BoardNavigationMixin):
         toolbar.addWidget(self.toolbar_clear_filters_button)
 
     def _build_menu(self):
-        """Create the menu bar."""
+        """!Create the menu bar."""
         menu_bar = self.window.menuBar()
 
         self.file_menu = menu_bar.addMenu('File')
@@ -307,7 +308,7 @@ class MultiBoardGUI(BoardActionsMixin, BoardFiltersMixin, BoardNavigationMixin):
         help_menu.addAction(self._action('Direct-Action CLI Options', self.show_direct_action_cli_options_dialog))
 
     def _set_window_title_summary(self, board_name: str, stats_text: str = ''):
-        """Update the native window title with board summary details."""
+        """!Update the native window title with board summary details."""
         if board_name == 'No board selected' and not stats_text:
             self.window.setWindowTitle(self.base_window_title)
             return
@@ -317,7 +318,7 @@ class MultiBoardGUI(BoardActionsMixin, BoardFiltersMixin, BoardNavigationMixin):
         self.window.setWindowTitle(f'{self.base_window_title}{suffix}')
 
     def _action(self, title: str, callback, shortcut=None) -> QAction:
-        """Create a QAction helper."""
+        """!Create a QAction helper."""
         action = QAction(title, self.window)
         if shortcut:
             action.setShortcut(shortcut)
@@ -325,29 +326,29 @@ class MultiBoardGUI(BoardActionsMixin, BoardFiltersMixin, BoardNavigationMixin):
         return action
 
     def _history_action_text(self, base_title: str, description: Optional[str]) -> str:
-        """Return a menu label for a history action."""
+        """!Return a menu label for a history action."""
         if not description:
             return base_title
         return f'{base_title}: {description}'
 
     def run(self):
-        """Run the application event loop."""
+        """!Run the application event loop."""
         self.window.show()
         return self.app.exec()
 
     def current_board(self) -> Optional[KanbanBoard]:
-        """Return the active board if available."""
+        """!Return the active board if available."""
         return self.board_manager.get_current_board()
 
     def ensure_board(self) -> Optional[KanbanBoard]:
-        """Return the current board or show a warning."""
+        """!Return the current board or show a warning."""
         board = self.current_board()
         if board is None:
             QMessageBox.warning(self.window, 'No Board Selected', 'Select or create a board first.')
         return board
 
     def ensure_writable_board(self) -> Optional[KanbanBoard]:
-        """Return the current board if it is writable."""
+        """!Return the current board if it is writable."""
         board = self.ensure_board()
         if board is None:
             return None
@@ -357,7 +358,7 @@ class MultiBoardGUI(BoardActionsMixin, BoardFiltersMixin, BoardNavigationMixin):
         return board
 
     def refresh_ui(self):
-        """Refresh the board list, summary, and column view."""
+        """!Refresh the board list, summary, and column view."""
         boards = self.board_manager.get_board_list()
         current_board = self.board_manager.get_current_board()
 
@@ -392,14 +393,14 @@ class MultiBoardGUI(BoardActionsMixin, BoardFiltersMixin, BoardNavigationMixin):
         self._refresh_history_actions(current_board)
 
     def _current_board_name(self) -> str:
-        """Return the current board name."""
+        """!Return the current board name."""
         for board in self.board_manager.get_board_list():
             if board['is_current']:
                 return board['name']
         return 'Unknown'
 
     def _clear_columns(self):
-        """Clear the rendered column widgets."""
+        """!Clear the rendered column widgets."""
         while self.columns_layout.count():
             item = self.columns_layout.takeAt(0)
             widget = item.widget()

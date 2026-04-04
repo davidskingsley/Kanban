@@ -1,6 +1,6 @@
 ## @file
 #  @brief Card editing dialogs and attachment widgets for the PySide6 multi-board GUI.
-"""Card editing dialogs for the PySide6 GUI."""
+"""!Card editing dialogs for the PySide6 GUI."""
 
 from __future__ import annotations
 
@@ -54,21 +54,25 @@ from .dialog_primitives import (
 
 
 class AttachmentDropFrame(QFrame):
-	"""Drop target used by the card dialog attachment area."""
+	"""!Drop target used by the card dialog attachment area."""
 
 	def __init__(self, dialog, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.dialog = dialog
 		self.setObjectName('AttachmentDropFrame')
 		self.setAcceptDrops(True)
 
 	def dragEnterEvent(self, event):
+		"""!Drag enter event."""
 		self.dialog._attachment_drag_enter_event(event)
 
 	def dragLeaveEvent(self, event):
+		"""!Drag leave event."""
 		self.dialog._attachment_drag_leave_event(event)
 
 	def dropEvent(self, event):
+		"""!Drop event."""
 		self.dialog._attachment_drop_event(event)
 
 
@@ -83,15 +87,17 @@ CARD_DIALOG_SECTION_FRAME_STYLESHEET = """
 
 
 class CardDialog(QDialog):
-	"""Dialog for creating or editing a card."""
+	"""!Dialog for creating or editing a card."""
 
 	def _dialog_facade(self):
+		"""!Dialog facade."""
 		from . import dialogs as dialog_facade
 
 		return dialog_facade
 
 	def __init__(self, board: KanbanBoard, card=None, target_column_id: Optional[str] = None,
 				 parent_card=None, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.board = board
 		self.card = card
@@ -437,6 +443,7 @@ class CardDialog(QDialog):
 		add_dialog_footer(self, buttons)
 
 	def _append_todo_list_item(self, text: str, completed: bool = False, item_id: Optional[str] = None):
+		"""!Append todo list item."""
 		item = QListWidgetItem(text)
 		item.setFlags(
 			Qt.ItemFlag.ItemIsEnabled
@@ -449,6 +456,7 @@ class CardDialog(QDialog):
 		self.todo_list.addItem(item)
 
 	def _selected_todo_item(self):
+		"""!Selected todo item."""
 		item = self.todo_list.currentItem()
 		if item is None:
 			return None
@@ -457,6 +465,7 @@ class CardDialog(QDialog):
 		return item
 
 	def _ensure_todo_placeholder(self):
+		"""!Ensure todo placeholder."""
 		if self.todo_list.count() > 0:
 			return
 		placeholder = QListWidgetItem('No checklist items yet.')
@@ -465,6 +474,7 @@ class CardDialog(QDialog):
 		self.todo_list.addItem(placeholder)
 
 	def _clear_todo_placeholder(self):
+		"""!Clear todo placeholder."""
 		if self.todo_list.count() != 1:
 			return
 		item = self.todo_list.item(0)
@@ -472,6 +482,7 @@ class CardDialog(QDialog):
 			self.todo_list.clear()
 
 	def refresh_todo_list(self):
+		"""!Refresh todo list."""
 		self.todo_list.clear()
 		for todo_item in (self.card.todo_items if self.card else []):
 			self._append_todo_list_item(todo_item.text, todo_item.completed, todo_item.id)
@@ -479,9 +490,11 @@ class CardDialog(QDialog):
 		self._refresh_todo_controls()
 
 	def _refresh_todo_controls(self):
+		"""!Refresh todo controls."""
 		self.remove_todo_button.setEnabled(self._selected_todo_item() is not None)
 
 	def add_todo_item(self):
+		"""!Add todo item."""
 		text = self.todo_entry.text().strip()
 		if not text:
 			return
@@ -492,10 +505,12 @@ class CardDialog(QDialog):
 		self._refresh_todo_controls()
 
 	def _edit_todo_item(self, item: QListWidgetItem):
+		"""!Edit todo item."""
 		if item.flags() & Qt.ItemFlag.ItemIsUserCheckable:
 			self.todo_list.editItem(item)
 
 	def remove_selected_todo_item(self):
+		"""!Remove selected todo item."""
 		item = self._selected_todo_item()
 		if item is None:
 			return
@@ -504,6 +519,7 @@ class CardDialog(QDialog):
 		self._refresh_todo_controls()
 
 	def _todo_values(self) -> List[Dict[str, object]]:
+		"""!Todo values."""
 		values: List[Dict[str, object]] = []
 		for index in range(self.todo_list.count()):
 			item = self.todo_list.item(index)
@@ -517,9 +533,11 @@ class CardDialog(QDialog):
 		return values
 
 	def _supports_subcard_management(self) -> bool:
+		"""!Supports subcard management."""
 		return self.card is not None and not self.card.parent_id
 
 	def _set_attachment_drop_active(self, active: bool):
+		"""!Set attachment drop active."""
 		border_color = '#3e7a5e' if active else '#dcc7a7'
 		background = '#eef7f0' if active else '#fff9f0'
 		self.attachment_drop_frame.setStyleSheet(
@@ -539,6 +557,7 @@ class CardDialog(QDialog):
 		)
 
 	def _attachment_drag_enter_event(self, event):
+		"""!Attachment drag enter event."""
 		if self.card is None:
 			event.ignore()
 			return
@@ -549,10 +568,12 @@ class CardDialog(QDialog):
 		event.acceptProposedAction()
 
 	def _attachment_drag_leave_event(self, event):
+		"""!Attachment drag leave event."""
 		self._set_attachment_drop_active(False)
 		QFrame.dragLeaveEvent(self.attachment_drop_frame, event)
 
 	def _attachment_drop_event(self, event):
+		"""!Attachment drop event."""
 		self._set_attachment_drop_active(False)
 		if self.card is None:
 			event.ignore()
@@ -565,6 +586,7 @@ class CardDialog(QDialog):
 		event.acceptProposedAction()
 
 	def refresh_attachments_list(self):
+		"""!Refresh attachments list."""
 		self.attachments_list.clear()
 		editable = self.card is not None and not self.board.is_read_only()
 		self.attachment_drop_frame.setEnabled(editable)
@@ -587,12 +609,14 @@ class CardDialog(QDialog):
 			self.attachments_list.addItem(item)
 
 	def _selected_attachment_id(self) -> Optional[str]:
+		"""!Selected attachment id."""
 		item = self.attachments_list.currentItem()
 		if item is None:
 			return None
 		return item.data(Qt.ItemDataRole.UserRole)
 
 	def _note_preview(self, text: str, limit: int = 120) -> str:
+		"""!Note preview."""
 		single_line = ' '.join((text or '').split())
 		if not single_line:
 			return '(empty note)'
@@ -601,6 +625,7 @@ class CardDialog(QDialog):
 		return single_line[: limit - 3] + '...'
 
 	def refresh_notes_list(self, selected_note_id: Optional[str] = None):
+		"""!Refresh notes list."""
 		if not hasattr(self, 'notes_list') or self.card is None:
 			return
 		self.notes_list.clear()
@@ -623,6 +648,7 @@ class CardDialog(QDialog):
 		self._refresh_note_controls()
 
 	def _selected_note_id(self) -> Optional[str]:
+		"""!Selected note id."""
 		if not hasattr(self, 'notes_list'):
 			return None
 		item = self.notes_list.currentItem()
@@ -631,6 +657,7 @@ class CardDialog(QDialog):
 		return item.data(Qt.ItemDataRole.UserRole)
 
 	def _selected_note(self):
+		"""!Selected note."""
 		note_id = self._selected_note_id()
 		if not note_id or self.card is None:
 			return None
@@ -640,6 +667,7 @@ class CardDialog(QDialog):
 		return None
 
 	def _refresh_note_controls(self):
+		"""!Refresh note controls."""
 		if not hasattr(self, 'notes_list'):
 			return
 		editable = self.card is not None and not self.board.is_read_only()
@@ -653,6 +681,7 @@ class CardDialog(QDialog):
 		self.delete_note_button.setEnabled(editable and has_selection)
 
 	def clear_note_editor(self):
+		"""!Clear note editor."""
 		if not hasattr(self, 'note_entry'):
 			return
 		self.editing_note_id = None
@@ -662,6 +691,7 @@ class CardDialog(QDialog):
 		self._refresh_note_controls()
 
 	def edit_selected_note(self):
+		"""!Edit selected note."""
 		note = self._selected_note()
 		if note is None:
 			QMessageBox.information(self, 'No Note Selected', 'Select a note first.')
@@ -672,6 +702,7 @@ class CardDialog(QDialog):
 		self._refresh_note_controls()
 
 	def save_note(self):
+		"""!Save note."""
 		if self.card is None:
 			QMessageBox.information(self, 'Create Card First', 'Save the card before adding notes.')
 			return
@@ -698,6 +729,7 @@ class CardDialog(QDialog):
 		self.refresh_notes_list(selected_note_id=note.id)
 
 	def delete_selected_note(self):
+		"""!Delete selected note."""
 		if self.card is None:
 			return
 		if self.board.is_read_only():
@@ -724,6 +756,7 @@ class CardDialog(QDialog):
 		self.refresh_notes_list()
 
 	def add_attachments_via_picker(self):
+		"""!Add attachments via picker."""
 		if self.card is None:
 			QMessageBox.information(self, 'Create Card First', 'Save the card before adding attachments.')
 			return
@@ -735,6 +768,7 @@ class CardDialog(QDialog):
 			self.add_attachments_from_drop(paths)
 
 	def add_attachments_from_drop(self, file_paths: List[str]):
+		"""!Add attachments from drop."""
 		if self.card is None:
 			return
 		try:
@@ -750,6 +784,7 @@ class CardDialog(QDialog):
 		self.refresh_attachments_list()
 
 	def open_selected_attachment(self):
+		"""!Open selected attachment."""
 		if self.card is None:
 			return
 		attachment_id = self._selected_attachment_id()
@@ -763,6 +798,7 @@ class CardDialog(QDialog):
 		open_path_with_default_app(path)
 
 	def delete_selected_attachment(self):
+		"""!Delete selected attachment."""
 		if self.card is None:
 			return
 		if self.board.is_read_only():
@@ -788,6 +824,7 @@ class CardDialog(QDialog):
 		self.refresh_attachments_list()
 
 	def refresh_subcards_list(self):
+		"""!Refresh subcards list."""
 		if not hasattr(self, 'subcards_list'):
 			return
 		self.subcards = self.board.get_subcards(self.card.id)
@@ -819,6 +856,7 @@ class CardDialog(QDialog):
 		QTimer.singleShot(0, self.subcards_list.refresh_item_sizes)
 
 	def _subcard_priority_color(self, priority: Priority) -> str:
+		"""!Subcard priority color."""
 		palette = {
 			Priority.LOW: '#6a8c63',
 			Priority.MEDIUM: '#8f6b2a',
@@ -828,6 +866,7 @@ class CardDialog(QDialog):
 		return palette.get(priority, '#7d5b3d')
 
 	def _create_subcard_row_widget(self, subcard) -> QWidget:
+		"""!Create subcard row widget."""
 		row = SubcardRowWidget()
 		row.setObjectName('SubcardRow')
 		row.setProperty('accentColor', self._subcard_priority_color(subcard.priority))
@@ -892,6 +931,7 @@ class CardDialog(QDialog):
 		return row
 
 	def _apply_subcard_row_style(self, row_widget: QWidget, selected: bool):
+		"""!Apply subcard row style."""
 		accent = row_widget.property('accentColor') or '#7d5b3d'
 		background = '#f5e4cb' if selected else '#fffdf9'
 		border = accent if selected else '#dec7a5'
@@ -900,6 +940,7 @@ class CardDialog(QDialog):
 		)
 
 	def _refresh_subcard_row_styles(self):
+		"""!Refresh subcard row styles."""
 		if not hasattr(self, 'subcards_list'):
 			return
 		for index in range(self.subcards_list.count()):
@@ -911,6 +952,7 @@ class CardDialog(QDialog):
 			self._apply_subcard_row_style(row_widget, item.isSelected())
 
 	def _selected_subcard(self):
+		"""!Selected subcard."""
 		if not hasattr(self, 'subcards_list'):
 			return None
 		item = self.subcards_list.currentItem()
@@ -922,6 +964,7 @@ class CardDialog(QDialog):
 		return self.board.find_card(subcard_id)
 
 	def add_subcard(self):
+		"""!Add subcard."""
 		if self.card is None:
 			return
 		if self.board.is_read_only():
@@ -963,6 +1006,7 @@ class CardDialog(QDialog):
 		self.refresh_subcards_list()
 
 	def edit_selected_subcard(self):
+		"""!Edit selected subcard."""
 		subcard = self._selected_subcard()
 		if subcard is None:
 			return
@@ -996,6 +1040,7 @@ class CardDialog(QDialog):
 		self.refresh_subcards_list()
 
 	def delete_selected_subcard(self):
+		"""!Delete selected subcard."""
 		subcard = self._selected_subcard()
 		if subcard is None:
 			QMessageBox.information(self, 'Delete Subcard', 'Select a subcard to delete.')
@@ -1014,6 +1059,7 @@ class CardDialog(QDialog):
 		self.refresh_subcards_list()
 
 	def values(self) -> Dict[str, object]:
+		"""!Values."""
 		return {
 			'title': self.title_edit.text().strip(),
 			'description': self.description_edit.toPlainText().strip(),
@@ -1030,6 +1076,7 @@ class CardDialog(QDialog):
 		}
 
 	def accept(self):
+		"""!Accept."""
 		if not self.title_edit.text().strip():
 			QMessageBox.warning(self, 'Missing Title', 'Card title is required.')
 			return

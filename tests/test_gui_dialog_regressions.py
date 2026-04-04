@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from gui_test_case import GuiTestCase
+from kanban import __version__
 from kanban.gui.board_statistics import BoardStatisticsDialog
 from kanban.gui.common import WINDOW_STYLE
 from kanban.gui.dialogs import ArchivedCardInfoDialog
@@ -53,7 +54,9 @@ from kanban.models import Priority
 
 
 class GuiDialogRegressionTests(GuiTestCase):
+    """!Gui Dialog Regression Tests."""
     def test_board_dialog_exposes_json_and_sqlite_backends(self):
+        """!Test board dialog exposes json and sqlite backends."""
         dialog = BoardDialog(self.temp_dir)
 
         backend_values = [dialog.backend_combo.itemData(index) for index in range(dialog.backend_combo.count())]
@@ -64,6 +67,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(dialog.values()['storage_backend'], 'sqlite')
 
     def test_legacy_board_files_are_rejected_and_skipped_in_folder_discovery(self):
+        """!Test legacy board files are rejected and skipped in folder discovery."""
         legacy_board_path = Path(self.temp_dir) / 'legacy_board.json'
         shutil.copyfile(Path(__file__).resolve().parents[1] / 'example_kanban.json', legacy_board_path)
 
@@ -75,6 +79,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(self.gui._discover_boards_in_folder(self.temp_dir), {})
 
     def test_large_dialogs_are_scrollable(self):
+        """!Test large dialogs are scrollable."""
         self.board_manager.create_board('Scrollable Dialog Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -102,6 +107,7 @@ class GuiDialogRegressionTests(GuiTestCase):
             dialog.close()
 
     def test_dialog_action_buttons_stay_outside_scroll_content(self):
+        """!Test dialog action buttons stay outside scroll content."""
         self.board_manager.create_board('Pinned Footer Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -125,11 +131,13 @@ class GuiDialogRegressionTests(GuiTestCase):
             self.assertNotIn(button_box, scroll_area.widget().findChildren(QDialogButtonBox))
 
     def test_drag_hotspot_is_clamped_to_preview_bounds(self):
+        """!Test drag hotspot is clamped to preview bounds."""
         self.assertEqual(clamp_drag_hotspot(QPoint(12, 18), QSize(100, 80)), QPoint(12, 18))
         self.assertEqual(clamp_drag_hotspot(QPoint(-5, 18), QSize(100, 80)), QPoint(0, 18))
         self.assertEqual(clamp_drag_hotspot(QPoint(120, 90), QSize(100, 80)), QPoint(99, 79))
 
     def test_drag_preview_preserves_size_and_adds_transparency(self):
+        """!Test drag preview preserves size and adds transparency."""
         source = QPixmap(20, 20)
         source.fill(QColor('#336699'))
 
@@ -140,6 +148,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(preview.toImage().pixelColor(10, 10).rgb(), QColor('#336699').rgb())
 
     def test_clipped_description_uses_three_trailing_full_stops(self):
+        """!Test clipped description uses three trailing full stops."""
         text = 'A' * 200
 
         clipped = clipped_description(text, limit=20)
@@ -147,6 +156,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(clipped, ('A' * 17) + '...')
 
     def test_clipped_title_uses_ninety_seven_character_limit(self):
+        """!Test clipped title uses ninety seven character limit."""
         text = 'A' * 120
 
         clipped = clipped_title(text)
@@ -155,6 +165,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(len(clipped), 97)
 
     def test_card_type_browser_double_click_selects_card_type(self):
+        """!Test card type browser double click selects card type."""
         self.board_manager.create_board('Card Type Browser Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -173,6 +184,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(dialog.result(), dialog.DialogCode.Accepted)
 
     def test_project_browser_double_click_selects_project(self):
+        """!Test project browser double click selects project."""
         self.board_manager.create_board('Project Browser Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -191,6 +203,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(dialog.result(), dialog.DialogCode.Accepted)
 
     def test_card_dialog_project_picker_lists_managed_projects(self):
+        """!Test card dialog project picker lists managed projects."""
         self.board_manager.create_board('Project Picker Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -205,6 +218,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertTrue(dialog.project_edit.isEditable())
 
     def test_card_dialog_collects_checklist_values(self):
+        """!Test card dialog collects checklist values."""
         self.board_manager.create_board('Checklist Dialog Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -228,6 +242,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertTrue(values['todo_items'][1]['completed'])
 
     def test_card_dialog_can_add_edit_and_delete_notes_for_existing_card(self):
+        """!Test card dialog can add edit and delete notes for existing card."""
         self.board_manager.create_board('Card Notes Dialog Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -268,6 +283,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(dialog.notes_list.item(0).text(), 'No notes added yet.')
 
     def test_card_dialog_uses_matching_section_borders_for_checklist_attachments_and_subcards(self):
+        """!Test card dialog uses matching section borders for checklist attachments and subcards."""
         self.board_manager.create_board('Matching Section Borders Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -285,6 +301,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIn(expected_border, subcards_frame.styleSheet())
 
     def test_card_tile_shows_checklist_progress_and_preview(self):
+        """!Test card tile shows checklist progress and preview."""
         self.board_manager.create_board('Checklist Tile Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -311,6 +328,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertFalse(todo_checkboxes[1].isChecked())
 
     def test_card_tile_checkbox_toggle_routes_through_callback(self):
+        """!Test card tile checkbox toggle routes through callback."""
         self.board_manager.create_board('Checklist Callback Tile Board')
         board = self.board_manager.get_current_board()
         column_id = board.get_columns_ordered()[0].id
@@ -336,6 +354,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(calls, [(card.id, card.todo_items[0].id, True)])
 
     def test_optional_date_field_enables_editor_when_checked(self):
+        """!Test optional date field enables editor when checked."""
         field = OptionalDateField('Start Date')
 
         self.assertFalse(field.checkbox.isChecked())
@@ -350,6 +369,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIsNotNone(field.value())
 
     def test_optional_date_field_clear_button_resets_to_none(self):
+        """!Test optional date field clear button resets to none."""
         field = OptionalDateField('End Date')
 
         field.checkbox.setChecked(True)
@@ -363,6 +383,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIsNone(field.value())
 
     def test_window_style_includes_date_edit_dropdown_rules(self):
+        """!Test window style includes date edit dropdown rules."""
         from kanban.gui.pyside_app import WINDOW_STYLE
 
         self.assertIn('QDateEdit::drop-down', WINDOW_STYLE)
@@ -372,6 +393,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIn('QCalendarWidget QWidget#qt_calendar_navigationbar', WINDOW_STYLE)
 
     def test_filter_toolbar_uses_compact_single_row_controls(self):
+        """!Test filter toolbar uses compact single row controls."""
         self.board_manager.create_board('Compact Toolbar Board')
         self.gui = MultiBoardGUI(self.board_manager)
 
@@ -392,6 +414,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(self.gui.toolbar_due_state_combo.width(), 118)
 
     def test_menu_bar_does_not_include_filters_menu(self):
+        """!Test menu bar does not include filters menu."""
         self.board_manager.create_board('No Filters Menu Board')
         self.gui = MultiBoardGUI(self.board_manager)
 
@@ -400,6 +423,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertNotIn('Filters', menu_titles)
 
     def test_menu_bar_includes_help_menu_actions(self):
+        """!Test menu bar includes help menu actions."""
         self.board_manager.create_board('Help Menu Board')
         self.gui = MultiBoardGUI(self.board_manager)
 
@@ -415,17 +439,19 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIn('Direct-Action CLI Options', help_titles)
 
     def test_main_window_uses_project_icon(self):
+        """!Test main window uses project icon."""
         self.board_manager.create_board('Icon Board')
         self.gui = MultiBoardGUI(self.board_manager)
 
         self.assertFalse(self.gui.window.windowIcon().isNull())
 
     def test_about_dialog_shows_version_usage_and_shortcuts(self):
-        dialog = AboutDialog(version='2.0')
+        """!Test about dialog shows version usage and shortcuts."""
+        dialog = AboutDialog(version=__version__)
         scroll_area = dialog.findChildren(QScrollArea, 'DialogScrollArea')[0]
 
         self.assertEqual(dialog.windowTitle(), 'About Kanban')
-        self.assertEqual(dialog.version_label.text(), 'Kanban Version 2.0')
+        self.assertEqual(dialog.version_label.text(), f'Kanban Version {__version__}')
         self.assertIn('Create or switch to a board', dialog.usage_label.text())
         self.assertIn('Ctrl+Shift+J', dialog.shortcuts_label.text())
         self.assertIn('Ctrl+Shift+O', dialog.shortcuts_label.text())
@@ -437,6 +463,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIsNot(dialog.button_box.parentWidget(), scroll_area.widget())
 
     def test_command_line_guide_dialog_shows_detailed_cli_help(self):
+        """!Test command line guide dialog shows detailed cli help."""
         dialog = CommandLineGuideDialog()
         guide_text = dialog.command_line_help.toPlainText()
 
@@ -465,6 +492,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIs(dialog.button_box.parentWidget(), dialog)
 
     def test_direct_action_cli_options_dialog_shows_command_reference(self):
+        """!Test direct action cli options dialog shows command reference."""
         dialog = DirectActionCliOptionsDialog()
         guide_text = dialog.direct_action_help.toPlainText()
 
@@ -493,6 +521,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         dialog.close()
 
     def test_archived_cards_dialog_lists_and_restores_archived_cards(self):
+        """!Test archived cards dialog lists and restores archived cards."""
         self.board_manager.create_board('Archived Dialog Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -514,6 +543,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIs(dialog.button_box.parentWidget(), dialog)
 
     def test_archived_card_info_dialog_uses_styled_shell_and_sections(self):
+        """!Test archived card info dialog uses styled shell and sections."""
         self.board_manager.create_board('Archived Info Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -541,6 +571,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(description.toPlainText(), 'Investigate the failed sync before restoring.')
 
     def test_board_summary_moves_to_title_bar(self):
+        """!Test board summary moves to title bar."""
         self.board_manager.create_board('Title Summary Board')
         self.gui = MultiBoardGUI(self.board_manager)
 
@@ -548,6 +579,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(self.gui.window.windowTitle(), 'Multi-Board Kanban Manager - Title Summary Board | 0 cards | 0 completed')
 
     def test_board_statistics_dialog_shows_current_board_breakdown(self):
+        """!Test board statistics dialog shows current board breakdown."""
         self.board_manager.create_board('Statistics Board', storage_backend='sqlite')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -574,6 +606,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIs(dialog.button_box.parentWidget(), dialog)
 
     def test_due_date_dialog_uses_timeline_column_for_gantt_style_view(self):
+        """!Test due date dialog uses timeline column for gantt style view."""
         self.board_manager.create_board('Timeline Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -598,6 +631,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(timeline_payload['end_date'], date(2026, 3, 28))
 
     def test_due_date_dialog_filter_popup_has_explicit_readable_styling(self):
+        """!Test due date dialog filter popup has explicit readable styling."""
         self.board_manager.create_board('Readable Due Filter Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -611,6 +645,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIn('selection-color: #ffffff;', popup_style)
 
     def test_due_date_dialog_edit_action_is_selected_on_double_click(self):
+        """!Test due date dialog edit action is selected on double click."""
         self.board_manager.create_board('Due Edit Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -634,6 +669,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(dialog.result(), dialog.DialogCode.Rejected)
 
     def test_due_date_dialog_has_no_open_card_button(self):
+        """!Test due date dialog has no open card button."""
         self.board_manager.create_board('Due Focus Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -649,6 +685,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertFalse(hasattr(dialog, 'open_button'))
 
     def test_card_dialog_restores_subcard_management_for_top_level_cards(self):
+        """!Test card dialog restores subcard management for top level cards."""
         self.board_manager.create_board('Subcard Dialog Board')
         board = self.board_manager.get_current_board()
         column_id = board.get_columns_ordered()[0].id
@@ -696,6 +733,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(dialog.subcards_list.item(0).text(), 'No subcards yet.')
 
     def test_add_subcard_uses_leftmost_column_when_parent_column_disables_add_card(self):
+        """!Test add subcard uses leftmost column when parent column disables add card."""
         self.board_manager.create_board('Subcard Target Board')
         board = self.board_manager.get_current_board()
         ordered_columns = board.get_columns_ordered()
@@ -716,6 +754,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(subcard.column_id, leftmost_column.id)
 
     def test_subcard_list_double_click_edit_updates_selected_subcard(self):
+        """!Test subcard list double click edit updates selected subcard."""
         self.board_manager.create_board('Subcard Double Click Board')
         board = self.board_manager.get_current_board()
         column_id = board.get_columns_ordered()[0].id
@@ -725,13 +764,17 @@ class GuiDialogRegressionTests(GuiTestCase):
         dialog.subcards_list.setCurrentRow(0)
 
         class FakeCardDialog:
+            """!Fake Card Dialog."""
             def __init__(self, *_args, **_kwargs):
+                """!Init."""
                 self.did_mutate_board = False
 
             def exec(self):
+                """!Exec."""
                 return CardDialog.DialogCode.Accepted
 
             def values(self):
+                """!Values."""
                 return {
                     'title': 'Child Edited',
                     'description': 'edited',
@@ -757,6 +800,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertTrue(dialog.did_mutate_board)
 
     def test_card_tile_context_menu_add_subcard_routes_through_callback(self):
+        """!Test card tile context menu add subcard routes through callback."""
         self.board_manager.create_board('Card Tile Context Menu Board')
         board = self.board_manager.get_current_board()
         column_id = board.get_columns_ordered()[0].id
@@ -773,10 +817,13 @@ class GuiDialogRegressionTests(GuiTestCase):
         add_subcard_action = object()
 
         class FakeMenu:
+            """!Fake Menu."""
             def __init__(self, *_args, **_kwargs):
+                """!Init."""
                 pass
 
             def addAction(self, label):
+                """!Add action."""
                 if label == 'Edit Card':
                     return edit_action
                 if label == 'Add Subcard':
@@ -784,6 +831,7 @@ class GuiDialogRegressionTests(GuiTestCase):
                 return object()
 
             def exec(self, *_args, **_kwargs):
+                """!Exec."""
                 return add_subcard_action
 
         with patch('kanban.gui.embedded_board.QMenu', FakeMenu):
@@ -792,6 +840,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(calls, [(parent_card.id, 'add_subcard')])
 
     def test_card_tile_uses_left_double_click_for_edit(self):
+        """!Test card tile uses left double click for edit."""
         self.board_manager.create_board('Card Tile Double Click Board')
         board = self.board_manager.get_current_board()
         card = board.create_card('Tile Card', 'desc', Priority.MEDIUM, board.get_columns_ordered()[0].id)
@@ -826,6 +875,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(edited, [card.id])
 
     def test_card_tile_ignores_left_press_for_parent_drag_handling(self):
+        """!Test card tile ignores left press for parent drag handling."""
         self.board_manager.create_board('Card Tile Press Board')
         board = self.board_manager.get_current_board()
         card = board.create_card('Tile Card', 'desc', Priority.MEDIUM, board.get_columns_ordered()[0].id)
@@ -845,6 +895,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertFalse(left_press.isAccepted())
 
     def test_card_tile_text_labels_do_not_use_line_height_styling(self):
+        """!Test card tile text labels do not use line height styling."""
         self.board_manager.create_board('Card Tile Text Style Board')
         board = self.board_manager.get_current_board()
         card = board.create_card(
@@ -862,6 +913,7 @@ class GuiDialogRegressionTests(GuiTestCase):
             self.assertNotIn('line-height', label.styleSheet())
 
     def test_card_tile_height_expands_for_wrapped_content(self):
+        """!Test card tile height expands for wrapped content."""
         self.board_manager.create_board('Card Tile Height Board')
         board = self.board_manager.get_current_board()
         column_id = board.get_columns_ordered()[0].id
@@ -878,6 +930,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertGreater(long_height, short_height)
 
     def test_card_tile_header_badges_use_fixed_height(self):
+        """!Test card tile header badges use fixed height."""
         self.board_manager.create_board('Card Tile Badge Height Board')
         board = self.board_manager.get_current_board()
         card = board.create_card('Tile Card', 'desc', Priority.MEDIUM, board.get_columns_ordered()[0].id)
@@ -892,6 +945,7 @@ class GuiDialogRegressionTests(GuiTestCase):
             self.assertEqual(badge.height(), 24)
 
     def test_selected_card_tile_uses_more_obvious_selected_styling(self):
+        """!Test selected card tile uses more obvious selected styling."""
         self.board_manager.create_board('Selected Card Tile Board')
         board = self.board_manager.get_current_board()
         card = board.create_card('Tile Card', 'desc', Priority.MEDIUM, board.get_columns_ordered()[0].id)
@@ -905,6 +959,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertIn(f'border: 3px solid {tile.selection_color};', tile.styleSheet())
 
     def test_column_header_uses_title_selection_and_plus_add_button(self):
+        """!Test column header uses title selection and plus add button."""
         self.board_manager.create_board('Column Header Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -922,6 +977,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertFalse(legacy_buttons)
 
     def test_column_cards_use_more_of_column_width(self):
+        """!Test column cards use more of column width."""
         self.board_manager.create_board('Column Card Width Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -946,6 +1002,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(card_widget.width(), list_widget.viewport().width() - 2 - list_widget._card_content_clearance_width())
 
     def test_column_card_list_uses_larger_vertical_spacing(self):
+        """!Test column card list uses larger vertical spacing."""
         self.board_manager.create_board('Column Card Spacing Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -963,6 +1020,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(row_widget.layout().contentsMargins().bottom(), 14)
 
     def test_column_card_list_uses_per_pixel_scrolling(self):
+        """!Test column card list uses per pixel scrolling."""
         self.board_manager.create_board('Column Smooth Scrolling Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -975,6 +1033,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(list_widget.verticalScrollBar().singleStep(), 24)
 
     def test_column_card_list_reserves_scrollbar_clearance(self):
+        """!Test column card list reserves scrollbar clearance."""
         self.board_manager.create_board('Column Scrollbar Clearance Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -997,6 +1056,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         self.assertEqual(list_widget._card_content_clearance_width(), 14)
 
     def test_scrollable_column_cards_use_compact_text_sizes(self):
+        """!Test scrollable column cards use compact text sizes."""
         self.board_manager.create_board('Compact Scroll Text Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()

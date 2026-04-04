@@ -1,6 +1,6 @@
 ## @file
 #  @brief Multi-board registry and metadata management for the Kanban application.
-"""Board Manager for handling multiple Kanban boards."""
+"""!Board Manager for handling multiple Kanban boards."""
 
 import json
 import os
@@ -26,10 +26,11 @@ from .storage import (
 
 ## @brief Manage board metadata, loading, switching, import, and export flows.
 class BoardManager:
-    """Manages multiple Kanban boards and their metadata."""
+    """!Manages multiple Kanban boards and their metadata."""
     MAX_UNDO_STEPS = 100
     
     def __init__(self, boards_directory: str = None):
+        """!Init."""
         if boards_directory is None:
             boards_directory = get_default_boards_dir()
         
@@ -48,7 +49,7 @@ class BoardManager:
         self.load_boards_metadata()
 
     def _normalize_board_info(self, board_info: Dict) -> Dict:
-        """Return a metadata entry with backend defaults applied."""
+        """!Return a metadata entry with backend defaults applied."""
         normalized = dict(board_info)
         data_file = normalized.get('data_file', '')
         normalized['description'] = normalized.get('description', '')
@@ -61,18 +62,18 @@ class BoardManager:
         return normalized
 
     def _board_backend(self, board_info: Dict) -> str:
-        """Return the normalized backend name for a board metadata entry."""
+        """!Return the normalized backend name for a board metadata entry."""
         return normalize_storage_backend(board_info.get('storage_backend'), file_path=board_info.get('data_file'))
 
     def _remove_board_file(self, data_file: str) -> None:
-        """Remove a board data file and its adjacent lock file when present."""
+        """!Remove a board data file and its adjacent lock file when present."""
         absolute_path = os.path.abspath(data_file)
         delete_board_lock(absolute_path)
         if os.path.exists(absolute_path):
             os.remove(absolute_path)
 
     def _capture_state(self) -> Dict[str, object]:
-        """Capture metadata and board files for board-management undo."""
+        """!Capture metadata and board files for board-management undo."""
         metadata = deepcopy(self.load_metadata())
         boards_data = {}
 
@@ -93,7 +94,7 @@ class BoardManager:
         }
 
     def _push_history_state(self, stack: List[Dict[str, object]], description: str):
-        """Capture the current manager state on the provided history stack."""
+        """!Capture the current manager state on the provided history stack."""
         stack.append({
             'description': description,
             'state': self._capture_state(),
@@ -102,32 +103,32 @@ class BoardManager:
             stack.pop(0)
 
     def _push_undo_state(self, description: str):
-        """Capture the current manager state so the next change can be undone."""
+        """!Capture the current manager state so the next change can be undone."""
         self._push_history_state(self._undo_stack, description)
         self._redo_stack.clear()
 
     def can_undo(self) -> bool:
-        """Return whether a board-management undo snapshot is available."""
+        """!Return whether a board-management undo snapshot is available."""
         return bool(self._undo_stack)
 
     def can_redo(self) -> bool:
-        """Return whether a board-management redo snapshot is available."""
+        """!Return whether a board-management redo snapshot is available."""
         return bool(self._redo_stack)
 
     def get_next_undo_description(self) -> Optional[str]:
-        """Return the description of the next manager action to undo."""
+        """!Return the description of the next manager action to undo."""
         if not self._undo_stack:
             return None
         return self._undo_stack[-1]['description']
 
     def get_next_redo_description(self) -> Optional[str]:
-        """Return the description of the next manager action to redo."""
+        """!Return the description of the next manager action to redo."""
         if not self._redo_stack:
             return None
         return self._redo_stack[-1]['description']
 
     def _restore_state(self, state: Dict[str, object]):
-        """Restore metadata and board files from a captured snapshot."""
+        """!Restore metadata and board files from a captured snapshot."""
         current_metadata = self.load_metadata()
         target_metadata = deepcopy(state['metadata'])
 
@@ -164,7 +165,7 @@ class BoardManager:
         self.load_boards_metadata()
 
     def undo_last_action(self) -> Optional[str]:
-        """Restore the most recent board-management snapshot."""
+        """!Restore the most recent board-management snapshot."""
         if not self._undo_stack:
             return None
 
@@ -174,7 +175,7 @@ class BoardManager:
         return snapshot['description']
 
     def redo_last_action(self) -> Optional[str]:
-        """Reapply the most recently undone board-management snapshot."""
+        """!Reapply the most recently undone board-management snapshot."""
         if not self._redo_stack:
             return None
 
@@ -184,11 +185,11 @@ class BoardManager:
         return snapshot['description']
 
     def set_lock_handler(self, lock_handler: Optional[LockHandler]):
-        """Set the callback used when a board lock is encountered."""
+        """!Set the callback used when a board lock is encountered."""
         self.lock_handler = lock_handler
 
     def _load_board_from_metadata(self, board_id: str, board_info: Dict) -> KanbanBoard:
-        """Load a board instance from stored metadata."""
+        """!Load a board instance from stored metadata."""
         data_file = board_info['data_file']
         if board_info.get('use_custom_columns') is False:
             raise ValueError('Legacy boards are no longer supported.')
@@ -201,7 +202,7 @@ class BoardManager:
         return board
 
     def inspect_board_file(self, data_file: str) -> Dict[str, object]:
-        """Inspect a board file and infer metadata needed to register it."""
+        """!Inspect a board file and infer metadata needed to register it."""
         absolute_path = os.path.abspath(data_file)
         if not os.path.exists(absolute_path):
             raise FileNotFoundError(absolute_path)
@@ -223,7 +224,7 @@ class BoardManager:
 
     def add_external_board(self, data_file: str, name: str = None, description: str = "",
                            use_custom_columns: Optional[bool] = None, switch_to: bool = True) -> Optional[str]:
-        """Register a board stored outside the managed boards directory."""
+        """!Register a board stored outside the managed boards directory."""
         inspected = self.inspect_board_file(data_file)
         absolute_path = inspected['data_file']
         metadata = self.load_metadata()
@@ -267,7 +268,7 @@ class BoardManager:
         return board_id
 
     def _is_managed_board_path(self, data_file: str) -> bool:
-        """Return whether the given board file lives in the managed boards directory."""
+        """!Return whether the given board file lives in the managed boards directory."""
         managed_root = os.path.abspath(self.boards_directory)
         candidate = os.path.abspath(data_file)
         try:
@@ -278,7 +279,7 @@ class BoardManager:
     
     def create_board(self, name: str, description: str = "", use_custom_columns: bool = True,
                      target_directory: str = None, storage_backend: Optional[str] = None) -> str:
-        """Create a new Kanban board."""
+        """!Create a new Kanban board."""
         self._push_undo_state(f"Create board '{name}'")
 
         # Generate unique board ID
@@ -320,7 +321,7 @@ class BoardManager:
         return board_id
 
     def convert_board_storage_backend(self, board_id: str, storage_backend: str, target_directory: str = None) -> str:
-        """Convert an existing board between JSON and SQLite storage backends."""
+        """!Convert an existing board between JSON and SQLite storage backends."""
         metadata = self.load_metadata()
         if board_id not in metadata['boards']:
             raise KeyError(board_id)
@@ -367,7 +368,7 @@ class BoardManager:
         return target_file
     
     def delete_board(self, board_id: str) -> bool:
-        """Delete a Kanban board."""
+        """!Delete a Kanban board."""
         metadata = self.load_metadata()
         
         if board_id not in metadata['boards']:
@@ -400,7 +401,7 @@ class BoardManager:
         return True
     
     def rename_board(self, board_id: str, new_name: str) -> bool:
-        """Rename a Kanban board."""
+        """!Rename a Kanban board."""
         metadata = self.load_metadata()
         
         if board_id not in metadata['boards']:
@@ -417,7 +418,7 @@ class BoardManager:
         return True
     
     def switch_board(self, board_id: str) -> bool:
-        """Switch to a different board."""
+        """!Switch to a different board."""
         metadata = self.load_metadata()
         
         if board_id not in metadata['boards']:
@@ -442,7 +443,7 @@ class BoardManager:
         return True
     
     def get_current_board(self) -> Optional[KanbanBoard]:
-        """Get the currently active board."""
+        """!Get the currently active board."""
         if self.current_board_id is None:
             return None
         
@@ -459,7 +460,7 @@ class BoardManager:
         return self.boards.get(self.current_board_id)
     
     def get_board_list(self) -> List[Dict]:
-        """Get list of all boards with their metadata."""
+        """!Get list of all boards with their metadata."""
         metadata = self.load_metadata()
         board_list = []
         
@@ -484,12 +485,12 @@ class BoardManager:
         return board_list
     
     def load_boards_metadata(self):
-        """Load boards metadata and set current board."""
+        """!Load boards metadata and set current board."""
         metadata = self.load_metadata()
         self.current_board_id = metadata.get('current_board')
     
     def load_metadata(self) -> Dict:
-        """Load boards metadata from file."""
+        """!Load boards metadata from file."""
         if not os.path.exists(self.metadata_file):
             return {'boards': {}, 'current_board': None}
         
@@ -510,7 +511,7 @@ class BoardManager:
         }
     
     def save_metadata(self, metadata: Dict):
-        """Save boards metadata to file."""
+        """!Save boards metadata to file."""
         try:
             normalized_metadata = {
                 'boards': {
@@ -525,7 +526,7 @@ class BoardManager:
             print(f"Error saving boards metadata: {e}")
     
     def _generate_board_id(self, name: str) -> str:
-        """Generate a unique board ID from the name."""
+        """!Generate a unique board ID from the name."""
         # Create base ID from name
         base_id = "".join(c.lower() if c.isalnum() else "_" for c in name)
         base_id = base_id.strip("_")
@@ -545,7 +546,7 @@ class BoardManager:
         return board_id
     
     def export_all_boards(self) -> Dict:
-        """Export all boards data for backup purposes."""
+        """!Export all boards data for backup purposes."""
         metadata = self.load_metadata()
         export_data = {
             'metadata': metadata,
@@ -563,7 +564,7 @@ class BoardManager:
         return export_data
 
     def export_board_data(self, board_id: str) -> Dict:
-        """Export a single board as standalone board-file data."""
+        """!Export a single board as standalone board-file data."""
         metadata = self.load_metadata()
         if board_id not in metadata['boards']:
             raise KeyError(board_id)
@@ -578,7 +579,7 @@ class BoardManager:
         return load_board_data_file(data_file, backend=self._board_backend(metadata['boards'][board_id]))
     
     def import_boards(self, import_data: Dict) -> bool:
-        """Import boards data from backup."""
+        """!Import boards data from backup."""
         try:
             self._push_undo_state("Import boards")
             # Save current metadata as backup
@@ -619,6 +620,6 @@ class BoardManager:
             return False
 
     def close(self):
-        """Release resources for all loaded boards."""
+        """!Release resources for all loaded boards."""
         for board in self.boards.values():
             board.close()

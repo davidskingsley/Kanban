@@ -1,6 +1,6 @@
 ## @file
 #  @brief Shared helpers for the direct-action CLI.
-"""Support helpers for the direct-action CLI."""
+"""!Support helpers for the direct-action CLI."""
 
 from __future__ import annotations
 
@@ -16,9 +16,10 @@ from .models import UNSET, Card, CardType, CustomColumn, Priority
 
 
 class DirectCliSupportMixin:
-    """Shared resolution, formatting, and parsing helpers for the direct CLI."""
+    """!Shared resolution, formatting, and parsing helpers for the direct CLI."""
 
     def _resolve_board_reference(self, identifier: Optional[str]) -> Tuple[str, Dict[str, object]]:
+        """!Resolve board reference."""
         metadata = self.board_manager.load_metadata()
         boards = metadata.get('boards', {})
         if not boards:
@@ -46,6 +47,7 @@ class DirectCliSupportMixin:
         raise ValueError(f"Board '{identifier}' was not found.")
 
     def _load_board(self, identifier: Optional[str]) -> Tuple[str, Dict[str, object], KanbanBoard]:
+        """!Load board."""
         board_id, board_info = self._resolve_board_reference(identifier)
         if board_id in self.board_manager.boards:
             return board_id, board_info, self.board_manager.boards[board_id]
@@ -57,6 +59,7 @@ class DirectCliSupportMixin:
         return board_id, board_info, board
 
     def _resolve_column(self, board: KanbanBoard, identifier: str) -> CustomColumn:
+        """!Resolve column."""
         if identifier in board.custom_columns:
             return board.custom_columns[identifier]
 
@@ -75,6 +78,7 @@ class DirectCliSupportMixin:
         include_archived: bool = False,
         archived_only: bool = False,
     ) -> Card:
+        """!Resolve card."""
         card = board.find_card(identifier, include_archived=include_archived)
         if card is not None:
             if archived_only and not card.is_archived():
@@ -96,6 +100,7 @@ class DirectCliSupportMixin:
         raise ValueError(f"Card '{identifier}' was not found.")
 
     def _resolve_card_type(self, board: KanbanBoard, identifier: str) -> CardType:
+        """!Resolve card type."""
         card_type = board.get_card_type(identifier)
         if card_type is not None:
             return card_type
@@ -109,6 +114,7 @@ class DirectCliSupportMixin:
         raise ValueError(f"Card type '{identifier}' was not found.")
 
     def _resolve_todo_item(self, card: Card, identifier: str):
+        """!Resolve todo item."""
         for todo_item in card.todo_items:
             if todo_item.id == identifier:
                 return todo_item
@@ -122,6 +128,7 @@ class DirectCliSupportMixin:
         raise ValueError(f"Checklist item '{identifier}' was not found on card '{card.title}'.")
 
     def _resolve_note(self, card: Card, identifier: str):
+        """!Resolve note."""
         for note in card.notes:
             if note.id == identifier:
                 return note
@@ -142,6 +149,7 @@ class DirectCliSupportMixin:
         raise ValueError(f"Note '{identifier}' was not found on card '{card.title}'.")
 
     def _select_external_board(self, path: str, identifier: Optional[str]) -> Dict[str, object]:
+        """!Select external board."""
         absolute_path = os.path.abspath(path)
         if os.path.isfile(absolute_path):
             inspected = self.board_manager.inspect_board_file(absolute_path)
@@ -173,6 +181,7 @@ class DirectCliSupportMixin:
         raise ValueError(f"Board '{identifier}' was not found in '{path}'.")
 
     def _discover_external_boards(self, folder: str) -> List[Dict[str, object]]:
+        """!Discover external boards."""
         metadata_path = os.path.join(folder, 'boards_metadata.json')
         options: List[Dict[str, object]] = []
 
@@ -208,6 +217,7 @@ class DirectCliSupportMixin:
         return options
 
     def _print_cards(self, board: KanbanBoard, cards: Sequence[Card]):
+        """!Print cards."""
         if not cards:
             print('No cards matched.')
             return
@@ -218,6 +228,7 @@ class DirectCliSupportMixin:
             )
 
     def _print_card_details(self, board: KanbanBoard, card: Card):
+        """!Print card details."""
         card_type = board.get_card_type(card.card_type_id)
         print(f'ID: {card.id}')
         print(f'Title: {card.title}')
@@ -249,6 +260,7 @@ class DirectCliSupportMixin:
             print(f'Subcards: {completed}/{total} done')
 
     def _print_card_notes(self, card: Card, include_full_text: bool = False):
+        """!Print card notes."""
         if not card.notes:
             print('Notes: (none)')
             return
@@ -269,6 +281,7 @@ class DirectCliSupportMixin:
                 print(f'      {preview}')
 
     def _format_board_stat_lines(self, stats: Dict[str, object]) -> List[str]:
+        """!Format board stat lines."""
         if all(key in stats for key in ('todo', 'in_progress', 'review', 'done')):
             return [
                 f"To Do: {stats['todo']}",
@@ -281,6 +294,7 @@ class DirectCliSupportMixin:
         return [f'{name}: {count}' for name, count in stats.items() if name not in ignored_keys]
 
     def _pick_optional_value(self, value: Optional[str], clear: bool, clear_value):
+        """!Pick optional value."""
         if clear:
             return clear_value
         if value is not None:
@@ -288,6 +302,7 @@ class DirectCliSupportMixin:
         return UNSET
 
     def _pick_optional_date(self, value: Optional[str], clear: bool, label: str):
+        """!Pick optional date."""
         if clear:
             return None
         if value is not None:
@@ -295,6 +310,7 @@ class DirectCliSupportMixin:
         return UNSET
 
     def _pick_optional_tags(self, tags_text: Optional[str], clear: bool):
+        """!Pick optional tags."""
         if clear:
             return []
         if tags_text is not None:
@@ -302,6 +318,7 @@ class DirectCliSupportMixin:
         return UNSET
 
     def _pick_optional_todo_items(self, todo_values: Optional[Sequence[str]], clear: bool):
+        """!Pick optional todo items."""
         if clear:
             return []
         if todo_values is not None:
@@ -309,20 +326,24 @@ class DirectCliSupportMixin:
         return UNSET
 
     def _normalize_order_tokens(self, values: Sequence[str]) -> List[str]:
+        """!Normalize order tokens."""
         if len(values) == 1 and ',' in values[0]:
             return [token.strip() for token in values[0].split(',') if token.strip()]
         return [value.strip() for value in values if value.strip()]
 
     def _parse_date(self, value: str, label: str) -> date:
+        """!Parse date."""
         try:
             return date.fromisoformat(value)
         except ValueError as error:
             raise ValueError(f'{label} must use YYYY-MM-DD format.') from error
 
     def _parse_priority(self, value: str) -> Priority:
+        """!Parse priority."""
         return Priority(value.strip().lower())
 
     def _parse_tags(self, value: Optional[str]) -> List[str]:
+        """!Parse tags."""
         if not value:
             return []
         tags = []
@@ -333,6 +354,7 @@ class DirectCliSupportMixin:
         return tags
 
     def _parse_todo_items(self, values: Optional[Sequence[str]]) -> List[Dict[str, object]]:
+        """!Parse todo items."""
         items: List[Dict[str, object]] = []
         for raw_value in values or []:
             text = raw_value.strip()
@@ -350,6 +372,7 @@ class DirectCliSupportMixin:
         return items
 
     def _set_todo_item_completed(self, args: argparse.Namespace, completed: bool):
+        """!Set todo item completed."""
         _, board_info, board = self._load_board(args.board)
         card = self._resolve_card(board, args.card)
         todo_item = self._resolve_todo_item(card, args.item)
@@ -364,6 +387,7 @@ class DirectCliSupportMixin:
         )
 
     def _write_json(self, output_path: str, payload: Dict[str, object]):
+        """!Write json."""
         directory = os.path.dirname(os.path.abspath(output_path))
         if directory:
             os.makedirs(directory, exist_ok=True)
@@ -371,5 +395,6 @@ class DirectCliSupportMixin:
             json.dump(payload, output_file, indent=2, ensure_ascii=False)
 
     def _require_force(self, enabled: bool, message: str):
+        """!Require force."""
         if not enabled:
             raise ValueError(message)

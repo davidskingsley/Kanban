@@ -1,6 +1,6 @@
 ## @file
 #  @brief Core Kanban board implementation.
-"""Core Kanban board implementation with internal mixin composition."""
+"""!Core Kanban board implementation with internal mixin composition."""
 
 from __future__ import annotations
 
@@ -16,13 +16,14 @@ from .storage import DataStorage, LockHandler, get_default_single_board_file
 
 
 class KanbanBoard(BoardColumnsMixin, BoardCatalogMixin, BoardCardsMixin, BoardPersistenceMixin):
-    """Main Kanban board class for managing cards and columns."""
+    """!Main Kanban board class for managing cards and columns."""
 
     DEFAULT_CARD_TYPE_NAME = 'Default'
     MAX_UNDO_STEPS = 100
 
     def __init__(self, data_file: str = None, use_custom_columns: bool = True,
                  lock_handler: Optional[LockHandler] = None, storage_backend: Optional[str] = None):
+        """!Init."""
         if data_file is None:
             data_file = get_default_single_board_file()
 
@@ -38,19 +39,24 @@ class KanbanBoard(BoardColumnsMixin, BoardCatalogMixin, BoardCardsMixin, BoardPe
         self.load_board()
 
     def is_read_only(self) -> bool:
+        """!Is read only."""
         return self.storage.is_read_only()
 
     def get_read_only_message(self) -> str:
+        """!Get read only message."""
         return self.storage.get_read_only_message()
 
     def close(self):
+        """!Close."""
         self.storage.release_lock()
 
     def _ensure_writable(self):
+        """!Ensure writable."""
         if self.is_read_only():
             raise PermissionError(self.get_read_only_message())
 
     def export_data(self) -> Dict:
+        """!Export data."""
         self._ensure_default_card_type()
         if not self.last_used_card_type_id:
             self.last_used_card_type_id = self.get_default_card_type_id()
@@ -71,31 +77,38 @@ class KanbanBoard(BoardColumnsMixin, BoardCatalogMixin, BoardCardsMixin, BoardPe
         }
 
     def _push_history_state(self, stack: List[Dict[str, object]], description: str):
+        """!Push history state."""
         stack.append({'description': description, 'data': deepcopy(self.export_data())})
         if len(stack) > self.MAX_UNDO_STEPS:
             stack.pop(0)
 
     def _push_undo_state(self, description: str):
+        """!Push undo state."""
         self._push_history_state(self._undo_stack, description)
         self._redo_stack.clear()
 
     def can_undo(self) -> bool:
+        """!Can undo."""
         return bool(self._undo_stack)
 
     def can_redo(self) -> bool:
+        """!Can redo."""
         return bool(self._redo_stack)
 
     def get_next_undo_description(self) -> Optional[str]:
+        """!Get next undo description."""
         if not self._undo_stack:
             return None
         return self._undo_stack[-1]['description']
 
     def get_next_redo_description(self) -> Optional[str]:
+        """!Get next redo description."""
         if not self._redo_stack:
             return None
         return self._redo_stack[-1]['description']
 
     def undo_last_action(self) -> Optional[str]:
+        """!Undo last action."""
         self._ensure_writable()
         if not self._undo_stack:
             return None
@@ -106,6 +119,7 @@ class KanbanBoard(BoardColumnsMixin, BoardCatalogMixin, BoardCardsMixin, BoardPe
         return snapshot['description']
 
     def redo_last_action(self) -> Optional[str]:
+        """!Redo last action."""
         self._ensure_writable()
         if not self._redo_stack:
             return None

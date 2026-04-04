@@ -1,6 +1,6 @@
 ## @file
 #  @brief Card, archive, and attachment mixins for the board domain.
-"""Card, archive, and attachment mixins for the board domain."""
+"""!Card, archive, and attachment mixins for the board domain."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from .models import UNSET, Card, CardAttachment, CardTodoItem, CustomColumn, Pri
 
 
 class BoardCardsMixin:
-    """Card, archive, attachment, and statistics helpers for a Kanban board."""
+    """!Card, archive, attachment, and statistics helpers for a Kanban board."""
 
     def create_card(self, title: str, description: str = '', priority: Priority = Priority.MEDIUM,
                     column_id: str = None, project: str = None, start_date: date = None,
@@ -20,6 +20,7 @@ class BoardCardsMixin:
                     card_type_id: str = None, assignee: str = None,
                     tags: Optional[List[str]] = None,
                     todo_items: Optional[List[object]] = None) -> Card:
+        """!Create card."""
         self._ensure_writable()
         card_type = self._resolve_card_type(card_type_id)
         effective_project = project if project is not None else card_type.default_project
@@ -72,6 +73,7 @@ class BoardCardsMixin:
                   priority: Priority = None, assignee: str = None, project: str = None,
                   start_date=UNSET, end_date=UNSET, parent_id: str = None, color=UNSET,
                   tags=UNSET, card_type_id=UNSET, todo_items=UNSET) -> Optional[Card]:
+        """!Edit card."""
         self._ensure_writable()
         card = self.find_card(card_id)
         if card:
@@ -92,6 +94,7 @@ class BoardCardsMixin:
         return None
 
     def update_card_tags(self, card_id: str, tags: List[str]) -> Optional[Card]:
+        """!Update card tags."""
         self._ensure_writable()
         card = self.find_card(card_id)
         if not card:
@@ -103,6 +106,7 @@ class BoardCardsMixin:
         return card
 
     def add_card_tag(self, card_id: str, tag: str) -> bool:
+        """!Add card tag."""
         self._ensure_writable()
         card = self.find_card(card_id)
         if not card or not tag or tag in card.tags:
@@ -113,6 +117,7 @@ class BoardCardsMixin:
         return True
 
     def add_card_todo_item(self, card_id: str, text: str, completed: bool = False) -> Optional[CardTodoItem]:
+        """!Add card todo item."""
         self._ensure_writable()
         card = self.find_card(card_id)
         normalized_text = (text or '').strip()
@@ -126,6 +131,7 @@ class BoardCardsMixin:
         return todo_item
 
     def update_card_todo_item(self, card_id: str, todo_item_id: str, text=UNSET, completed=UNSET) -> Optional[CardTodoItem]:
+        """!Update card todo item."""
         self._ensure_writable()
         card = self.find_card(card_id)
         if not card:
@@ -147,6 +153,7 @@ class BoardCardsMixin:
         return todo_item
 
     def delete_card_todo_item(self, card_id: str, todo_item_id: str) -> bool:
+        """!Delete card todo item."""
         self._ensure_writable()
         card = self.find_card(card_id)
         if not card:
@@ -162,6 +169,7 @@ class BoardCardsMixin:
         return False
 
     def get_all_cards(self, include_archived: bool = False) -> List[Card]:
+        """!Get all cards."""
         cards = []
         columns = self.custom_columns.values() if self.use_custom_columns else self.columns.values()
         for column in columns:
@@ -171,6 +179,7 @@ class BoardCardsMixin:
         return cards
 
     def get_column_cards(self, column: Union[str, CustomColumn], include_archived: bool = False) -> List[Card]:
+        """!Get column cards."""
         target_column = column if isinstance(column, CustomColumn) else self.get_column_by_id(column)
         if target_column is None:
             return []
@@ -179,10 +188,12 @@ class BoardCardsMixin:
         return [card for card in target_column.cards if not card.is_archived()]
 
     def get_archived_cards(self) -> List[Card]:
+        """!Get archived cards."""
         cards = [card for card in self.get_all_cards(include_archived=True) if card.is_archived()]
         return sorted(cards, key=lambda card: ((card.archived_at or card.updated_at), card.title.lower()))
 
     def get_parent_card(self, card: Card) -> Optional[Card]:
+        """!Get parent card."""
         if not card.parent_id:
             return None
         parent = self.find_card(card.parent_id)
@@ -191,25 +202,30 @@ class BoardCardsMixin:
         return self.find_card(card.parent_id, include_archived=True)
 
     def get_subcards(self, parent_id: str, include_archived: bool = False) -> List[Card]:
+        """!Get subcards."""
         return [card for card in self.get_all_cards(include_archived=include_archived) if card.parent_id == parent_id]
 
     def get_card_attachment(self, card_id: str, attachment_id: str) -> Optional[CardAttachment]:
+        """!Get card attachment."""
         card = self.find_card(card_id)
         if not card:
             return None
         return card.get_attachment(attachment_id)
 
     def get_card_attachment_path(self, card_id: str, attachment_id: str) -> Optional[str]:
+        """!Get card attachment path."""
         attachment = self.get_card_attachment(card_id, attachment_id)
         if attachment is None:
             return None
         return self.storage.resolve_attachment_path(attachment.relative_path)
 
     def add_card_attachment(self, card_id: str, source_path: str) -> Optional[CardAttachment]:
+        """!Add card attachment."""
         attachments = self.add_card_attachments(card_id, [source_path])
         return attachments[0] if attachments else None
 
     def add_card_attachments(self, card_id: str, source_paths: List[str]) -> List[CardAttachment]:
+        """!Add card attachments."""
         self._ensure_writable()
         card = self.find_card(card_id)
         if not card:
@@ -236,6 +252,7 @@ class BoardCardsMixin:
         return attachments
 
     def delete_card_attachment(self, card_id: str, attachment_id: str) -> bool:
+        """!Delete card attachment."""
         self._ensure_writable()
         card = self.find_card(card_id)
         if not card:
@@ -252,6 +269,7 @@ class BoardCardsMixin:
         return True
 
     def _collect_attachment_paths_from_data(self, data: Dict) -> Set[str]:
+        """!Collect attachment paths from data."""
         attachment_paths: Set[str] = set()
         for card_data in data.get('cards', []):
             for attachment_data in card_data.get('attachments', []):
@@ -262,6 +280,7 @@ class BoardCardsMixin:
         return attachment_paths
 
     def get_referenced_attachment_paths(self, include_history: bool = True) -> Set[str]:
+        """!Get referenced attachment paths."""
         referenced_paths = self._collect_attachment_paths_from_data(self.export_data())
         if not include_history:
             return referenced_paths
@@ -272,6 +291,7 @@ class BoardCardsMixin:
         return referenced_paths
 
     def cleanup_orphaned_attachment_files(self) -> Dict[str, object]:
+        """!Cleanup orphaned attachment files."""
         self._ensure_writable()
         stored_files = self.storage.list_attachment_files()
         if not stored_files:
@@ -300,6 +320,7 @@ class BoardCardsMixin:
         }
 
     def add_card_note(self, card_id: str, text: str = ''):
+        """!Add card note."""
         self._ensure_writable()
         card = self.find_card(card_id)
         if not card:
@@ -310,6 +331,7 @@ class BoardCardsMixin:
         return note
 
     def delete_card_note(self, card_id: str, note_id: str) -> bool:
+        """!Delete card note."""
         self._ensure_writable()
         card = self.find_card(card_id)
         if not card:
@@ -323,6 +345,7 @@ class BoardCardsMixin:
         return removed
 
     def edit_card_note(self, card_id: str, note_id: str, text: str = ''):
+        """!Edit card note."""
         self._ensure_writable()
         card = self.find_card(card_id)
         if not card:
@@ -336,17 +359,20 @@ class BoardCardsMixin:
         return note
 
     def get_subcard_progress(self, parent_id: str) -> tuple[int, int]:
+        """!Get subcard progress."""
         subcards = self.get_subcards(parent_id)
         completed = sum(1 for card in subcards if self.is_card_done(card))
         return completed, len(subcards)
 
     def is_card_done(self, card: Card) -> bool:
+        """!Is card done."""
         if self.use_custom_columns:
             column = self.get_column_by_id(card.column_id)
             return bool(column and column.is_completed)
         return card.status == Status.DONE
 
     def get_card_location_label(self, card: Card) -> str:
+        """!Get card location label."""
         if self.use_custom_columns:
             column = self.get_column_by_id(card.column_id)
             return column.name if column else 'Unknown'
@@ -356,6 +382,7 @@ class BoardCardsMixin:
                        project: str = None, color: str = None, card_type_id: str = None, start_date: date = None,
                        end_date: date = None, assignee: str = None, tags: Optional[List[str]] = None,
                        todo_items: Optional[List[object]] = None) -> Card:
+        """!Create subcard."""
         parent_card = self.find_card(parent_id)
         if not parent_card:
             raise ValueError('Parent card does not exist')
@@ -379,6 +406,7 @@ class BoardCardsMixin:
         )
 
     def _delete_card_internal(self, card_id: str) -> bool:
+        """!Delete card internal."""
         for subcard in list(self.get_subcards(card_id, include_archived=True)):
             self._delete_card_internal(subcard.id)
         if self.use_custom_columns:
@@ -394,6 +422,7 @@ class BoardCardsMixin:
         return False
 
     def delete_card(self, card_id: str) -> bool:
+        """!Delete card."""
         self._ensure_writable()
         card = self.find_card(card_id, include_archived=True)
         if not card:
@@ -405,6 +434,7 @@ class BoardCardsMixin:
         return removed
 
     def move_card(self, card_id: str, to_column: Union[str, Status], target_card_id: Optional[str] = None, insert_after: bool = False) -> bool:
+        """!Move card."""
         self._ensure_writable()
         card = None
         existing_card = self.find_card(card_id)
@@ -454,6 +484,7 @@ class BoardCardsMixin:
         return False
 
     def find_card(self, card_id: str, include_archived: bool = False) -> Optional[Card]:
+        """!Find card."""
         if self.use_custom_columns:
             for column in self.custom_columns.values():
                 card = column.get_card(card_id)
@@ -467,6 +498,7 @@ class BoardCardsMixin:
         return None
 
     def _set_card_archived_state(self, card: Card, archived: bool):
+        """!Set card archived state."""
         for subcard in self.get_subcards(card.id, include_archived=True):
             self._set_card_archived_state(subcard, archived)
         if archived:
@@ -475,6 +507,7 @@ class BoardCardsMixin:
             card.restore()
 
     def archive_card(self, card_id: str) -> bool:
+        """!Archive card."""
         self._ensure_writable()
         card = self.find_card(card_id, include_archived=True)
         if not card or card.is_archived():
@@ -485,6 +518,7 @@ class BoardCardsMixin:
         return True
 
     def restore_archived_card(self, card_id: str) -> bool:
+        """!Restore archived card."""
         self._ensure_writable()
         card = self.find_card(card_id, include_archived=True)
         if not card or not card.is_archived():
@@ -495,6 +529,7 @@ class BoardCardsMixin:
         return True
 
     def search_cards(self, query: str, include_archived: bool = False) -> List[Card]:
+        """!Search cards."""
         results = []
         query_lower = query.lower()
         columns = self.custom_columns.values() if self.use_custom_columns else self.columns.values()
@@ -511,6 +546,7 @@ class BoardCardsMixin:
         return results
 
     def get_cards_by_priority(self, priority: Priority, include_archived: bool = False) -> List[Card]:
+        """!Get cards by priority."""
         results = []
         columns = self.custom_columns.values() if self.use_custom_columns else self.columns.values()
         for column in columns:
@@ -522,6 +558,7 @@ class BoardCardsMixin:
         return results
 
     def get_cards_by_assignee(self, assignee: str, include_archived: bool = False) -> List[Card]:
+        """!Get cards by assignee."""
         results = []
         columns = self.custom_columns.values() if self.use_custom_columns else self.columns.values()
         for column in columns:
@@ -533,6 +570,7 @@ class BoardCardsMixin:
         return results
 
     def get_board_stats(self) -> Dict:
+        """!Get board stats."""
         if self.use_custom_columns:
             total_cards = sum(len(self.get_column_cards(column)) for column in self.custom_columns.values())
             column_stats = {column.name: len(self.get_column_cards(column)) for column in self.custom_columns.values()}
@@ -563,6 +601,7 @@ class BoardCardsMixin:
         return stats
 
     def archive_done_cards(self) -> int:
+        """!Archive done cards."""
         self._ensure_writable()
         if not self.custom_columns:
             return 0
@@ -584,4 +623,5 @@ class BoardCardsMixin:
         return len(cards_to_archive)
 
     def clear_done_cards(self) -> int:
+        """!Clear done cards."""
         return self.archive_done_cards()

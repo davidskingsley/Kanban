@@ -1,6 +1,6 @@
 ## @file
 #  @brief Board overview and archive-inspection dialogs for the PySide6 multi-board GUI.
-"""Board overview and archive-inspection dialogs for the PySide6 GUI."""
+"""!Board overview and archive-inspection dialogs for the PySide6 GUI."""
 
 from __future__ import annotations
 
@@ -43,6 +43,7 @@ from .dialog_primitives import DueTimelineDelegate
 
 
 class DueDateViewDialog(QDialog):
+	"""!Due Date View Dialog."""
 	def __init__(
 		self,
 		board: KanbanBoard,
@@ -51,6 +52,7 @@ class DueDateViewDialog(QDialog):
 		on_focus_card=None,
 		on_edit_card=None,
 	):
+		"""!Init."""
 		super().__init__(parent)
 		self.board = board
 		self.board_name = board_name
@@ -179,6 +181,7 @@ class DueDateViewDialog(QDialog):
 		self._populate_table()
 
 	def _activate_selected_row(self, action: str):
+		"""!Activate selected row."""
 		self._update_selection_state()
 		if not self.selected_card_id:
 			return
@@ -192,6 +195,7 @@ class DueDateViewDialog(QDialog):
 		self.accept()
 
 	def _create_stat_card(self, caption: str) -> Dict[str, QWidget]:
+		"""!Create stat card."""
 		frame = QFrame()
 		frame.setObjectName('DueStatCard')
 		layout = QVBoxLayout(frame)
@@ -212,6 +216,7 @@ class DueDateViewDialog(QDialog):
 		}
 
 	def _build_entries(self) -> List[Dict[str, object]]:
+		"""!Build entries."""
 		today = date.today()
 		entries: List[Dict[str, object]] = []
 		for card in self.board.get_all_cards():
@@ -240,6 +245,7 @@ class DueDateViewDialog(QDialog):
 		)
 
 	def _timeline_bounds(self, rows: List[Dict[str, object]]) -> tuple[date, date]:
+		"""!Timeline bounds."""
 		reference = date.today()
 		anchors = [reference]
 		for entry in rows:
@@ -255,6 +261,7 @@ class DueDateViewDialog(QDialog):
 		return range_start, range_end
 
 	def _filtered_entries(self) -> List[Dict[str, object]]:
+		"""!Filtered entries."""
 		today = date.today()
 		filter_name = self.filter_combo.currentText()
 		if filter_name == 'Overdue':
@@ -272,6 +279,7 @@ class DueDateViewDialog(QDialog):
 		return [entry for entry in self.entries if entry['end_date'] is not None]
 
 	def _populate_table(self):
+		"""!Populate table."""
 		rows = self._filtered_entries()
 		total_due = sum(1 for entry in self.entries if entry['end_date'] is not None)
 		overdue = sum(1 for entry in self.entries if entry['is_overdue'])
@@ -336,6 +344,7 @@ class DueDateViewDialog(QDialog):
 		self.selected_column_id = None
 
 	def _update_selection_state(self):
+		"""!Update selection state."""
 		row = self.table.currentRow()
 		if row < 0:
 			self.selected_card_id = None
@@ -346,11 +355,14 @@ class DueDateViewDialog(QDialog):
 		self.selected_column_id = payload.get('column_id')
 
 	def _edit_selected_card(self):
+		"""!Edit selected card."""
 		self._activate_selected_row('edit')
 
 
 class ArchivedCardInfoDialog(QDialog):
+	"""!Archived Card Info Dialog."""
 	def __init__(self, card, column_label: str, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.setWindowTitle(f'Archived Card: {card.title}')
 		self.resize(640, 520)
@@ -412,6 +424,7 @@ class ArchivedCardInfoDialog(QDialog):
 		badge_layout.setSpacing(8)
 
 		def create_badge(text: str, variant: Optional[str] = None) -> QLabel:
+			"""!Create badge."""
 			badge = QLabel(text)
 			badge.setObjectName('ArchivedInfoBadge')
 			if variant:
@@ -442,6 +455,7 @@ class ArchivedCardInfoDialog(QDialog):
 		configure_form_layout(metadata_form)
 
 		def create_value_label(text: str, secondary: bool = False) -> QLabel:
+			"""!Create value label."""
 			label = QLabel(text)
 			label.setWordWrap(True)
 			label.setObjectName('ArchivedInfoSecondaryValue' if secondary else 'ArchivedInfoValue')
@@ -483,7 +497,9 @@ class ArchivedCardInfoDialog(QDialog):
 
 
 class ArchivedCardsDialog(QDialog):
+	"""!Archived Cards Dialog."""
 	def __init__(self, board: KanbanBoard, board_name: str, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.board = board
 		self.board_name = board_name
@@ -494,6 +510,7 @@ class ArchivedCardsDialog(QDialog):
 		self._populate_table()
 
 	def _build_ui(self):
+		"""!Build ui."""
 		content_layout = build_dialog_shell(
 			self,
 			'Archived Cards',
@@ -590,6 +607,7 @@ class ArchivedCardsDialog(QDialog):
 		self.table.itemDoubleClicked.connect(lambda _item: self._view_selected_card())
 
 	def _archived_cards(self):
+		"""!Archived cards."""
 		return sorted(
 			self.board.get_archived_cards(),
 			key=lambda card: (
@@ -600,6 +618,7 @@ class ArchivedCardsDialog(QDialog):
 		)
 
 	def _populate_table(self):
+		"""!Populate table."""
 		cards = self._archived_cards()
 		count = len(cards)
 		if count == 0:
@@ -633,6 +652,7 @@ class ArchivedCardsDialog(QDialog):
 		self._update_selection_state()
 
 	def _update_selection_state(self):
+		"""!Update selection state."""
 		row = self.table.currentRow()
 		payload = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole) if row >= 0 and self.table.item(row, 0) else {}
 		self.selected_card_id = (payload or {}).get('card_id')
@@ -643,6 +663,7 @@ class ArchivedCardsDialog(QDialog):
 		self.delete_button.setEnabled(can_mutate)
 
 	def _selected_card(self):
+		"""!Selected card."""
 		if not self.selected_card_id:
 			return None
 		card = self.board.find_card(self.selected_card_id, include_archived=True)
@@ -651,6 +672,7 @@ class ArchivedCardsDialog(QDialog):
 		return card
 
 	def _view_selected_card(self):
+		"""!View selected card."""
 		card = self._selected_card()
 		if card is None:
 			QMessageBox.information(self, 'Archived Cards', 'Select an archived card first.')
@@ -659,6 +681,7 @@ class ArchivedCardsDialog(QDialog):
 		dialog.exec()
 
 	def _restore_selected_card(self):
+		"""!Restore selected card."""
 		card = self._selected_card()
 		if card is None:
 			QMessageBox.information(self, 'Restore Archived Card', 'Select an archived card first.')
@@ -676,6 +699,7 @@ class ArchivedCardsDialog(QDialog):
 			QMessageBox.warning(self, 'Restore Archived Card', f"Unable to restore '{card.title}'.")
 
 	def _delete_selected_card(self):
+		"""!Delete selected card."""
 		card = self._selected_card()
 		if card is None:
 			QMessageBox.information(self, 'Delete Archived Card', 'Select an archived card first.')

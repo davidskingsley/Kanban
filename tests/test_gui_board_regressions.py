@@ -26,7 +26,9 @@ from kanban.models import Priority
 
 
 class GuiBoardRegressionTests(GuiTestCase):
+    """!Gui Board Regression Tests."""
     def test_sqlite_board_backend_round_trips_and_creates_backups(self):
+        """!Test sqlite board backend round trips and creates backups."""
         board_id = self.board_manager.create_board('SQLite Board', storage_backend='sqlite')
         metadata = self.board_manager.load_metadata()
         board_info = metadata['boards'][board_id]
@@ -45,6 +47,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertEqual(export_data['cards'][0]['id'], created_card.id)
 
     def test_import_boards_preserves_sqlite_backend_payloads(self):
+        """!Test import boards preserves sqlite backend payloads."""
         board_id = self.board_manager.create_board('SQLite Import Board', storage_backend='sqlite')
         board = self.board_manager.get_current_board()
         column_id = board.get_columns_ordered()[0].id
@@ -65,6 +68,7 @@ class GuiBoardRegressionTests(GuiTestCase):
             imported_manager.close()
 
     def test_folder_discovery_includes_sqlite_board_files(self):
+        """!Test folder discovery includes sqlite board files."""
         external_dir = os.path.join(self.temp_dir, 'sqlite_folder_board')
         os.makedirs(external_dir, exist_ok=True)
         self.board_manager.create_board(
@@ -82,6 +86,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertTrue(discovered_board['data_file'].endswith('.sqlite3'))
 
     def test_board_manager_converts_board_between_json_and_sqlite(self):
+        """!Test board manager converts board between json and sqlite."""
         board_id = self.board_manager.create_board('Convertible Board', storage_backend='json')
         board = self.board_manager.get_current_board()
         column_id = board.get_columns_ordered()[0].id
@@ -106,6 +111,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertEqual(self.board_manager.export_board_data(board_id)['cards'][0]['title'], 'Convert Me')
 
     def test_gui_can_convert_current_board_backend(self):
+        """!Test gui can convert current board backend."""
         board_id = self.board_manager.create_board('GUI Convertible Board', storage_backend='json')
         self.gui = MultiBoardGUI(self.board_manager)
         original_path = self.board_manager.load_metadata()['boards'][board_id]['data_file']
@@ -122,6 +128,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         information_mock.assert_called_once()
 
     def test_card_list_drag_preview_uses_card_widget_not_row_container(self):
+        """!Test card list drag preview uses card widget not row container."""
         self.board_manager.create_board('Drag Preview Board')
         board = self.board_manager.get_current_board()
         column_id = board.get_columns_ordered()[0].id
@@ -143,22 +150,29 @@ class GuiBoardRegressionTests(GuiTestCase):
         captured = {}
 
         class FakeDrag:
+            """!Fake Drag."""
             def __init__(self, _source):
+                """!Init."""
                 self.mime_data = None
 
             def setMimeData(self, mime_data):
+                """!Set mime data."""
                 self.mime_data = mime_data
 
             def setPixmap(self, pixmap):
+                """!Set pixmap."""
                 captured['pixmap_size'] = pixmap.size()
 
             def setHotSpot(self, hotspot):
+                """!Set hot spot."""
                 captured['hotspot'] = hotspot
 
             def exec(self, _action):
+                """!Exec."""
                 captured['exec_called'] = True
 
         def fake_create_drag_preview(pixmap):
+            """!Fake create drag preview."""
             captured['grabbed_size'] = pixmap.size()
             return QPixmap(pixmap)
 
@@ -170,6 +184,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertTrue(captured['exec_called'])
 
     def test_dismissing_subcard_context_menu_does_not_trigger_add_subcard(self):
+        """!Test dismissing subcard context menu does not trigger add subcard."""
         self.board_manager.create_board('Subcard Context Menu Board')
         board = self.board_manager.get_current_board()
         column_id = board.get_columns_ordered()[0].id
@@ -179,24 +194,32 @@ class GuiBoardRegressionTests(GuiTestCase):
         tile = CardTile(board, subcard, context_action_callback=lambda card_id, action: callback_calls.append((card_id, action)))
 
         class FakeContextEvent:
+            """!Fake Context Event."""
             def __init__(self):
+                """!Init."""
                 self.ignored = False
 
             def globalPos(self):
+                """!Global pos."""
                 return QPoint(5, 5)
 
             def ignore(self):
+                """!Ignore."""
                 self.ignored = True
 
         class FakeMenu:
+            """!Fake Menu."""
             def __init__(self, _parent=None):
+                """!Init."""
                 self.actions = []
 
             def addAction(self, label):
+                """!Add action."""
                 self.actions.append(label)
                 return label
 
             def exec(self, _global_pos):
+                """!Exec."""
                 return None
 
         with patch('kanban.gui.embedded_board.QMenu', FakeMenu):
@@ -207,6 +230,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertTrue(event.ignored)
 
     def test_card_list_drop_indicator_tracks_item_insertion_position(self):
+        """!Test card list drop indicator tracks item insertion position."""
         list_widget = CardListWidget()
         list_widget.resize(220, 240)
 
@@ -234,6 +258,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertFalse(list_widget._drop_indicator_line.isVisible())
 
     def test_column_group_box_drop_indicator_tracks_left_and_right_edges(self):
+        """!Test column group box drop indicator tracks left and right edges."""
         column_box = ColumnGroupBox('', 'column-1', board_view=None, selected=False)
         column_box.resize(260, 200)
         column_box.show()
@@ -252,6 +277,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertFalse(column_box._drop_indicator_line.isVisible())
 
     def test_column_title_button_can_trigger_drag_callback(self):
+        """!Test column title button can trigger drag callback."""
         drag_calls = []
         drag_target = QWidget()
         button = ColumnTitleButton('Backlog', drag_callback=drag_calls.append, drag_target=drag_target, parent=drag_target)
@@ -267,6 +293,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertIsNone(button._press_pos)
 
     def test_file_menu_exposes_exit_action(self):
+        """!Test file menu exposes exit action."""
         self.board_manager.create_board('File Menu Board')
         self.gui = MultiBoardGUI(self.board_manager)
 
@@ -279,6 +306,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertIn('Exit', file_action_texts)
 
     def test_cards_menu_exposes_archive_management_actions(self):
+        """!Test cards menu exposes archive management actions."""
         self.board_manager.create_board('Archive Menu Board')
         self.gui = MultiBoardGUI(self.board_manager)
 
@@ -290,6 +318,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertIn('Manage Archived Cards', card_action_texts)
 
     def test_gui_archive_done_cards_moves_cards_out_of_active_board_view(self):
+        """!Test gui archive done cards moves cards out of active board view."""
         self.board_manager.create_board('Archive Done GUI Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -310,6 +339,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         information_mock.assert_called_once()
 
     def test_export_current_board_writes_standalone_board_json(self):
+        """!Test export current board writes standalone board json."""
         self.board_manager.create_board('Exportable Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -333,6 +363,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         information_mock.assert_called_once()
 
     def test_custom_board_drag_drop_and_attachment_flow(self):
+        """!Test custom board drag drop and attachment flow."""
         self.board_manager.create_board('Regression Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -367,6 +398,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertEqual(moved_card.attachments[0].name, 'attachment.txt')
 
     def test_column_double_click_routes_to_column_edit(self):
+        """!Test column double click routes to column edit."""
         self.board_manager.create_board('Column Double Click Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -375,6 +407,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         calls = []
 
         def fake_edit_selected_column():
+            """!Fake edit selected column."""
             calls.append(self.gui.selected_column_id)
 
         self.gui.edit_selected_column = fake_edit_selected_column
@@ -385,6 +418,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertIsNone(self.gui.selected_card_id)
 
     def test_project_crud_updates_cards_and_card_type_presets(self):
+        """!Test project crud updates cards and card type presets."""
         self.board_manager.create_board('Project Crud Board')
         board = self.board_manager.get_current_board()
         column_id = board.get_columns_ordered()[0].id
@@ -412,6 +446,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertEqual(reassigned_card_type.default_project, 'Beta')
 
     def test_add_subcard_action_creates_child_for_selected_top_level_card(self):
+        """!Test add subcard action creates child for selected top level card."""
         self.board_manager.create_board('Selected Subcard Action Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -420,13 +455,17 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.gui.selected_card_id = parent_card.id
 
         class FakeCardDialog:
+            """!Fake Card Dialog."""
             def __init__(self, *_args, **_kwargs):
+                """!Init."""
                 self.did_mutate_board = False
 
             def exec(self):
+                """!Exec."""
                 return CardDialog.DialogCode.Accepted
 
             def values(self):
+                """!Values."""
                 return {
                     'title': 'Child Task',
                     'description': 'nested work',
@@ -452,6 +491,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertEqual(subcards[0].priority, Priority.HIGH)
 
     def test_board_card_checklist_persists_through_create_and_edit(self):
+        """!Test board card checklist persists through create and edit."""
         self.board_manager.create_board('Checklist Persistence Board')
         board = self.board_manager.get_current_board()
         column_id = board.get_columns_ordered()[0].id
@@ -485,6 +525,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertEqual(len(exported_card['todo_items']), 2)
 
     def test_gui_can_toggle_card_checklist_item_inline(self):
+        """!Test gui can toggle card checklist item inline."""
         self.board_manager.create_board('Inline Checklist Toggle Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -506,6 +547,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertEqual(self.gui.selected_card_id, card.id)
 
     def test_card_list_has_no_default_container_frame(self):
+        """!Test card list has no default container frame."""
         list_widget = CardListWidget()
         list_widget._apply_drop_style()
 
@@ -513,6 +555,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertIn('border: none;', list_widget.styleSheet())
 
     def test_history_actions_track_current_board_undo_and_redo(self):
+        """!Test history actions track current board undo and redo."""
         self.board_manager.create_board('Board History Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -536,6 +579,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertTrue(self.gui.undo_current_board_qaction.isEnabled())
 
     def test_history_actions_track_board_management_undo_and_redo(self):
+        """!Test history actions track board management undo and redo."""
         first_board_id = self.board_manager.create_board('Primary Board')
         self.gui = MultiBoardGUI(self.board_manager)
 
@@ -560,6 +604,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertTrue(self.gui.undo_board_management_qaction.isEnabled())
 
     def test_column_dialog_prefills_existing_column_values(self):
+        """!Test column dialog prefills existing column values."""
         self.board_manager.create_board('Column Prefill Board')
         self.gui = MultiBoardGUI(self.board_manager)
         board = self.board_manager.get_current_board()
@@ -573,6 +618,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertEqual(dialog.add_card_check.isChecked(), column.can_add_card)
 
     def test_scroll_wheel_bubbles_to_parent_when_child_cannot_scroll(self):
+        """!Test scroll wheel bubbles to parent when child cannot scroll."""
         parent_scroll = PropagatingScrollArea()
         parent_scroll.resize(260, 150)
 
@@ -616,6 +662,7 @@ class GuiBoardRegressionTests(GuiTestCase):
         self.assertGreater(parent_scroll.verticalScrollBar().value(), 0)
 
     def test_scroll_wheel_stays_on_child_when_child_can_scroll(self):
+        """!Test scroll wheel stays on child when child can scroll."""
         parent_scroll = PropagatingScrollArea()
         parent_scroll.resize(260, 180)
 

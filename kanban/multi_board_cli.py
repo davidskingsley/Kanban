@@ -1,6 +1,6 @@
 ## @file
 #  @brief Interactive command-line interface for managing multiple Kanban boards.
-"""Multi-board command-line interface for the Kanban board application."""
+"""!Multi-board command-line interface for the Kanban board application."""
 
 import os
 
@@ -10,16 +10,17 @@ from .cli import BoardCLI
 
 ## @brief Provide menu-driven multi-board management from the terminal.
 class MultiBoardCLI:
-    """Command line interface for managing multiple Kanban boards."""
+    """!Command line interface for managing multiple Kanban boards."""
     
     def __init__(self, board_manager: BoardManager):
+        """!Init."""
         self.board_manager = board_manager
         self.board_manager.set_lock_handler(self.prompt_for_locked_board_action)
         self.running = True
         self.current_cli = None
 
     def prompt_for_locked_board_action(self, file_path: str, lock_details: dict) -> str:
-        """Prompt for how to handle a locked board file."""
+        """!Prompt for how to handle a locked board file."""
         print("\n--- BOARD LOCKED ---")
         print(f"Board file: {file_path}")
         if lock_details:
@@ -37,7 +38,7 @@ class MultiBoardCLI:
             print("Please enter 'r' to open read only, 'd' to delete the lock, or 'c' to cancel.")
     
     def run(self):
-        """Main CLI loop."""
+        """!Main CLI loop."""
         self.show_welcome()
         
         # Check if any boards exist, if not, create one
@@ -57,7 +58,7 @@ class MultiBoardCLI:
                 print(f"Error: {e}")
     
     def show_welcome(self):
-        """Show welcome message."""
+        """!Show welcome message."""
         print("=" * 60)
         print("🗂️  WELCOME TO MULTI-BOARD KANBAN MANAGER  🗂️")
         print("=" * 60)
@@ -65,7 +66,7 @@ class MultiBoardCLI:
         print()
     
     def show_board_selector(self):
-        """Display board selection and management options."""
+        """!Display board selection and management options."""
         boards = self.board_manager.get_board_list()
         
         if boards:
@@ -108,7 +109,7 @@ class MultiBoardCLI:
         print()
     
     def handle_main_choice(self, choice: str):
-        """Handle user's main menu choice."""
+        """!Handle user's main menu choice."""
         boards = self.board_manager.get_board_list()
         
         handlers = {
@@ -139,7 +140,7 @@ class MultiBoardCLI:
             input("\nPress Enter to continue...")
     
     def open_current_board(self):
-        """Open the current board in the board command interface."""
+        """!Open the current board in the board command interface."""
         current_board = self.board_manager.get_current_board()
         if not current_board:
             if self.board_manager.current_board_id:
@@ -155,7 +156,7 @@ class MultiBoardCLI:
         board_cli.run()
     
     def switch_board(self):
-        """Switch to a different board."""
+        """!Switch to a different board."""
         boards = self.board_manager.get_board_list()
         if not boards:
             print("No boards available!")
@@ -181,7 +182,7 @@ class MultiBoardCLI:
             print("Invalid input!")
     
     def create_board(self):
-        """Create a new board."""
+        """!Create a new board."""
         print("\n--- CREATE NEW BOARD ---")
         name = input("Board name: ").strip()
         if not name:
@@ -217,7 +218,7 @@ class MultiBoardCLI:
             print("❌ Failed to create board!")
     
     def rename_board(self):
-        """Rename a board."""
+        """!Rename a board."""
         boards = self.board_manager.get_board_list()
         if not boards:
             print("No boards available!")
@@ -247,7 +248,7 @@ class MultiBoardCLI:
             print("Invalid input!")
 
     def convert_board_backend(self):
-        """Convert a board between JSON and SQLite storage backends."""
+        """!Convert a board between JSON and SQLite storage backends."""
         boards = self.board_manager.get_board_list()
         if not boards:
             print("No boards available!")
@@ -286,7 +287,7 @@ class MultiBoardCLI:
             print(f"❌ Failed to convert board: {error}")
     
     def delete_board(self):
-        """Delete a board."""
+        """!Delete a board."""
         boards = self.board_manager.get_board_list()
         if not boards:
             print("No boards available!")
@@ -321,7 +322,7 @@ class MultiBoardCLI:
             print("Invalid input!")
     
     def show_board_statistics(self):
-        """Show statistics for all boards."""
+        """!Show statistics for all boards."""
         boards = self.board_manager.get_board_list()
         if not boards:
             print("No boards available!")
@@ -364,6 +365,7 @@ class MultiBoardCLI:
         print(f"   ✅ Total Done: {total_done}")
 
     def _format_board_stats(self, stats: dict) -> list[str]:
+        """!Format board stats."""
         if all(key in stats for key in ('todo', 'in_progress', 'review', 'done')):
             return [
                 f"📝 To Do: {stats['todo']}",
@@ -376,7 +378,7 @@ class MultiBoardCLI:
         return [f"📂 {name}: {count}" for name, count in stats.items() if name not in ignored_keys]
     
     def export_all_boards(self):
-        """Export all boards to a backup file."""
+        """!Export all boards to a backup file."""
         print("\n--- EXPORT ALL BOARDS ---")
         filename = input("Export filename (default: kanban_backup.json): ").strip()
         if not filename:
@@ -397,7 +399,7 @@ class MultiBoardCLI:
             print(f"❌ Failed to export boards: {e}")
 
     def export_current_board(self):
-        """Export the current board as a standalone board JSON file."""
+        """!Export the current board as a standalone board JSON file."""
         print("\n--- EXPORT CURRENT BOARD ---")
         current_board_id = self.board_manager.current_board_id
         if not current_board_id:
@@ -428,7 +430,7 @@ class MultiBoardCLI:
             print(f"❌ Failed to export current board: {e}")
     
     def import_boards(self):
-        """Import boards from a backup file."""
+        """!Import boards from a backup file."""
         print("\n--- IMPORT BOARDS ---")
         filename = input("Import filename: ").strip()
         
@@ -462,7 +464,7 @@ class MultiBoardCLI:
             print(f"❌ Failed to import boards: {e}")
 
     def load_board_from_folder(self):
-        """Load a specific board from an external folder."""
+        """!Load a specific board from an external folder."""
         import json
         import os
 
@@ -562,7 +564,7 @@ class MultiBoardCLI:
             print(f"❌ Failed to load board: {error}")
 
     def undo_last_change(self):
-        """Undo the most recent board-management change."""
+        """!Undo the most recent board-management change."""
         description = self.board_manager.undo_last_action()
         if not description:
             print("No board-management action is available to undo.")
@@ -571,7 +573,7 @@ class MultiBoardCLI:
         print(f"↩ Undid: {description}")
 
     def redo_last_change(self):
-        """Redo the most recently undone board-management change."""
+        """!Redo the most recently undone board-management change."""
         description = self.board_manager.redo_last_action()
         if not description:
             print("No board-management action is available to redo.")
@@ -580,7 +582,7 @@ class MultiBoardCLI:
         print(f"↪ Redid: {description}")
     
     def exit_app(self):
-        """Exit the application."""
+        """!Exit the application."""
         self.board_manager.close()
         print("\n👋 Goodbye! All your boards are automatically saved!")
         self.running = False

@@ -1,6 +1,6 @@
 ## @file
 #  @brief Board, column, card-type, and project management dialogs for the PySide6 multi-board GUI.
-"""Management dialogs for the PySide6 GUI."""
+"""!Management dialogs for the PySide6 GUI."""
 
 from __future__ import annotations
 
@@ -45,9 +45,10 @@ from .common import (
 
 
 class BoardDialog(QDialog):
-	"""Dialog for creating a board."""
+	"""!Dialog for creating a board."""
 
 	def __init__(self, default_directory: str, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.setWindowTitle('Create Board')
 		self.resize(620, 420)
@@ -88,11 +89,13 @@ class BoardDialog(QDialog):
 		add_dialog_footer(self, buttons)
 
 	def choose_directory(self):
+		"""!Choose directory."""
 		directory = choose_existing_directory_dialog(self, 'Select Board Storage Folder', self.directory_edit.text())
 		if directory:
 			self.directory_edit.setText(directory)
 
 	def values(self) -> Dict[str, str]:
+		"""!Values."""
 		return {
 			'name': self.name_edit.text().strip(),
 			'description': self.description_edit.toPlainText().strip(),
@@ -101,6 +104,7 @@ class BoardDialog(QDialog):
 		}
 
 	def accept(self):
+		"""!Accept."""
 		if not self.name_edit.text().strip():
 			QMessageBox.warning(self, 'Missing Name', 'Board name is required.')
 			return
@@ -108,9 +112,10 @@ class BoardDialog(QDialog):
 
 
 class ColumnDialog(QDialog):
-	"""Dialog for creating or editing a column."""
+	"""!Dialog for creating or editing a column."""
 
 	def __init__(self, column: Optional[CustomColumn] = None, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.setWindowTitle('Column')
 		self.resize(560, 360)
@@ -148,6 +153,7 @@ class ColumnDialog(QDialog):
 		add_dialog_footer(self, buttons)
 
 	def values(self) -> Dict[str, object]:
+		"""!Values."""
 		return {
 			'name': self.name_edit.text().strip(),
 			'color': self.color_field.color() or '#2196F3',
@@ -156,6 +162,7 @@ class ColumnDialog(QDialog):
 		}
 
 	def accept(self):
+		"""!Accept."""
 		if not self.name_edit.text().strip():
 			QMessageBox.warning(self, 'Missing Name', 'Column name is required.')
 			return
@@ -163,9 +170,10 @@ class ColumnDialog(QDialog):
 
 
 class ReorderColumnsDialog(QDialog):
-	"""Dialog for reordering columns."""
+	"""!Dialog for reordering columns."""
 
 	def __init__(self, columns: List[CustomColumn], parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.setWindowTitle('Reorder Columns')
 		self.resize(560, 440)
@@ -199,6 +207,7 @@ class ReorderColumnsDialog(QDialog):
 		add_dialog_footer(self, buttons)
 
 	def refresh_items(self):
+		"""!Refresh items."""
 		self.list_widget.clear()
 		for column in self.columns:
 			self.list_widget.addItem(column.name)
@@ -206,6 +215,7 @@ class ReorderColumnsDialog(QDialog):
 			self.list_widget.setCurrentRow(0)
 
 	def move_up(self):
+		"""!Move up."""
 		row = self.list_widget.currentRow()
 		if row <= 0:
 			return
@@ -214,6 +224,7 @@ class ReorderColumnsDialog(QDialog):
 		self.list_widget.setCurrentRow(row - 1)
 
 	def move_down(self):
+		"""!Move down."""
 		row = self.list_widget.currentRow()
 		if row < 0 or row >= len(self.columns) - 1:
 			return
@@ -222,13 +233,15 @@ class ReorderColumnsDialog(QDialog):
 		self.list_widget.setCurrentRow(row + 1)
 
 	def ordered_ids(self) -> List[str]:
+		"""!Ordered ids."""
 		return [column.id for column in self.columns]
 
 
 class CardTypeDialog(QDialog):
-	"""Dialog for creating or editing a card type."""
+	"""!Dialog for creating or editing a card type."""
 
 	def __init__(self, card_type: Optional[CardType] = None, is_default: bool = False, board: Optional[KanbanBoard] = None, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.card_type = card_type
 		self.is_default = is_default
@@ -268,6 +281,7 @@ class CardTypeDialog(QDialog):
 		add_dialog_footer(self, buttons)
 
 	def values(self) -> Dict[str, Optional[str]]:
+		"""!Values."""
 		return {
 			'name': self.name_edit.text().strip(),
 			'description': self.description_edit.toPlainText().strip(),
@@ -276,6 +290,7 @@ class CardTypeDialog(QDialog):
 		}
 
 	def accept(self):
+		"""!Accept."""
 		if not self.card_type and not self.name_edit.text().strip():
 			QMessageBox.warning(self, 'Missing Name', 'Card type name is required.')
 			return
@@ -286,9 +301,10 @@ class CardTypeDialog(QDialog):
 
 
 class CardTypesBrowserDialog(QDialog):
-	"""Read-only browser for board card types and their presets."""
+	"""!Read-only browser for board card types and their presets."""
 
 	def __init__(self, board: KanbanBoard, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.board = board
 		self.selected_card_type_id: Optional[str] = None
@@ -326,6 +342,7 @@ class CardTypesBrowserDialog(QDialog):
 		self.refresh_rows()
 
 	def _create_color_swatch(self, color_value: Optional[str]) -> QWidget:
+		"""!Create color swatch."""
 		container = QWidget()
 		layout = QHBoxLayout(container)
 		layout.setContentsMargins(8, 0, 8, 0)
@@ -355,6 +372,7 @@ class CardTypesBrowserDialog(QDialog):
 		return container
 
 	def refresh_rows(self):
+		"""!Refresh rows."""
 		default_type_id = self.board.get_default_card_type_id()
 		last_used_id = self.board.get_last_used_card_type().id
 		card_types = self.board.get_card_types_ordered()
@@ -382,6 +400,7 @@ class CardTypesBrowserDialog(QDialog):
 			self.table.setRowHeight(row_index, 36)
 
 	def _activate_selected_card_type(self):
+		"""!Activate selected card type."""
 		row = self.table.currentRow()
 		if row < 0:
 			return
@@ -394,9 +413,10 @@ class CardTypesBrowserDialog(QDialog):
 
 
 class ProjectDialog(QDialog):
-	"""Dialog for creating or editing a managed project."""
+	"""!Dialog for creating or editing a managed project."""
 
 	def __init__(self, project: Optional[Project] = None, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.project = project
 		self.setWindowTitle('Edit Project' if project else 'Create Project')
@@ -425,12 +445,14 @@ class ProjectDialog(QDialog):
 		add_dialog_footer(self, buttons)
 
 	def values(self) -> Dict[str, str]:
+		"""!Values."""
 		return {
 			'name': self.name_edit.text().strip(),
 			'description': self.description_edit.toPlainText().strip(),
 		}
 
 	def accept(self):
+		"""!Accept."""
 		if not self.name_edit.text().strip():
 			QMessageBox.warning(self, 'Missing Name', 'Project name is required.')
 			return
@@ -438,9 +460,10 @@ class ProjectDialog(QDialog):
 
 
 class ProjectsBrowserDialog(QDialog):
-	"""Read-only browser for managed projects and their usage counts."""
+	"""!Read-only browser for managed projects and their usage counts."""
 
 	def __init__(self, board: KanbanBoard, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.board = board
 		self.selected_project_id: Optional[str] = None
@@ -476,6 +499,7 @@ class ProjectsBrowserDialog(QDialog):
 		self.refresh_rows()
 
 	def refresh_rows(self):
+		"""!Refresh rows."""
 		projects = self.board.get_projects_ordered()
 		self.table.setRowCount(len(projects))
 		for row_index, project in enumerate(projects):
@@ -493,6 +517,7 @@ class ProjectsBrowserDialog(QDialog):
 			self.table.setRowHeight(row_index, 36)
 
 	def _activate_selected_project(self):
+		"""!Activate selected project."""
 		row = self.table.currentRow()
 		if row < 0:
 			return

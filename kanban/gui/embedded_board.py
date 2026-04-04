@@ -1,6 +1,6 @@
 ## @file
 #  @brief Embedded board widgets used by the PySide6 multi-board GUI.
-"""Board-view widgets for the PySide6 GUI."""
+"""!Board-view widgets for the PySide6 GUI."""
 
 from __future__ import annotations
 
@@ -44,13 +44,14 @@ from .common import (
 
 
 class CardTile(QFrame):
-	"""Structured card widget used inside each column list."""
+	"""!Structured card widget used inside each column list."""
 
 	def __init__(self, board: KanbanBoard, card, selected: bool = False,
 				 file_drop_callback=None, select_callback=None,
 				 edit_callback=None, context_action_callback=None,
 				 todo_toggle_callback=None,
 				 parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.board = board
 		self.card = card
@@ -77,6 +78,7 @@ class CardTile(QFrame):
 		self._apply_style()
 
 	def _create_badge(self, text: str, background: str, foreground: str, border: Optional[str] = None) -> QLabel:
+		"""!Create badge."""
 		label = QLabel(text)
 		label.setFixedHeight(24)
 		label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -94,6 +96,7 @@ class CardTile(QFrame):
 		return label
 
 	def _selection_color_for_background(self) -> str:
+		"""!Selection color for background."""
 		background = QColor(self.background)
 		if self.foreground == '#ffffff':
 			selection = background.lighter(170)
@@ -102,6 +105,7 @@ class CardTile(QFrame):
 		return selection.name()
 
 	def set_compact_text(self, compact_text: bool):
+		"""!Set compact text."""
 		if self.compact_text == compact_text:
 			return
 		self.compact_text = compact_text
@@ -109,6 +113,7 @@ class CardTile(QFrame):
 		self.updateGeometry()
 
 	def _build_ui(self):
+		"""!Build ui."""
 		layout = QVBoxLayout(self)
 		layout.setContentsMargins(14, 14, 14, 14)
 		layout.setSpacing(10)
@@ -276,6 +281,7 @@ class CardTile(QFrame):
 		self._apply_text_styles()
 
 	def _apply_text_styles(self):
+		"""!Apply text styles."""
 		title_size = '8.5pt' if self.compact_text else '9pt'
 		meta_size = '6.5pt' if self.compact_text else '7pt'
 		body_size = '7pt' if self.compact_text else '7.5pt'
@@ -314,6 +320,7 @@ class CardTile(QFrame):
 			)
 
 	def _apply_shadow(self):
+		"""!Apply shadow."""
 		shadow = QGraphicsDropShadowEffect(self)
 		shadow.setBlurRadius(30 if self.selected else 24)
 		shadow.setOffset(0, 7 if self.selected else 5)
@@ -324,6 +331,7 @@ class CardTile(QFrame):
 		self.setGraphicsEffect(shadow)
 
 	def _apply_style(self):
+		"""!Apply style."""
 		active_border = '#3e7a5e' if self._drop_highlight else self.border_color
 		soft_top = QColor(self.background).lighter(108 if self.selected else 104).name()
 		soft_bottom = QColor(self.background).darker(100 if self.selected else 102).name()
@@ -340,6 +348,7 @@ class CardTile(QFrame):
 		)
 
 	def dragEnterEvent(self, event):
+		"""!DragEnterEvent."""
 		if self.file_drop_callback is None:
 			event.ignore()
 			return
@@ -352,11 +361,13 @@ class CardTile(QFrame):
 		event.acceptProposedAction()
 
 	def dragLeaveEvent(self, event):
+		"""!DragLeaveEvent."""
 		self._drop_highlight = False
 		self._apply_style()
 		super().dragLeaveEvent(event)
 
 	def dropEvent(self, event):
+		"""!DropEvent."""
 		paths = file_paths_from_mime_data(event.mimeData())
 		self._drop_highlight = False
 		self._apply_style()
@@ -367,17 +378,20 @@ class CardTile(QFrame):
 		event.acceptProposedAction()
 
 	def mousePressEvent(self, event):
+		"""!MousePressEvent."""
 		if event.button() == Qt.MouseButton.LeftButton:
 			event.ignore()
 			return
 		super().mousePressEvent(event)
 
 	def _handle_todo_checkbox_state_change(self, todo_item_id: str, state: int):
+		"""!Handle todo checkbox state change."""
 		if self.todo_toggle_callback is None:
 			return
 		self.todo_toggle_callback(self.card.id, todo_item_id, state == Qt.CheckState.Checked.value)
 
 	def mouseDoubleClickEvent(self, event):
+		"""!MouseDoubleClickEvent."""
 		if event.button() == Qt.MouseButton.LeftButton and self.edit_callback is not None:
 			self.edit_callback(self.card.id)
 			event.accept()
@@ -385,6 +399,7 @@ class CardTile(QFrame):
 		super().mouseDoubleClickEvent(event)
 
 	def contextMenuEvent(self, event):
+		"""!ContextMenuEvent."""
 		menu = QMenu(self)
 		edit_action = menu.addAction('Edit Card')
 		add_subcard_action = None
@@ -405,18 +420,22 @@ class CardTile(QFrame):
 		super().contextMenuEvent(event)
 
 	def sizeHint(self) -> QSize:
+		"""!SizeHint."""
 		width = self.width() if self.width() > 0 else super().sizeHint().width()
 		return QSize(width, self.heightForWidth(width))
 
 	def minimumSizeHint(self) -> QSize:
+		"""!MinimumSizeHint."""
 		hint = super().minimumSizeHint()
 		width = self.width() if self.width() > 0 else max(hint.width(), super().sizeHint().width())
 		return QSize(width, self.heightForWidth(width))
 
 	def hasHeightForWidth(self) -> bool:
+		"""!HasHeightForWidth."""
 		return True
 
 	def heightForWidth(self, width: int) -> int:
+		"""!HeightForWidth."""
 		layout = self.layout()
 		if layout is None:
 			return max(super().sizeHint().height(), 156)
@@ -425,10 +444,11 @@ class CardTile(QFrame):
 
 
 class CardListItemContainer(QWidget):
-	"""Full-width row container that keeps card clearance on the scrollbar side only."""
+	"""!Full-width row container that keeps card clearance on the scrollbar side only."""
 	BOTTOM_SPACING = 14
 
 	def __init__(self, card_widget: CardTile, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.card_widget = card_widget
 		self._layout = QHBoxLayout(self)
@@ -438,18 +458,21 @@ class CardListItemContainer(QWidget):
 		self._layout.addStretch(1)
 
 	def apply_widths(self, row_width: int, card_width: int, right_clearance: int):
+		"""!Apply widths."""
 		self.setFixedWidth(row_width)
 		self._layout.setContentsMargins(0, 0, right_clearance, self.BOTTOM_SPACING)
 		self.card_widget.setFixedWidth(card_width)
 		self.card_widget.updateGeometry()
 
 	def heightForWidth(self, width: int) -> int:
+		"""!HeightForWidth."""
 		margins = self._layout.contentsMargins()
 		card_width = max(120, width - margins.right())
 		return self.card_widget.heightForWidth(card_width) + margins.bottom()
 
 
 class CardListWidget(QListWidget):
+	"""!CardListWidget."""
 	CARD_MIME_TYPE = 'application/x-kanban-card'
 	DROP_INDICATOR_MARGIN = 10
 	DROP_INDICATOR_SPACING = 5
@@ -458,6 +481,7 @@ class CardListWidget(QListWidget):
 	SCROLLBAR_CLEARANCE = 14
 
 	def __init__(self, column_id: Optional[str] = None, board_view=None, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.column_id = column_id
 		self.board_view = board_view
@@ -479,6 +503,7 @@ class CardListWidget(QListWidget):
 		self.verticalScrollBar().rangeChanged.connect(lambda _minimum, _maximum: self.refresh_card_sizes())
 
 	def _apply_drop_style(self):
+		"""!Apply drop style."""
 		self.setStyleSheet(
 			"""
 			QListWidget {
@@ -502,6 +527,7 @@ class CardListWidget(QListWidget):
 		)
 
 	def startDrag(self, supported_actions):
+		"""!StartDrag."""
 		item = self.currentItem()
 		if item is None:
 			return
@@ -524,6 +550,7 @@ class CardListWidget(QListWidget):
 		drag.exec(Qt.DropAction.MoveAction)
 
 	def dragEnterEvent(self, event):
+		"""!DragEnterEvent."""
 		if event.mimeData().hasFormat(self.CARD_MIME_TYPE):
 			self._drop_highlight = True
 			self._apply_drop_style()
@@ -533,6 +560,7 @@ class CardListWidget(QListWidget):
 		event.ignore()
 
 	def dragMoveEvent(self, event):
+		"""!DragMoveEvent."""
 		if event.mimeData().hasFormat(self.CARD_MIME_TYPE):
 			self._update_drop_indicator(event.position().toPoint())
 			event.acceptProposedAction()
@@ -540,6 +568,7 @@ class CardListWidget(QListWidget):
 		event.ignore()
 
 	def _indicator_y_for_point(self, point: QPoint) -> int:
+		"""!Indicator y for point."""
 		if self.count() == 0:
 			return self.DROP_INDICATOR_MARGIN + 2
 		item = self.itemAt(point)
@@ -551,16 +580,19 @@ class CardListWidget(QListWidget):
 		return item_rect.bottom() + self.DROP_INDICATOR_SPACING if insert_after else item_rect.top() - self.DROP_INDICATOR_SPACING
 
 	def _update_drop_indicator(self, point: QPoint):
+		"""!Update drop indicator."""
 		indicator_y = self._indicator_y_for_point(point)
 		max_y = max(self.DROP_INDICATOR_MARGIN, self.viewport().height() - self.DROP_INDICATOR_MARGIN)
 		self._drop_indicator_y = max(self.DROP_INDICATOR_MARGIN, min(indicator_y, max_y))
 		self._position_drop_indicator_line()
 
 	def _clear_drop_indicator(self):
+		"""!Clear drop indicator."""
 		self._drop_indicator_y = None
 		self._drop_indicator_line.hide()
 
 	def _position_drop_indicator_line(self):
+		"""!Position drop indicator line."""
 		if self._drop_indicator_y is None:
 			self._drop_indicator_line.hide()
 			return
@@ -572,6 +604,7 @@ class CardListWidget(QListWidget):
 		self._drop_indicator_line.raise_()
 
 	def _drop_target_details(self, point):
+		"""!Drop target details."""
 		item = self.itemAt(point)
 		if item is None:
 			return None, True
@@ -581,12 +614,14 @@ class CardListWidget(QListWidget):
 		return payload.get('card_id'), insert_after
 
 	def dragLeaveEvent(self, event):
+		"""!DragLeaveEvent."""
 		self._drop_highlight = False
 		self._apply_drop_style()
 		self._clear_drop_indicator()
 		super().dragLeaveEvent(event)
 
 	def dropEvent(self, event):
+		"""!DropEvent."""
 		self._drop_highlight = False
 		self._apply_drop_style()
 		self._clear_drop_indicator()
@@ -605,20 +640,24 @@ class CardListWidget(QListWidget):
 		event.acceptProposedAction()
 
 	def resizeEvent(self, event):
+		"""!ResizeEvent."""
 		super().resizeEvent(event)
 		self.refresh_card_sizes()
 		self._position_drop_indicator_line()
 
 	def wheelEvent(self, event):
+		"""!WheelEvent."""
 		handle_scrollable_wheel_event(self, event, lambda: super(CardListWidget, self).wheelEvent(event))
 
 	def _card_content_clearance_width(self) -> int:
+		"""!Card content clearance width."""
 		scroll_bar = self.verticalScrollBar()
 		if scroll_bar.maximum() <= 0 and not scroll_bar.isVisible():
 			return self.BASE_CONTENT_GUTTER
 		return self.SCROLLBAR_CLEARANCE
 
 	def refresh_card_sizes(self):
+		"""!Refresh card sizes."""
 		row_width = self.viewport().width()
 		right_clearance = self._card_content_clearance_width()
 		card_width = row_width - 2 - right_clearance
@@ -644,6 +683,7 @@ class CardListWidget(QListWidget):
 
 
 class ColumnTitleButton(QPushButton):
+	"""!ColumnTitleButton."""
 	def __init__(
 		self,
 		text: str,
@@ -653,6 +693,7 @@ class ColumnTitleButton(QPushButton):
 		drag_target: Optional[QWidget] = None,
 		parent: Optional[QWidget] = None,
 	):
+		"""!Init."""
 		super().__init__(text, parent)
 		self._double_click_callback = double_click_callback
 		self._drag_callback = drag_callback
@@ -664,11 +705,13 @@ class ColumnTitleButton(QPushButton):
 			self.clicked.connect(click_callback)
 
 	def mousePressEvent(self, event):
+		"""!MousePressEvent."""
 		if event.button() == Qt.MouseButton.LeftButton:
 			self._press_pos = event.position().toPoint()
 		super().mousePressEvent(event)
 
 	def _maybe_start_drag(self, current_pos: QPoint, buttons: Qt.MouseButtons) -> bool:
+		"""!Maybe start drag."""
 		if self._press_pos is None or self._drag_callback is None:
 			return False
 		if not (buttons & Qt.MouseButton.LeftButton):
@@ -683,16 +726,19 @@ class ColumnTitleButton(QPushButton):
 		return True
 
 	def mouseMoveEvent(self, event):
+		"""!MouseMoveEvent."""
 		if self._maybe_start_drag(event.position().toPoint(), event.buttons()):
 			event.accept()
 			return
 		super().mouseMoveEvent(event)
 
 	def mouseReleaseEvent(self, event):
+		"""!MouseReleaseEvent."""
 		self._press_pos = None
 		super().mouseReleaseEvent(event)
 
 	def mouseDoubleClickEvent(self, event):
+		"""!MouseDoubleClickEvent."""
 		if event.button() == Qt.MouseButton.LeftButton and self._double_click_callback is not None:
 			self._double_click_callback()
 			event.accept()
@@ -701,7 +747,9 @@ class ColumnTitleButton(QPushButton):
 
 
 class ColumnAddButton(QPushButton):
+	"""!ColumnAddButton."""
 	def __init__(self, accent_color: str, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.accent_color = resolve_hex_color(accent_color, '#8f4a1d')
 		self.setObjectName('ColumnAddButton')
@@ -715,6 +763,7 @@ class ColumnAddButton(QPushButton):
 		)
 
 	def paintEvent(self, event):
+		"""!PaintEvent."""
 		super().paintEvent(event)
 		painter = QPainter(self)
 		painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -731,12 +780,14 @@ class ColumnAddButton(QPushButton):
 
 
 class ColumnGroupBox(QGroupBox):
+	"""!ColumnGroupBox."""
 	COLUMN_MIME_TYPE = 'application/x-kanban-column'
 	DRAG_HANDLE_HEIGHT = 56
 	DROP_INDICATOR_MARGIN = 10
 	DROP_INDICATOR_THICKNESS = 5
 
 	def __init__(self, title: str, column_id: str, board_view, selected: bool, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(title, parent)
 		self.column_id = column_id
 		self.board_view = board_view
@@ -758,6 +809,7 @@ class ColumnGroupBox(QGroupBox):
 		self._apply_style()
 
 	def _apply_style(self):
+		"""!Apply style."""
 		border_color = '#3e7a5e' if self._drop_highlight else ('#7d3b14' if self.selected else '#ccb391')
 		self.setStyleSheet(
 			f"""
@@ -773,11 +825,13 @@ class ColumnGroupBox(QGroupBox):
 		)
 
 	def mousePressEvent(self, event):
+		"""!MousePressEvent."""
 		if event.button() == Qt.MouseButton.LeftButton and event.position().y() <= self.DRAG_HANDLE_HEIGHT:
 			self._press_pos = event.position().toPoint()
 		super().mousePressEvent(event)
 
 	def mouseMoveEvent(self, event):
+		"""!MouseMoveEvent."""
 		if self._press_pos is None:
 			super().mouseMoveEvent(event)
 			return
@@ -791,6 +845,7 @@ class ColumnGroupBox(QGroupBox):
 		super().mouseMoveEvent(event)
 
 	def start_drag_from_hotspot(self, hot_spot: QPoint):
+		"""!Start drag from hotspot."""
 		mime_data = QMimeData()
 		mime_data.setData(self.COLUMN_MIME_TYPE, self.column_id.encode('utf-8'))
 		drag = QDrag(self)
@@ -802,10 +857,12 @@ class ColumnGroupBox(QGroupBox):
 		drag.exec(Qt.DropAction.MoveAction)
 
 	def mouseReleaseEvent(self, event):
+		"""!MouseReleaseEvent."""
 		self._press_pos = None
 		super().mouseReleaseEvent(event)
 
 	def mouseDoubleClickEvent(self, event):
+		"""!MouseDoubleClickEvent."""
 		if event.button() == Qt.MouseButton.LeftButton and event.position().y() <= 34:
 			self.board_view.handle_column_double_click(self.column_id)
 			event.accept()
@@ -813,6 +870,7 @@ class ColumnGroupBox(QGroupBox):
 		super().mouseDoubleClickEvent(event)
 
 	def dragEnterEvent(self, event):
+		"""!DragEnterEvent."""
 		if event.mimeData().hasFormat(self.COLUMN_MIME_TYPE):
 			self._drop_highlight = True
 			self._apply_style()
@@ -822,6 +880,7 @@ class ColumnGroupBox(QGroupBox):
 		event.ignore()
 
 	def dragMoveEvent(self, event):
+		"""!DragMoveEvent."""
 		if event.mimeData().hasFormat(self.COLUMN_MIME_TYPE):
 			self._update_drop_indicator(event.position().x())
 			event.acceptProposedAction()
@@ -829,15 +888,18 @@ class ColumnGroupBox(QGroupBox):
 		event.ignore()
 
 	def _update_drop_indicator(self, x_pos: float):
+		"""!Update drop indicator."""
 		insert_after = x_pos > (self.width() / 2)
 		self._drop_indicator_x = self.width() - self.DROP_INDICATOR_MARGIN if insert_after else self.DROP_INDICATOR_MARGIN
 		self._position_drop_indicator_line()
 
 	def _clear_drop_indicator(self):
+		"""!Clear drop indicator."""
 		self._drop_indicator_x = None
 		self._drop_indicator_line.hide()
 
 	def _position_drop_indicator_line(self):
+		"""!Position drop indicator line."""
 		if self._drop_indicator_x is None:
 			self._drop_indicator_line.hide()
 			return
@@ -848,12 +910,14 @@ class ColumnGroupBox(QGroupBox):
 		self._drop_indicator_line.raise_()
 
 	def dragLeaveEvent(self, event):
+		"""!DragLeaveEvent."""
 		self._drop_highlight = False
 		self._apply_style()
 		self._clear_drop_indicator()
 		super().dragLeaveEvent(event)
 
 	def dropEvent(self, event):
+		"""!DropEvent."""
 		self._drop_highlight = False
 		self._apply_style()
 		self._clear_drop_indicator()
@@ -866,6 +930,7 @@ class ColumnGroupBox(QGroupBox):
 		event.acceptProposedAction()
 
 	def resizeEvent(self, event):
+		"""!ResizeEvent."""
 		super().resizeEvent(event)
 		self._position_drop_indicator_line()
 

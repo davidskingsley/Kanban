@@ -1,6 +1,6 @@
 ## @file
 #  @brief Board rendering and navigation mixins for the PySide6 GUI.
-"""Board rendering and navigation mixins for the PySide6 GUI."""
+"""!Board rendering and navigation mixins for the PySide6 GUI."""
 
 from __future__ import annotations
 
@@ -44,14 +44,16 @@ from .embedded_board import (
 
 
 class BoardNavigationMixin:
-	"""Board view rendering and navigation helpers."""
+	"""!Board view rendering and navigation helpers."""
 
 	def _populate_columns(self, board: KanbanBoard):
+		"""!Populate columns."""
 		for column in board.get_columns_ordered():
 			self.columns_layout.addWidget(self._create_column_widget(board, column))
 		self.columns_layout.addStretch(1)
 
 	def _create_column_widget(self, board: KanbanBoard, column: CustomColumn) -> QWidget:
+		"""!Create column widget."""
 		column_id = column_identifier(column)
 		accent_color = resolve_hex_color(column_color(column), '#8f4a1d')
 		column_box = ColumnGroupBox('', column_id, self, selected=column_id == self.selected_column_id)
@@ -121,6 +123,7 @@ class BoardNavigationMixin:
 		layout.addWidget(header_row)
 
 		def populate_cards(search_text: str):
+			"""!Populate cards."""
 			active_cards = board.get_column_cards(column)
 			filtered_cards = [
 				card for card in self._filter_cards(board, active_cards)
@@ -160,33 +163,39 @@ class BoardNavigationMixin:
 		return column_box
 
 	def on_card_clicked(self, column_id: str, item: QListWidgetItem):
+		"""!On card clicked."""
 		payload = item.data(Qt.ItemDataRole.UserRole) or {}
 		self.selected_column_id = column_id
 		self.selected_card_id = payload.get('card_id')
 		self.refresh_ui()
 
 	def handle_column_double_click(self, column_id: str):
+		"""!Handle column double click."""
 		self.selected_column_id = column_id
 		self.selected_card_id = None
 		self.edit_selected_column()
 
 	def select_card_from_tile(self, column_id: str, card_id: str):
+		"""!Select card from tile."""
 		self.selected_column_id = column_id
 		self.selected_card_id = card_id
 		self.refresh_ui()
 
 	def edit_card_from_tile(self, column_id: str, card_id: str):
+		"""!Edit card from tile."""
 		self.selected_column_id = column_id
 		self.selected_card_id = card_id
 		self.edit_selected_card()
 
 	def handle_card_tile_action(self, column_id: str, card_id: str, action: str):
+		"""!Handle card tile action."""
 		self.selected_column_id = column_id
 		self.selected_card_id = card_id
 		if action == 'add_subcard':
 			self.add_subcard_to_selected_card()
 
 	def handle_card_tile_todo_toggle(self, column_id: str, card_id: str, todo_item_id: str, completed: bool):
+		"""!Handle card tile todo toggle."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -197,11 +206,13 @@ class BoardNavigationMixin:
 		self.refresh_ui()
 
 	def select_column(self, column_id: str):
+		"""!Select column."""
 		self.selected_column_id = column_id
 		self.selected_card_id = None
 		self.refresh_ui()
 
 	def handle_card_drop(self, card_id: Optional[str], source_column_id: Optional[str], target_column_id: Optional[str], target_card_id: Optional[str] = None, insert_after: bool = False):
+		"""!Handle card drop."""
 		if not card_id or not target_column_id:
 			return
 		board = self.ensure_writable_board()
@@ -222,6 +233,7 @@ class BoardNavigationMixin:
 		self.refresh_ui()
 
 	def handle_column_drop(self, dragged_column_id: Optional[str], target_column_id: Optional[str], insert_after: bool):
+		"""!Handle column drop."""
 		if not dragged_column_id or not target_column_id or dragged_column_id == target_column_id:
 			return
 		board = self.ensure_writable_board()
@@ -240,6 +252,7 @@ class BoardNavigationMixin:
 		self.refresh_ui()
 
 	def handle_card_file_drop(self, card_id: Optional[str], file_paths: List[str]):
+		"""!Handle card file drop."""
 		if not card_id or not file_paths:
 			return
 		board = self.ensure_writable_board()
@@ -260,6 +273,7 @@ class BoardNavigationMixin:
 		self.refresh_ui()
 
 	def _refresh_board_menus(self, boards: List[Dict[str, object]]):
+		"""!Refresh board menus."""
 		self._refresh_recent_boards_menu(boards)
 		self.switch_board_menu.clear()
 		if not boards:
@@ -277,6 +291,7 @@ class BoardNavigationMixin:
 			action.triggered.connect(lambda _checked=False, board_id=board_info['id']: self._switch_board_by_id(board_id))
 
 	def _refresh_recent_boards_menu(self, boards: List[Dict[str, object]]):
+		"""!Refresh recent boards menu."""
 		self.recent_board_menu.clear()
 		if not boards:
 			empty_action = self.recent_board_menu.addAction('No Recent Boards')
@@ -302,6 +317,7 @@ class BoardNavigationMixin:
 			action.triggered.connect(lambda _checked=False, selected_board_id=board_id: self._switch_board_by_id(selected_board_id))
 
 	def _remember_recent_board(self, board_id: str):
+		"""!Remember recent board."""
 		if not board_id:
 			return
 		self.recent_board_ids = [existing_id for existing_id in self.recent_board_ids if existing_id != board_id]
@@ -309,12 +325,14 @@ class BoardNavigationMixin:
 		self.recent_board_ids = self.recent_board_ids[:self.max_recent_boards]
 
 	def _switch_board_by_id(self, board_id: str):
+		"""!Switch board by id."""
 		if board_id and board_id != self.board_manager.current_board_id:
 			if self.board_manager.switch_board(board_id):
 				self._remember_recent_board(board_id)
 				self.refresh_ui()
 
 	def switch_board_prompt(self):
+		"""!Switch board prompt."""
 		boards = self.board_manager.get_board_list()
 		if len(boards) <= 1:
 			return

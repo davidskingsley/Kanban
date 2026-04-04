@@ -1,6 +1,6 @@
 ## @file
 #  @brief Non-interactive command-line actions for the Kanban application.
-"""Direct-action CLI support for automating Kanban board operations."""
+"""!Direct-action CLI support for automating Kanban board operations."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from .direct_cli_support import DirectCliSupportMixin
 
 
 def add_direct_action_subcommands(subparsers: Any) -> None:
-    """Register non-interactive direct-action subcommands on an argparse parser."""
+    """!Register non-interactive direct-action subcommands on an argparse parser."""
     list_boards = subparsers.add_parser('list-boards', help='List all registered boards')
     list_boards.set_defaults(command='list-boards')
 
@@ -356,15 +356,16 @@ class DirectActionCLI(
     DirectCliStructureCommandsMixin,
     DirectCliSupportMixin,
 ):
-    """Execute direct non-interactive board and card operations."""
+    """!Execute direct non-interactive board and card operations."""
 
     def __init__(self, board_manager: BoardManager, lock_action: str = 'cancel'):
+        """!Init."""
         self.board_manager = board_manager
         self.lock_action = lock_action
         self.board_manager.set_lock_handler(lambda _file_path, _lock_details: lock_action)
 
     def execute(self, args: argparse.Namespace) -> int:
-        """Dispatch the parsed direct-action command."""
+        """!Dispatch the parsed direct-action command."""
         handler = getattr(self, f"cmd_{args.command.replace('-', '_')}", None)
         if handler is None:
             raise ValueError(f"Unsupported direct command: {args.command}")

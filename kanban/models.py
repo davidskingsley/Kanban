@@ -1,6 +1,6 @@
 ## @file
 #  @brief Shared enums and data objects for boards, cards, and columns.
-"""Data models for the Kanban board application."""
+"""!Data models for the Kanban board application."""
 
 import uuid
 from datetime import date, datetime
@@ -12,7 +12,7 @@ UNSET = object()
 
 ## @brief Enumerates supported card priority values.
 class Priority(Enum):
-    """Task priority levels."""
+    """!Task priority levels."""
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -21,7 +21,7 @@ class Priority(Enum):
 
 ## @brief Enumerates legacy board status columns.
 class Status(Enum):
-    """Default task status options (for backward compatibility)."""
+    """!Default task status options (for backward compatibility)."""
     TODO = "To Do"
     IN_PROGRESS = "In Progress"
     REVIEW = "Review"
@@ -30,15 +30,16 @@ class Status(Enum):
 
 ## @brief Represents a timestamped note attached to a card.
 class CardNote:
-    """Represents a note recorded against a card."""
+    """!Represents a note recorded against a card."""
 
     def __init__(self, text: str = "", created_at: datetime = None, note_id: str = None):
+        """!Init."""
         self.id = note_id if note_id else str(uuid.uuid4())
         self.text = text or ""
         self.created_at = created_at or datetime.now()
 
     def to_dict(self):
-        """Convert note to dictionary for serialization."""
+        """!Convert note to dictionary for serialization."""
         return {
             'id': self.id,
             'text': self.text,
@@ -47,7 +48,7 @@ class CardNote:
 
     @classmethod
     def from_dict(cls, data: dict):
-        """Create note from dictionary."""
+        """!Create note from dictionary."""
         return cls(
             data.get('text', ''),
             datetime.fromisoformat(data.get('created_at', datetime.now().isoformat())),
@@ -57,16 +58,17 @@ class CardNote:
 
 ## @brief Represents a copied file linked to a card.
 class CardAttachment:
-    """Represents a file attachment recorded against a card."""
+    """!Represents a file attachment recorded against a card."""
 
     def __init__(self, name: str, relative_path: str, created_at: datetime = None, attachment_id: str = None):
+        """!Init."""
         self.id = attachment_id if attachment_id else str(uuid.uuid4())
         self.name = name or "attachment"
         self.relative_path = relative_path
         self.created_at = created_at or datetime.now()
 
     def to_dict(self):
-        """Convert attachment to dictionary for serialization."""
+        """!Convert attachment to dictionary for serialization."""
         return {
             'id': self.id,
             'name': self.name,
@@ -76,7 +78,7 @@ class CardAttachment:
 
     @classmethod
     def from_dict(cls, data: dict):
-        """Create attachment from dictionary."""
+        """!Create attachment from dictionary."""
         return cls(
             data.get('name', 'attachment'),
             data.get('relative_path', ''),
@@ -86,15 +88,16 @@ class CardAttachment:
 
 
 class CardTodoItem:
-    """Represents a checklist item attached to a card."""
+    """!Represents a checklist item attached to a card."""
 
     def __init__(self, text: str, completed: bool = False, todo_id: str = None):
+        """!Init."""
         self.id = todo_id if todo_id else str(uuid.uuid4())
         self.text = (text or '').strip()
         self.completed = bool(completed)
 
     def to_dict(self):
-        """Convert checklist item to dictionary for serialization."""
+        """!Convert checklist item to dictionary for serialization."""
         return {
             'id': self.id,
             'text': self.text,
@@ -103,7 +106,7 @@ class CardTodoItem:
 
     @classmethod
     def from_dict(cls, data: dict):
-        """Create checklist item from dictionary."""
+        """!Create checklist item from dictionary."""
         return cls(
             data.get('text', ''),
             data.get('completed', False),
@@ -113,10 +116,11 @@ class CardTodoItem:
 
 ## @brief Represents a reusable board-level card type with optional presets.
 class CardType:
-    """Represents a configurable card type with optional project and color presets."""
+    """!Represents a configurable card type with optional project and color presets."""
 
     def __init__(self, name: str, description: str = "", default_project: str = None,
                  default_color: str = None, card_type_id: str = None):
+        """!Init."""
         self.id = card_type_id if card_type_id else str(uuid.uuid4())
         self.name = name
         self.description = description or ""
@@ -127,7 +131,7 @@ class CardType:
 
     def update(self, name: str = None, description: str = None,
                default_project=UNSET, default_color=UNSET):
-        """Update card type properties."""
+        """!Update card type properties."""
         if name is not None:
             self.name = name
         if description is not None:
@@ -139,7 +143,7 @@ class CardType:
         self.updated_at = datetime.now()
 
     def to_dict(self):
-        """Convert card type to dictionary for serialization."""
+        """!Convert card type to dictionary for serialization."""
         return {
             'id': self.id,
             'name': self.name,
@@ -152,7 +156,7 @@ class CardType:
 
     @classmethod
     def from_dict(cls, data: dict):
-        """Create card type from dictionary."""
+        """!Create card type from dictionary."""
         card_type = cls(
             data['name'],
             data.get('description', ''),
@@ -167,9 +171,10 @@ class CardType:
 
 ## @brief Represents a reusable board-level project with optional description.
 class Project:
-    """Represents a configurable project that cards and card-type presets can reference."""
+    """!Represents a configurable project that cards and card-type presets can reference."""
 
     def __init__(self, name: str, description: str = "", project_id: str = None):
+        """!Init."""
         self.id = project_id if project_id else str(uuid.uuid4())
         self.name = name
         self.description = description or ""
@@ -177,7 +182,7 @@ class Project:
         self.updated_at = datetime.now()
 
     def update(self, name: str = None, description: str = None):
-        """Update project properties."""
+        """!Update project properties."""
         if name is not None:
             self.name = name
         if description is not None:
@@ -185,7 +190,7 @@ class Project:
         self.updated_at = datetime.now()
 
     def to_dict(self):
-        """Convert project to dictionary for serialization."""
+        """!Convert project to dictionary for serialization."""
         return {
             'id': self.id,
             'name': self.name,
@@ -196,7 +201,7 @@ class Project:
 
     @classmethod
     def from_dict(cls, data: dict):
-        """Create project from dictionary."""
+        """!Create project from dictionary."""
         project = cls(
             data['name'],
             data.get('description', ''),
@@ -209,10 +214,11 @@ class Project:
 
 ## @brief Represents a configurable board column with custom ordering and color.
 class CustomColumn:
-    """Represents a custom column on the Kanban board."""
+    """!Represents a custom column on the Kanban board."""
     
     def __init__(self, column_id: str, name: str, position: int = 0, color: str = "#2196F3",
                  is_completed: bool = False, can_add_card: bool = False):
+        """!Init."""
         self.id = column_id if column_id else str(uuid.uuid4())
         self.name = name
         self.position = position
@@ -224,7 +230,7 @@ class CustomColumn:
         self.updated_at = datetime.now()
     
     def add_card(self, card: 'Card', index: Optional[int] = None):
-        """Add a card to this column."""
+        """!Add a card to this column."""
         card.column_id = self.id
         if index is None:
             self.cards.append(card)
@@ -234,7 +240,7 @@ class CustomColumn:
         self.updated_at = datetime.now()
     
     def remove_card(self, card_id: str) -> Optional['Card']:
-        """Remove a card from this column by ID."""
+        """!Remove a card from this column by ID."""
         for i, card in enumerate(self.cards):
             if card.id == card_id:
                 removed_card = self.cards.pop(i)
@@ -243,46 +249,46 @@ class CustomColumn:
         return None
     
     def get_card(self, card_id: str) -> Optional['Card']:
-        """Get a card from this column by ID."""
+        """!Get a card from this column by ID."""
         for card in self.cards:
             if card.id == card_id:
                 return card
         return None
 
     def card_index(self, card_id: str) -> Optional[int]:
-        """Return the index of a card in this column, if present."""
+        """!Return the index of a card in this column, if present."""
         for index, card in enumerate(self.cards):
             if card.id == card_id:
                 return index
         return None
     
     def rename(self, new_name: str):
-        """Rename the column."""
+        """!Rename the column."""
         self.name = new_name
         self.updated_at = datetime.now()
     
     def change_color(self, new_color: str):
-        """Change the column color."""
+        """!Change the column color."""
         self.color = new_color
         self.updated_at = datetime.now()
 
     def set_completed(self, is_completed: bool):
-        """Control whether cards in this column are treated as done."""
+        """!Control whether cards in this column are treated as done."""
         self.is_completed = bool(is_completed)
         self.updated_at = datetime.now()
 
     def set_can_add_card(self, can_add_card: bool):
-        """Control whether this column exposes a direct add-card action."""
+        """!Control whether this column exposes a direct add-card action."""
         self.can_add_card = bool(can_add_card)
         self.updated_at = datetime.now()
     
     def reposition(self, new_position: int):
-        """Change the column position."""
+        """!Change the column position."""
         self.position = new_position
         self.updated_at = datetime.now()
     
     def to_dict(self):
-        """Convert column to dictionary for serialization."""
+        """!Convert column to dictionary for serialization."""
         return {
             'id': self.id,
             'name': self.name,
@@ -296,7 +302,7 @@ class CustomColumn:
     
     @classmethod
     def from_dict(cls, data: dict):
-        """Create column from dictionary."""
+        """!Create column from dictionary."""
         column = cls(
             data['id'],
             data['name'],
@@ -310,21 +316,25 @@ class CustomColumn:
         return column
     
     def __len__(self):
+        """!Len."""
         return len(self.cards)
     
     def __iter__(self):
+        """!Iter."""
         return iter(self.cards)
     
     def __str__(self):
+        """!Str."""
         return f"{self.name} ({len(self.cards)} cards)"
 
 
 ## @brief Represents an individual task card tracked on the board.
 class Card:
-    """Represents a single task card on the Kanban board."""
+    """!Represents a single task card on the Kanban board."""
     
     def __init__(self, title: str, description: str = "", priority: Priority = Priority.MEDIUM, 
                  column_id: str = None):
+        """!Init."""
         self.id = str(uuid.uuid4())
         self.title = title
         self.description = description
@@ -349,8 +359,8 @@ class Card:
     def update(self, title: str = None, description: str = None,
              priority: Priority = None, assignee: str = None, project: str = None,
              start_date=UNSET, end_date=UNSET, parent_id: str = None, color=UNSET,
-               card_type_id=UNSET, todo_items=UNSET):
-        """Update card properties."""
+             card_type_id=UNSET, todo_items=UNSET):
+        """!Update card properties."""
         if title is not None:
             self.title = title
         if description is not None:
@@ -376,23 +386,23 @@ class Card:
         self.updated_at = datetime.now()
 
     def archive(self):
-        """Mark the card as archived."""
+        """!Mark the card as archived."""
         now = datetime.now()
         self.archived_at = now
         self.updated_at = now
 
     def restore(self):
-        """Mark the card as active again."""
+        """!Mark the card as active again."""
         self.archived_at = None
         self.updated_at = datetime.now()
 
     def is_archived(self) -> bool:
-        """Return whether the card is archived."""
+        """!Return whether the card is archived."""
         return self.archived_at is not None
 
     @staticmethod
     def _coerce_todo_items(todo_items) -> List[CardTodoItem]:
-        """Normalize checklist items from model objects, dicts, or plain text."""
+        """!Normalize checklist items from model objects, dicts, or plain text."""
         normalized: List[CardTodoItem] = []
         for todo_item in todo_items or []:
             if isinstance(todo_item, CardTodoItem):
@@ -409,20 +419,20 @@ class Card:
         return normalized
 
     def get_todo_progress(self) -> tuple[int, int]:
-        """Return completed and total checklist counts for this card."""
+        """!Return completed and total checklist counts for this card."""
         total = len(self.todo_items)
         completed = sum(1 for todo_item in self.todo_items if todo_item.completed)
         return completed, total
 
     def has_past_end_date(self, today: Optional[date] = None) -> bool:
-        """Return whether the card's end date is before today."""
+        """!Return whether the card's end date is before today."""
         if self.end_date is None:
             return False
         reference = today or date.today()
         return self.end_date < reference
     
     def move_to_status(self, status: Union[Status, str]):
-        """Move card to a different status column (backward compatibility)."""
+        """!Move card to a different status column (backward compatibility)."""
         if isinstance(status, Status):
             self.status = status
         else:
@@ -430,31 +440,31 @@ class Card:
         self.updated_at = datetime.now()
     
     def move_to_column(self, column_id: str):
-        """Move card to a different column."""
+        """!Move card to a different column."""
         self.column_id = column_id
         self.updated_at = datetime.now()
     
     def add_tag(self, tag: str):
-        """Add a tag to the card."""
+        """!Add a tag to the card."""
         if tag not in self.tags:
             self.tags.append(tag)
             self.updated_at = datetime.now()
     
     def remove_tag(self, tag: str):
-        """Remove a tag from the card."""
+        """!Remove a tag from the card."""
         if tag in self.tags:
             self.tags.remove(tag)
             self.updated_at = datetime.now()
 
     def add_note(self, text: str = "") -> CardNote:
-        """Add a timestamped note to the card."""
+        """!Add a timestamped note to the card."""
         note = CardNote(text)
         self.notes.append(note)
         self.updated_at = datetime.now()
         return note
 
     def remove_note(self, note_id: str) -> bool:
-        """Remove a note from the card by ID."""
+        """!Remove a note from the card by ID."""
         for index, note in enumerate(self.notes):
             if note.id == note_id:
                 self.notes.pop(index)
@@ -463,7 +473,7 @@ class Card:
         return False
 
     def update_note(self, note_id: str, text: str = "") -> Optional[CardNote]:
-        """Update an existing note on the card by ID."""
+        """!Update an existing note on the card by ID."""
         for note in self.notes:
             if note.id == note_id:
                 note.text = text or ""
@@ -472,21 +482,21 @@ class Card:
         return None
 
     def add_attachment(self, name: str, relative_path: str, created_at: datetime = None) -> CardAttachment:
-        """Add a copied file attachment to the card."""
+        """!Add a copied file attachment to the card."""
         attachment = CardAttachment(name, relative_path, created_at)
         self.attachments.append(attachment)
         self.updated_at = datetime.now()
         return attachment
 
     def get_attachment(self, attachment_id: str) -> Optional[CardAttachment]:
-        """Return a card attachment by ID."""
+        """!Return a card attachment by ID."""
         for attachment in self.attachments:
             if attachment.id == attachment_id:
                 return attachment
         return None
 
     def remove_attachment(self, attachment_id: str) -> Optional[CardAttachment]:
-        """Remove an attachment link from the card by ID."""
+        """!Remove an attachment link from the card by ID."""
         for index, attachment in enumerate(self.attachments):
             if attachment.id == attachment_id:
                 removed = self.attachments.pop(index)
@@ -495,7 +505,7 @@ class Card:
         return None
     
     def to_dict(self):
-        """Convert card to dictionary for serialization."""
+        """!Convert card to dictionary for serialization."""
         return {
             'id': self.id,
             'title': self.title,
@@ -521,7 +531,7 @@ class Card:
     
     @classmethod
     def from_dict(cls, data: dict):
-        """Create card from dictionary."""
+        """!Create card from dictionary."""
         # Handle both new column_id format and old status format
         column_id = data.get('column_id')
         status = data.get('status')
@@ -552,6 +562,7 @@ class Card:
         return card
     
     def __str__(self):
+        """!Str."""
         priority_icon = {
             Priority.LOW: "🟢",
             Priority.MEDIUM: "🟡", 
@@ -569,33 +580,36 @@ class Card:
 
 ## @brief Represents a legacy fixed-status column kept for backward compatibility.
 class Column:
-    """Legacy column class for backward compatibility."""
+    """!Legacy column class for backward compatibility."""
     
     def __init__(self, status: Status):
+        """!Init."""
         self.status = status
         self.cards: List[Card] = []
     
     def add_card(self, card: Card):
-        """Add a card to this column."""
+        """!Add a card to this column."""
         card.status = self.status
         self.cards.append(card)
     
     def remove_card(self, card_id: str) -> Optional[Card]:
-        """Remove a card from this column by ID."""
+        """!Remove a card from this column by ID."""
         for i, card in enumerate(self.cards):
             if card.id == card_id:
                 return self.cards.pop(i)
         return None
     
     def get_card(self, card_id: str) -> Optional[Card]:
-        """Get a card from this column by ID."""
+        """!Get a card from this column by ID."""
         for card in self.cards:
             if card.id == card_id:
                 return card
         return None
     
     def __len__(self):
+        """!Len."""
         return len(self.cards)
     
     def __iter__(self):
+        """!Iter."""
         return iter(self.cards)

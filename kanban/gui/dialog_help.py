@@ -1,6 +1,6 @@
 ## @file
 #  @brief Help and command-reference dialogs for the PySide6 multi-board GUI.
-"""Help and command-reference dialogs for the PySide6 GUI."""
+"""!Help and command-reference dialogs for the PySide6 GUI."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Optional
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QSizePolicy, QTextBrowser
 
+from .. import __version__
 from .common import (
 	add_dialog_footer,
 	build_dialog_shell,
@@ -18,9 +19,10 @@ from .common import (
 
 
 class AboutDialog(QDialog):
-	"""Application help and version dialog."""
+	"""!Application help and version dialog."""
 
-	def __init__(self, parent: Optional[QDialog] = None, version: str = '2.0'):
+	def __init__(self, parent: Optional[QDialog] = None, version: str = __version__):
+		"""!Init."""
 		super().__init__(parent)
 		self.setWindowTitle('About Kanban')
 		self.resize(700, 620)
@@ -98,7 +100,7 @@ class AboutDialog(QDialog):
 
 
 def build_command_line_guide_html() -> str:
-	"""Return the HTML shown in the command-line guide dialog."""
+	"""!Return the HTML shown in the command-line guide dialog."""
 	return (
 		'<h3 style="margin: 0 0 8px 0; color: #6f3d1c;">Start From The Project Folder</h3>'
 		'<p style="margin: 0 0 10px 0;">Open a terminal in the Kanban project directory. Both direct Python and <b>uv</b> commands work. The GUI is the default launch mode, and the CLI is enabled with <b>--cli</b>.</p>'
@@ -173,7 +175,7 @@ def build_command_line_guide_html() -> str:
 
 
 def build_direct_action_cli_options_html() -> str:
-	"""Return the HTML shown in the direct-action CLI options dialog."""
+	"""!Return the HTML shown in the direct-action CLI options dialog."""
 	return (
 		'<h3 style="margin: 0 0 8px 0; color: #6f3d1c;">Direct-Action CLI Options</h3>'
 		'<p style="margin: 0 0 10px 0;">These commands run one action immediately without entering the interactive CLI. Use them for scripts, scheduled jobs, and automation. Run <b>python main.py &lt;command&gt; --help</b> to inspect the exact flag set for one command.</p>'
@@ -260,9 +262,10 @@ def build_direct_action_cli_options_html() -> str:
 
 
 class CommandLineGuideDialog(QDialog):
-	"""Dedicated dialog for command-line usage documentation."""
+	"""!Dedicated dialog for command-line usage documentation."""
 
 	def __init__(self, parent: Optional[QDialog] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.setWindowTitle('Kanban Command Line Guide')
 		self.resize(760, 760)
@@ -299,9 +302,10 @@ class CommandLineGuideDialog(QDialog):
 
 
 class DirectActionCliOptionsDialog(QDialog):
-	"""Dedicated dialog for direct-action CLI option documentation."""
+	"""!Dedicated dialog for direct-action CLI option documentation."""
 
 	def __init__(self, parent: Optional[QDialog] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.setWindowTitle('Kanban Direct-Action CLI Options')
 		self.resize(860, 780)

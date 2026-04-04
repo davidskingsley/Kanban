@@ -1,6 +1,6 @@
 ## @file
 #  @brief Board and card action mixins for the PySide6 GUI.
-"""Board and card action mixins for the PySide6 GUI."""
+"""!Board and card action mixins for the PySide6 GUI."""
 
 from __future__ import annotations
 
@@ -36,26 +36,31 @@ from .dialogs import (
 
 
 class BoardActionsMixin:
-	"""Board, card, project, and dialog actions for the main GUI."""
+	"""!Board, card, project, and dialog actions for the main GUI."""
 
 	def _compat_gui_module(self):
+		"""!Compat gui module."""
 		from . import pyside_app as compat_gui_module
 
 		return compat_gui_module
 
 	def show_about_dialog(self):
-		dialog = AboutDialog(parent=self.window, version='2.0')
+		"""!Show about dialog."""
+		dialog = AboutDialog(parent=self.window)
 		dialog.exec()
 
 	def show_command_line_guide_dialog(self):
+		"""!Show command line guide dialog."""
 		dialog = CommandLineGuideDialog(parent=self.window)
 		dialog.exec()
 
 	def show_direct_action_cli_options_dialog(self):
+		"""!Show direct action cli options dialog."""
 		dialog = DirectActionCliOptionsDialog(parent=self.window)
 		dialog.exec()
 
 	def _refresh_history_actions(self, board: Optional[KanbanBoard] = None):
+		"""!Refresh history actions."""
 		current_board = board if board is not None else self.current_board()
 		board_can_undo = bool(current_board and not current_board.is_read_only() and current_board.can_undo())
 		board_can_redo = bool(current_board and not current_board.is_read_only() and current_board.can_redo())
@@ -81,9 +86,11 @@ class BoardActionsMixin:
 		self.redo_board_management_qaction.setStatusTip(redo_manager_description or 'Redo the most recently undone board-management change')
 
 	def _show_history_feedback(self, message: str, timeout_ms: int = 4000):
+		"""!Show history feedback."""
 		self.window.statusBar().showMessage(message, timeout_ms)
 
 	def _run_current_board_history_action(self, method_name: str, unavailable_message: str, success_prefix: str):
+		"""!Run current board history action."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -103,12 +110,15 @@ class BoardActionsMixin:
 		self._show_history_feedback(f'{success_prefix}: {description}')
 
 	def undo_current_board_action(self):
+		"""!Undo current board action."""
 		self._run_current_board_history_action('undo_last_action', 'No board action is available to undo.', 'Undid')
 
 	def redo_current_board_action(self):
+		"""!Redo current board action."""
 		self._run_current_board_history_action('redo_last_action', 'No board action is available to redo.', 'Redid')
 
 	def _run_board_management_history_action(self, method_name: str, unavailable_message: str, success_prefix: str):
+		"""!Run board management history action."""
 		action = getattr(self.board_manager, method_name)
 		description = action()
 		if not description:
@@ -123,12 +133,15 @@ class BoardActionsMixin:
 		self._show_history_feedback(f'{success_prefix}: {description}')
 
 	def undo_board_management_action(self):
+		"""!Undo board management action."""
 		self._run_board_management_history_action('undo_last_action', 'No board-management action is available to undo.', 'Undid')
 
 	def redo_board_management_action(self):
+		"""!Redo board management action."""
 		self._run_board_management_history_action('redo_last_action', 'No board-management action is available to redo.', 'Redid')
 
 	def prompt_for_locked_board_action(self, file_path: str, lock_details: dict) -> str:
+		"""!Prompt for locked board action."""
 		dialog = QMessageBox(self.window)
 		dialog.setIcon(QMessageBox.Icon.Warning)
 		dialog.setWindowTitle('Board Locked')
@@ -150,6 +163,7 @@ class BoardActionsMixin:
 		return 'cancel'
 
 	def create_board(self):
+		"""!Create board."""
 		dialog = BoardDialog(self.board_manager.boards_directory, self.window)
 		if dialog.exec() != QDialog.DialogCode.Accepted:
 			return
@@ -163,6 +177,7 @@ class BoardActionsMixin:
 		self._switch_board_by_id(board_id)
 
 	def rename_current_board(self):
+		"""!Rename current board."""
 		boards = self.board_manager.get_board_list()
 		current = next((board for board in boards if board['is_current']), None)
 		if current is None:
@@ -173,6 +188,7 @@ class BoardActionsMixin:
 			self.refresh_ui()
 
 	def convert_current_board_backend(self):
+		"""!Convert current board backend."""
 		boards = self.board_manager.get_board_list()
 		current = next((board for board in boards if board['is_current']), None)
 		if current is None:
@@ -209,6 +225,7 @@ class BoardActionsMixin:
 		self.refresh_ui()
 
 	def delete_current_board(self):
+		"""!Delete current board."""
 		boards = self.board_manager.get_board_list()
 		current = next((board for board in boards if board['is_current']), None)
 		if current is None:
@@ -224,6 +241,7 @@ class BoardActionsMixin:
 			self.refresh_ui()
 
 	def show_board_statistics(self):
+		"""!Show board statistics."""
 		board = self.ensure_board()
 		if board is None:
 			return
@@ -238,6 +256,7 @@ class BoardActionsMixin:
 		exclude_default: bool = False,
 		exclude_ids: Optional[set[str]] = None,
 	) -> Optional[CardType]:
+		"""!Choose card type."""
 		exclude_ids = set(exclude_ids or set())
 		card_types = [
 			card_type
@@ -263,6 +282,7 @@ class BoardActionsMixin:
 		return option_map[selected]
 
 	def show_card_types_browser(self):
+		"""!Show card types browser."""
 		board = self.ensure_board()
 		if board is None:
 			return
@@ -271,6 +291,7 @@ class BoardActionsMixin:
 			self.edit_card_type_by_id(dialog.selected_card_type_id)
 
 	def create_card_type(self):
+		"""!Create card type."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -291,6 +312,7 @@ class BoardActionsMixin:
 		self.refresh_ui()
 
 	def edit_card_type(self):
+		"""!Edit card type."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -300,6 +322,7 @@ class BoardActionsMixin:
 		self._edit_card_type(board, card_type)
 
 	def edit_card_type_by_id(self, card_type_id: str):
+		"""!Edit card type by id."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -310,6 +333,7 @@ class BoardActionsMixin:
 		self._edit_card_type(board, card_type)
 
 	def _edit_card_type(self, board: KanbanBoard, card_type: CardType):
+		"""!Edit card type."""
 		is_default = card_type.id == board.get_default_card_type_id()
 		dialog = CardTypeDialog(card_type=card_type, is_default=is_default, board=board, parent=self.window)
 		if dialog.exec() != QDialog.DialogCode.Accepted:
@@ -329,6 +353,7 @@ class BoardActionsMixin:
 		self.refresh_ui()
 
 	def delete_card_type(self):
+		"""!Delete card type."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -406,6 +431,7 @@ class BoardActionsMixin:
 		prompt: str,
 		exclude_ids: Optional[set[str]] = None,
 	) -> Optional[Project]:
+		"""!Choose project."""
 		exclude_ids = set(exclude_ids or set())
 		projects = [project for project in board.get_projects_ordered() if project.id not in exclude_ids]
 		if not projects:
@@ -422,6 +448,7 @@ class BoardActionsMixin:
 		return option_map[selected]
 
 	def show_projects_browser(self):
+		"""!Show projects browser."""
 		board = self.ensure_board()
 		if board is None:
 			return
@@ -430,6 +457,7 @@ class BoardActionsMixin:
 			self.edit_project_by_id(dialog.selected_project_id)
 
 	def create_project(self):
+		"""!Create project."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -445,6 +473,7 @@ class BoardActionsMixin:
 		self.refresh_ui()
 
 	def edit_project(self):
+		"""!Edit project."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -454,6 +483,7 @@ class BoardActionsMixin:
 		self._edit_project(board, project)
 
 	def edit_project_by_id(self, project_id: str):
+		"""!Edit project by id."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -464,6 +494,7 @@ class BoardActionsMixin:
 		self._edit_project(board, project)
 
 	def _edit_project(self, board: KanbanBoard, project: Project):
+		"""!Edit project."""
 		dialog = ProjectDialog(project=project, parent=self.window)
 		if dialog.exec() != QDialog.DialogCode.Accepted:
 			return
@@ -476,6 +507,7 @@ class BoardActionsMixin:
 		self.refresh_ui()
 
 	def delete_project(self):
+		"""!Delete project."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -558,6 +590,7 @@ class BoardActionsMixin:
 			self.refresh_ui()
 
 	def show_due_date_view(self):
+		"""!Show due date view."""
 		board = self.ensure_board()
 		if board is None:
 			return
@@ -572,16 +605,19 @@ class BoardActionsMixin:
 		dialog.exec()
 
 	def _focus_card_from_due_date_view(self, card_id: str, column_id: Optional[str]):
+		"""!Focus card from due date view."""
 		self.selected_column_id = column_id
 		self.selected_card_id = card_id
 		self.refresh_ui()
 
 	def _edit_card_from_due_date_view(self, card_id: str, column_id: Optional[str]):
+		"""!Edit card from due date view."""
 		self.selected_column_id = column_id
 		self.selected_card_id = card_id
 		self.edit_selected_card()
 
 	def export_all_boards(self):
+		"""!Export all boards."""
 		compat = self._compat_gui_module()
 		file_name = compat.choose_save_file_dialog(self.window, 'Export All Boards', 'kanban_backup.json', 'JSON Files (*.json)')
 		if not file_name:
@@ -592,6 +628,7 @@ class BoardActionsMixin:
 		QMessageBox.information(self.window, 'Export Complete', f'Exported boards to {file_name}.')
 
 	def export_current_board(self):
+		"""!Export current board."""
 		board = self.ensure_board()
 		if board is None:
 			return
@@ -613,6 +650,7 @@ class BoardActionsMixin:
 		QMessageBox.information(self.window, 'Export Complete', f'Exported current board to {file_name}.')
 
 	def import_boards(self):
+		"""!Import boards."""
 		compat = self._compat_gui_module()
 		file_name = compat.choose_open_file_dialog(self.window, 'Import Boards', '', 'JSON Files (*.json)')
 		if not file_name:
@@ -631,6 +669,7 @@ class BoardActionsMixin:
 			self.refresh_ui()
 
 	def _discover_boards_in_folder(self, folder: str) -> Dict[str, Dict[str, object]]:
+		"""!Discover boards in folder."""
 		option_map: Dict[str, Dict[str, object]] = {}
 		metadata_path = os.path.join(folder, 'boards_metadata.json')
 		if os.path.exists(metadata_path):
@@ -672,6 +711,7 @@ class BoardActionsMixin:
 		return option_map
 
 	def load_board_from_folder(self):
+		"""!Load board from folder."""
 		compat = self._compat_gui_module()
 		folder = compat.choose_existing_directory_dialog(self.window, 'Select Folder Containing a Board')
 		if not folder:
@@ -695,6 +735,7 @@ class BoardActionsMixin:
 			self.refresh_ui()
 
 	def create_card(self, column_id: Optional[str] = None):
+		"""!Create card."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -722,6 +763,7 @@ class BoardActionsMixin:
 		self.refresh_ui()
 
 	def add_subcard_to_selected_card(self):
+		"""!Add subcard to selected card."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -767,12 +809,14 @@ class BoardActionsMixin:
 		self.refresh_ui()
 
 	def _selected_card(self):
+		"""!Selected card."""
 		board = self.current_board()
 		if board is None or not self.selected_card_id:
 			return None
 		return board.find_card(self.selected_card_id)
 
 	def edit_selected_card(self):
+		"""!Edit selected card."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -806,6 +850,7 @@ class BoardActionsMixin:
 		self.refresh_ui()
 
 	def delete_selected_card(self):
+		"""!Delete selected card."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -824,6 +869,7 @@ class BoardActionsMixin:
 			self.refresh_ui()
 
 	def move_selected_card(self):
+		"""!Move selected card."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -849,6 +895,7 @@ class BoardActionsMixin:
 				return
 
 	def archive_done_cards(self):
+		"""!Archive done cards."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -870,6 +917,7 @@ class BoardActionsMixin:
 		self.refresh_ui()
 
 	def manage_archived_cards(self):
+		"""!Manage archived cards."""
 		board = self.ensure_board()
 		if board is None:
 			return
@@ -880,6 +928,7 @@ class BoardActionsMixin:
 		self.refresh_ui()
 
 	def _selected_column(self):
+		"""!Selected column."""
 		board = self.current_board()
 		if board is None:
 			return None
@@ -889,6 +938,7 @@ class BoardActionsMixin:
 		return columns[0] if columns else None
 
 	def create_column(self):
+		"""!Create column."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -906,6 +956,7 @@ class BoardActionsMixin:
 		self.refresh_ui()
 
 	def edit_selected_column(self):
+		"""!Edit selected column."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -926,6 +977,7 @@ class BoardActionsMixin:
 		self.refresh_ui()
 
 	def delete_selected_column(self):
+		"""!Delete selected column."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return
@@ -954,6 +1006,7 @@ class BoardActionsMixin:
 			self.refresh_ui()
 
 	def reorder_columns(self):
+		"""!Reorder columns."""
 		board = self.ensure_writable_board()
 		if board is None:
 			return

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 ## @file
 #  @brief Application entry point for the Kanban board project.
-"""Kanban Board application launcher."""
+"""!Kanban Board application launcher."""
 
 import argparse
 import sys
@@ -13,7 +13,7 @@ from kanban.multi_board_cli import MultiBoardCLI
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the application argument parser."""
+    """!Build the application argument parser."""
     parser = argparse.ArgumentParser(
         description="Multi-Board Kanban Manager with a desktop GUI, an interactive terminal UI, and direct-action automation commands.",
         epilog="Use --cli for the interactive terminal UI, or run '<command> --help' for direct-action automation details.",
@@ -36,7 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 ## @brief Parse command-line options and launch the requested Kanban mode.
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    """Main entry point of the Kanban application."""
+    """!Main entry point of the Kanban application."""
     parser = build_parser()
     args = parser.parse_args(argv)
 

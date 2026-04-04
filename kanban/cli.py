@@ -1,6 +1,6 @@
 ## @file
 #  @brief Interactive command-line interface for operating one board inside the multi-board CLI.
-"""Board-level command-line interface for the Kanban board application."""
+"""!Board-level command-line interface for the Kanban board application."""
 
 from datetime import date
 from typing import Dict, List, Optional
@@ -13,14 +13,15 @@ EMPTY_NOTE_LABEL = '(empty note)'
 
 ## @brief Provide menu-driven access to a selected board from the multi-board CLI.
 class BoardCLI:
-    """Command line interface for an individual board."""
+    """!Command line interface for an individual board."""
     
     def __init__(self, board: KanbanBoard):
+        """!Init."""
         self.board = board
         self.running = True
 
     def parse_optional_date(self, value: str, field_name: str) -> Optional[date]:
-        """Parse an optional ISO date string entered by the user."""
+        """!Parse an optional ISO date string entered by the user."""
         text = value.strip()
         if not text:
             return None
@@ -30,7 +31,7 @@ class BoardCLI:
             raise ValueError(f"{field_name} must use YYYY-MM-DD format.") from error
 
     def parse_todo_items(self, value: str) -> List[Dict[str, object]]:
-        """Parse a pipe-delimited checklist string into structured items."""
+        """!Parse a pipe-delimited checklist string into structured items."""
         items: List[Dict[str, object]] = []
         for raw_item in value.split('|'):
             text = raw_item.strip()
@@ -48,14 +49,14 @@ class BoardCLI:
         return items
 
     def note_preview(self, text: str, limit: int = 80) -> str:
-        """Return a compact single-line note preview for CLI listings."""
+        """!Return a compact single-line note preview for CLI listings."""
         preview = ' '.join((text or '').split()) or EMPTY_NOTE_LABEL
         if len(preview) <= limit:
             return preview
         return preview[: limit - 3] + '...'
     
     def run(self):
-        """Main CLI loop."""
+        """!Main CLI loop."""
         self.show_welcome()
         
         while self.running:
@@ -70,7 +71,7 @@ class BoardCLI:
                 print(f"Error: {e}")
     
     def show_welcome(self):
-        """Show welcome message."""
+        """!Show welcome message."""
         print("=" * 50)
         print("🗂️  WELCOME TO KANBAN BOARD MANAGER  🗂️")
         print("=" * 50)
@@ -80,7 +81,7 @@ class BoardCLI:
         print()
 
     def ensure_board_writable(self) -> bool:
-        """Return False and explain why if the current board is read-only."""
+        """!Return False and explain why if the current board is read-only."""
         if not self.board.is_read_only():
             return True
 
@@ -88,7 +89,7 @@ class BoardCLI:
         return False
     
     def show_board(self):
-        """Display the current board state."""
+        """!Display the current board state."""
         print(self.board.export_board())
         print()
         
@@ -102,7 +103,7 @@ class BoardCLI:
         print()
     
     def show_menu(self):
-        """Display the main menu."""
+        """!Display the main menu."""
         print("CARD ACTIONS:")
         print("1. Create new card")
         print("2. Edit card")
@@ -142,7 +143,7 @@ class BoardCLI:
         print()
     
     def handle_choice(self, choice: str):
-        """Handle user's menu choice."""
+        """!Handle user's menu choice."""
         handlers = {
             '1': self.create_card,
             '2': self.edit_card,
@@ -184,7 +185,7 @@ class BoardCLI:
             input("\nPress Enter to continue...")
     
     def create_card(self):
-        """Create a new card."""
+        """!Create a new card."""
         if not self.ensure_board_writable():
             return
 
@@ -276,7 +277,7 @@ class BoardCLI:
             print(f"❌ Error creating card: {e}")
     
     def edit_card(self):
-        """Edit an existing card."""
+        """!Edit an existing card."""
         if not self.ensure_board_writable():
             return
 
@@ -375,7 +376,7 @@ class BoardCLI:
         print("✅ Card updated successfully!")
 
     def add_subcard(self):
-        """Create a real child card under an existing top-level card."""
+        """!Create a real child card under an existing top-level card."""
         if not self.ensure_board_writable():
             return
 
@@ -456,7 +457,7 @@ class BoardCLI:
             print(f"❌ Error creating subcard: {error}")
     
     def move_card(self):
-        """Move a card to a different column."""
+        """!Move a card to a different column."""
         if not self.ensure_board_writable():
             return
 
@@ -497,7 +498,7 @@ class BoardCLI:
             print("Invalid input!")
     
     def delete_card(self):
-        """Delete a card."""
+        """!Delete a card."""
         if not self.ensure_board_writable():
             return
 
@@ -523,7 +524,7 @@ class BoardCLI:
             print("Deletion cancelled.")
     
     def search_cards(self):
-        """Search for cards."""
+        """!Search for cards."""
         print("\n--- SEARCH CARDS ---")
         query = input("Enter search query: ").strip()
         if not query:
@@ -540,7 +541,7 @@ class BoardCLI:
             print(f"{i}. [{self.board.get_card_location_label(card)}] {card}")
     
     def filter_by_priority(self):
-        """Filter cards by priority."""
+        """!Filter cards by priority."""
         print("\n--- FILTER BY PRIORITY ---")
         print("Priority levels:")
         priorities = list(Priority)
@@ -566,7 +567,7 @@ class BoardCLI:
             print("Invalid input!")
     
     def filter_by_assignee(self):
-        """Filter cards by assignee."""
+        """!Filter cards by assignee."""
         print("\n--- FILTER BY ASSIGNEE ---")
         assignee = input("Enter assignee name: ").strip()
         if not assignee:
@@ -583,7 +584,7 @@ class BoardCLI:
             print(f"{i}. [{self.board.get_card_location_label(card)}] {card}")
     
     def add_tag_to_card(self):
-        """Add a tag to a card."""
+        """!Add a tag to a card."""
         if not self.ensure_board_writable():
             return
 
@@ -611,7 +612,7 @@ class BoardCLI:
             print("Tag name cannot be empty!")
 
     def undo_last_change(self):
-        """Undo the most recent board change."""
+        """!Undo the most recent board change."""
         if not self.ensure_board_writable():
             return
 
@@ -623,7 +624,7 @@ class BoardCLI:
         print(f"↩ Undid: {description}")
 
     def redo_last_change(self):
-        """Redo the most recently undone board change."""
+        """!Redo the most recently undone board change."""
         if not self.ensure_board_writable():
             return
 
@@ -635,7 +636,7 @@ class BoardCLI:
         print(f"↪ Redid: {description}")
     
     def show_card_details(self):
-        """Show detailed information about a card."""
+        """!Show detailed information about a card."""
         print("\n--- CARD DETAILS ---")
         card_id = self.select_card()
         if not card_id:
@@ -692,7 +693,7 @@ class BoardCLI:
         print(f"Updated: {card.updated_at.strftime('%Y-%m-%d %H:%M:%S')}")
 
     def manage_card_notes(self):
-        """View, add, edit, and delete notes recorded on a card."""
+        """!View, add, edit, and delete notes recorded on a card."""
         print("\n--- MANAGE CARD NOTES ---")
         card_id = self.select_card()
         if not card_id:
@@ -779,7 +780,7 @@ class BoardCLI:
             print('Invalid choice. Please try again.')
 
     def prompt_note_text(self, prompt: str, existing_text: Optional[str] = None) -> Optional[str]:
-        """Prompt for note text, allowing multi-line input until a blank line is entered."""
+        """!Prompt for note text, allowing multi-line input until a blank line is entered."""
         print(prompt)
         if existing_text is not None:
             print('Current note text:')
@@ -796,7 +797,7 @@ class BoardCLI:
         return note_text or None
 
     def select_note(self, card) -> Optional[object]:
-        """Prompt the user to select a note from a card."""
+        """!Prompt the user to select a note from a card."""
         ordered_notes = sorted(card.notes, key=lambda item: item.created_at, reverse=True)
         if not ordered_notes:
             print('No notes available!')
@@ -818,7 +819,7 @@ class BoardCLI:
         return None
 
     def _print_note(self, note):
-        """Print one note with full text."""
+        """!Print one note with full text."""
         print(f"\n📝 Note {note.id}")
         print(f"Created: {note.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
         print('Text:')
@@ -826,7 +827,7 @@ class BoardCLI:
             print(f'  {line}')
     
     def archive_done_cards(self):
-        """Archive all active cards from completed columns."""
+        """!Archive all active cards from completed columns."""
         if not self.ensure_board_writable():
             return
 
@@ -848,7 +849,7 @@ class BoardCLI:
             print("Operation cancelled.")
 
     def manage_archived_cards(self):
-        """List, restore, and permanently delete archived cards."""
+        """!List, restore, and permanently delete archived cards."""
         if not self.ensure_board_writable():
             return
 
@@ -902,7 +903,7 @@ class BoardCLI:
                 print("Invalid choice. Please try again.")
 
     def _print_archived_card_details(self, card):
-        """Print details for an archived card."""
+        """!Print details for an archived card."""
         print("\n🗄️ Archived Card Details:")
         print(f"ID: {card.id}")
         print(f"Title: {card.title}")
@@ -923,7 +924,7 @@ class BoardCLI:
             print("Checklist: (none)")
     
     def create_backup(self):
-        """Create a backup of the board data."""
+        """!Create a backup of the board data."""
         print("\n--- CREATE BACKUP ---")
         backup_path = self.board.storage.backup()
         if backup_path:
@@ -932,7 +933,7 @@ class BoardCLI:
             print("❌ Failed to create backup!")
 
     def cleanup_orphaned_attachment_files(self):
-        """Delete copied attachment files that are no longer referenced by the board or history."""
+        """!Delete copied attachment files that are no longer referenced by the board or history."""
         if not self.ensure_board_writable():
             return
 
@@ -953,7 +954,7 @@ class BoardCLI:
         )
 
     def view_card_types(self):
-        """Display all configured card types."""
+        """!Display all configured card types."""
         print("\n--- CARD TYPES ---")
         default_type_id = self.board.get_default_card_type_id()
         last_used_id = self.board.get_last_used_card_type().id
@@ -971,7 +972,7 @@ class BoardCLI:
             print(f"   Color preset: {card_type.default_color or '(default)'}")
 
     def create_card_type(self):
-        """Create a new card type."""
+        """!Create a new card type."""
         if not self.ensure_board_writable():
             return
 
@@ -992,7 +993,7 @@ class BoardCLI:
             print(f"❌ {error}")
 
     def edit_card_type(self):
-        """Edit an existing card type."""
+        """!Edit an existing card type."""
         if not self.ensure_board_writable():
             return
 
@@ -1023,7 +1024,7 @@ class BoardCLI:
             print(f"❌ {error}")
 
     def delete_card_type(self):
-        """Delete a card type and either delete or reassign its cards."""
+        """!Delete a card type and either delete or reassign its cards."""
         if not self.ensure_board_writable():
             return
 
@@ -1056,7 +1057,7 @@ class BoardCLI:
 
     def select_card_type(self, default_type_id: str = None, allow_skip: bool = False,
                          exclude_default: bool = False, exclude_ids=None):
-        """Select a card type from the board."""
+        """!Select a card type from the board."""
         exclude_ids = set(exclude_ids or [])
         card_types = []
         for card_type in self.board.get_card_types_ordered():
@@ -1110,7 +1111,7 @@ class BoardCLI:
         return False
     
     def select_card(self, top_level_only: bool = False, archived_only: bool = False) -> Optional[str]:
-        """Helper method to select a card from the board."""
+        """!Helper method to select a card from the board."""
         # Show all cards with indices
         all_cards = []
         
@@ -1144,7 +1145,7 @@ class BoardCLI:
             return None
     
     def exit_app(self):
-        """Exit the application."""
+        """!Exit the application."""
         print("\nSaving your work...")
         if not self.board.is_read_only():
             self.board.save_board()
@@ -1154,7 +1155,7 @@ class BoardCLI:
     
     # Column Management Methods
     def create_column(self):
-        """Create a new column."""
+        """!Create a new column."""
         if not self.ensure_board_writable():
             return
 
@@ -1195,7 +1196,7 @@ class BoardCLI:
         print(f"✅ Column '{name}' created successfully!")
     
     def rename_column(self):
-        """Rename an existing column."""
+        """!Rename an existing column."""
         if not self.ensure_board_writable():
             return
 
@@ -1228,7 +1229,7 @@ class BoardCLI:
             print("Invalid input!")
     
     def delete_column(self):
-        """Delete a column."""
+        """!Delete a column."""
         if not self.ensure_board_writable():
             return
 
@@ -1284,7 +1285,7 @@ class BoardCLI:
             print("Invalid input!")
     
     def reorder_columns(self):
-        """Reorder columns."""
+        """!Reorder columns."""
         if not self.ensure_board_writable():
             return
 
@@ -1324,7 +1325,7 @@ class BoardCLI:
             print("Invalid input! Use numbers separated by commas.")
     
     def change_column_color(self):
-        """Change column color."""
+        """!Change column color."""
         if not self.ensure_board_writable():
             return
 
@@ -1374,7 +1375,7 @@ class BoardCLI:
             print("Invalid input!")
 
     def edit_column_flags(self):
-        """Edit the completed/add-card flags for an existing column."""
+        """!Edit the completed/add-card flags for an existing column."""
         if not self.ensure_board_writable():
             return
 
@@ -1422,7 +1423,7 @@ class BoardCLI:
             print("Invalid input!")
     
     def view_columns(self):
-        """View all columns and their details."""
+        """!View all columns and their details."""
         print("\n--- COLUMN OVERVIEW ---")
         columns = self.board.get_columns_ordered()
         if not columns:

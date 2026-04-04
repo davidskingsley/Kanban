@@ -12,13 +12,17 @@ from kanban.direct_cli import DirectActionCLI
 
 
 class DirectCliRegressionTests(unittest.TestCase):
+    """!Direct Cli Regression Tests."""
     def setUp(self):
+        """!Set up."""
         self.temp_dir = tempfile.mkdtemp(prefix='kanban-direct-cli-')
 
     def tearDown(self):
+        """!Tear down."""
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def invoke_direct(self, argv):
+        """!Invoke direct."""
         parser = build_parser()
         args = parser.parse_args(['--boards-dir', self.temp_dir, *argv])
         manager = BoardManager(self.temp_dir)
@@ -32,6 +36,7 @@ class DirectCliRegressionTests(unittest.TestCase):
         return exit_code, output.getvalue()
 
     def test_create_and_list_boards_directly(self):
+        """!Test create and list boards directly."""
         exit_code, output = self.invoke_direct([
             'create-board',
             '--name', 'Automation Board',
@@ -50,6 +55,7 @@ class DirectCliRegressionTests(unittest.TestCase):
         self.assertIn('current', output)
 
     def test_create_search_and_show_card_details_directly(self):
+        """!Test create search and show card details directly."""
         self.invoke_direct(['create-board', '--name', 'Automation Board'])
         exit_code, output = self.invoke_direct([
             'create-card',
@@ -80,6 +86,7 @@ class DirectCliRegressionTests(unittest.TestCase):
         self.assertIn('Tags: cli, automation', detail_output)
 
     def test_direct_cli_can_create_and_replace_card_checklists(self):
+        """!Test direct cli can create and replace card checklists."""
         self.invoke_direct(['create-board', '--name', 'Checklist Board'])
         exit_code, output = self.invoke_direct([
             'create-card',
@@ -122,6 +129,7 @@ class DirectCliRegressionTests(unittest.TestCase):
         self.assertIn('[ ] Publish announcement', detail_output)
 
     def test_direct_cli_can_mutate_single_checklist_items(self):
+        """!Test direct cli can mutate single checklist items."""
         self.invoke_direct(['create-board', '--name', 'Item Commands Board'])
         self.invoke_direct([
             'create-card',
@@ -187,6 +195,7 @@ class DirectCliRegressionTests(unittest.TestCase):
         self.assertNotIn('Initial task', detail_output)
 
     def test_direct_cli_can_add_edit_list_and_delete_notes(self):
+        """!Test direct cli can add edit list and delete notes."""
         self.invoke_direct(['create-board', '--name', 'Notes Board'])
         self.invoke_direct([
             'create-card',
@@ -257,6 +266,7 @@ class DirectCliRegressionTests(unittest.TestCase):
         self.assertIn('Notes: (none)', list_output)
 
     def test_direct_cli_can_archive_restore_and_delete_archived_cards(self):
+        """!Test direct cli can archive restore and delete archived cards."""
         self.invoke_direct(['create-board', '--name', 'Archive Automation'])
 
         manager = BoardManager(self.temp_dir)
@@ -318,6 +328,7 @@ class DirectCliRegressionTests(unittest.TestCase):
         self.assertIn('No archived cards found.', archived_output)
 
     def test_edit_card_can_clear_optional_fields_directly(self):
+        """!Test edit card can clear optional fields directly."""
         self.invoke_direct(['create-board', '--name', 'Automation Board'])
         self.invoke_direct([
             'create-card',
@@ -350,12 +361,14 @@ class DirectCliRegressionTests(unittest.TestCase):
         self.assertIn('Project: (none)', detail_output)
 
     def test_delete_board_requires_force(self):
+        """!Test delete board requires force."""
         self.invoke_direct(['create-board', '--name', 'Protected Board'])
 
         with self.assertRaisesRegex(ValueError, 'requires --force'):
             self.invoke_direct(['delete-board', '--board', 'Protected Board'])
 
     def test_create_column_and_move_card_directly(self):
+        """!Test create column and move card directly."""
         self.invoke_direct(['create-board', '--name', 'Column Automation'])
         self.invoke_direct(['create-column', '--board', 'Column Automation', '--name', 'Blocked', '--can-add-card'])
         self.invoke_direct(['create-card', '--board', 'Column Automation', '--title', 'Waiting on review'])
@@ -375,6 +388,7 @@ class DirectCliRegressionTests(unittest.TestCase):
         self.assertIn('Waiting on review', board_output)
 
     def test_load_board_from_folder_directly(self):
+        """!Test load board from folder directly."""
         external_dir = tempfile.mkdtemp(prefix='kanban-external-board-')
         try:
             external_manager = BoardManager(external_dir)
@@ -399,6 +413,7 @@ class DirectCliRegressionTests(unittest.TestCase):
             shutil.rmtree(external_dir, ignore_errors=True)
 
     def test_convert_board_between_json_and_sqlite_directly(self):
+        """!Test convert board between json and sqlite directly."""
         self.invoke_direct(['create-board', '--name', 'Convertible Board'])
         self.invoke_direct([
             'create-card',
@@ -441,6 +456,7 @@ class DirectCliRegressionTests(unittest.TestCase):
         self.assertIn('Title: Preserved Card', detail_output)
 
     def test_main_executes_direct_action_subcommand(self):
+        """!Test main executes direct action subcommand."""
         output = io.StringIO()
         with redirect_stdout(output):
             exit_code = main(['--boards-dir', self.temp_dir, 'create-board', '--name', 'Main Entry Board'])
@@ -450,6 +466,7 @@ class DirectCliRegressionTests(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(self.temp_dir, 'boards_metadata.json')))
 
     def test_board_stats_reports_backend_type(self):
+        """!Test board stats reports backend type."""
         self.invoke_direct(['create-board', '--name', 'Stats Board', '--storage-backend', 'sqlite'])
 
         exit_code, output = self.invoke_direct(['board-stats', '--board', 'Stats Board'])

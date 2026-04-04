@@ -1,6 +1,6 @@
 ## @file
 #  @brief Filter-related mixins for the PySide6 multi-board GUI.
-"""Filter mixins for the PySide6 GUI."""
+"""!Filter mixins for the PySide6 GUI."""
 
 from __future__ import annotations
 
@@ -13,9 +13,10 @@ from .common import due_state_label
 
 
 class BoardFiltersMixin:
-	"""Filter toolbar behavior for the multi-board GUI."""
+	"""!Filter toolbar behavior for the multi-board GUI."""
 
 	def _default_filter_state(self) -> Dict[str, object]:
+		"""!Default filter state."""
 		return {
 			'search': '',
 			'priority': '',
@@ -27,6 +28,7 @@ class BoardFiltersMixin:
 		}
 
 	def _get_current_filter_state(self) -> Dict[str, object]:
+		"""!Get current filter state."""
 		board_id = self.board_manager.current_board_id
 		if not board_id:
 			return self._default_filter_state()
@@ -37,6 +39,7 @@ class BoardFiltersMixin:
 		return state
 
 	def _filters_active(self) -> bool:
+		"""!Filters active."""
 		state = self._get_current_filter_state()
 		return any([
 			state['search'],
@@ -48,11 +51,13 @@ class BoardFiltersMixin:
 		])
 
 	def _column_search_text(self, column_id: str) -> str:
+		"""!Column search text."""
 		state = self._get_current_filter_state()
 		column_search = state.get('column_search') or {}
 		return str(column_search.get(column_id, ''))
 
 	def _set_column_search_text(self, column_id: str, value: str):
+		"""!Set column search text."""
 		state = self._get_current_filter_state()
 		column_search = dict(state.get('column_search') or {})
 		normalized = value.strip()
@@ -63,6 +68,7 @@ class BoardFiltersMixin:
 		state['column_search'] = column_search
 
 	def _card_matches_column_search(self, card, search_text: str) -> bool:
+		"""!Card matches column search."""
 		needle = search_text.lower().strip()
 		if not needle:
 			return True
@@ -71,6 +77,7 @@ class BoardFiltersMixin:
 		return any(needle in text.lower() for text in haystacks)
 
 	def _set_filter_toolbar_enabled(self, enabled: bool):
+		"""!Set filter toolbar enabled."""
 		self.toolbar_search_entry.setEnabled(enabled)
 		self.toolbar_priority_combo.setEnabled(enabled)
 		self.toolbar_assignee_combo.setEnabled(enabled)
@@ -80,6 +87,7 @@ class BoardFiltersMixin:
 		self.toolbar_clear_filters_button.setEnabled(enabled and self._filters_active())
 
 	def _sync_filter_toolbar(self, board: Optional[KanbanBoard]):
+		"""!Sync filter toolbar."""
 		self._updating_filter_controls = True
 		try:
 			self._refresh_assignee_filter_options(board)
@@ -107,6 +115,7 @@ class BoardFiltersMixin:
 			self._updating_filter_controls = False
 
 	def _set_combo_to_data(self, combo_box: QComboBox, target_data):
+		"""!Set combo to data."""
 		for index in range(combo_box.count()):
 			if combo_box.itemData(index) == target_data:
 				combo_box.setCurrentIndex(index)
@@ -114,6 +123,7 @@ class BoardFiltersMixin:
 		combo_box.setCurrentIndex(0)
 
 	def _refresh_assignee_filter_options(self, board: Optional[KanbanBoard]):
+		"""!Refresh assignee filter options."""
 		selected_assignee = self.toolbar_assignee_combo.currentData() if hasattr(self, 'toolbar_assignee_combo') else ''
 		self.toolbar_assignee_combo.blockSignals(True)
 		self.toolbar_assignee_combo.clear()
@@ -126,6 +136,7 @@ class BoardFiltersMixin:
 		self.toolbar_assignee_combo.blockSignals(False)
 
 	def _refresh_card_type_filter_options(self, board: Optional[KanbanBoard]):
+		"""!Refresh card type filter options."""
 		selected_type = self.toolbar_card_type_combo.currentData() if hasattr(self, 'toolbar_card_type_combo') else ''
 		self.toolbar_card_type_combo.blockSignals(True)
 		self.toolbar_card_type_combo.clear()
@@ -137,6 +148,7 @@ class BoardFiltersMixin:
 		self.toolbar_card_type_combo.blockSignals(False)
 
 	def _refresh_tag_filter_options(self, board: Optional[KanbanBoard]):
+		"""!Refresh tag filter options."""
 		selected_tag = self.toolbar_tag_combo.currentData() if hasattr(self, 'toolbar_tag_combo') else ''
 		self.toolbar_tag_combo.blockSignals(True)
 		self.toolbar_tag_combo.clear()
@@ -149,6 +161,7 @@ class BoardFiltersMixin:
 		self.toolbar_tag_combo.blockSignals(False)
 
 	def apply_toolbar_filters(self, *_args):
+		"""!Apply toolbar filters."""
 		if self._updating_filter_controls or self.board_manager.current_board_id is None:
 			return
 		self.board_filter_states[self.board_manager.current_board_id] = {
@@ -163,6 +176,7 @@ class BoardFiltersMixin:
 		self.refresh_ui()
 
 	def clear_toolbar_filters(self):
+		"""!Clear toolbar filters."""
 		if self.board_manager.current_board_id is None:
 			return
 		self._updating_filter_controls = True
@@ -180,6 +194,7 @@ class BoardFiltersMixin:
 		self.refresh_ui()
 
 	def _card_matches_filters(self, board: KanbanBoard, card) -> bool:
+		"""!Card matches filters."""
 		state = self._get_current_filter_state()
 		search_text = str(state['search']).lower().strip()
 		if search_text:
@@ -200,9 +215,11 @@ class BoardFiltersMixin:
 		return True
 
 	def _filter_cards(self, board: KanbanBoard, cards: List[object]) -> List[object]:
+		"""!Filter cards."""
 		return [card for card in cards if self._card_matches_filters(board, card)]
 
 	def _filter_summary_suffix(self) -> str:
+		"""!Filter summary suffix."""
 		state = self._get_current_filter_state()
 		if not any([state['search'], state['priority'], state['assignee'], state['card_type'], state['tag'], state['due_state']]):
 			return ''

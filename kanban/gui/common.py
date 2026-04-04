@@ -1,6 +1,6 @@
 ## @file
 #  @brief Shared PySide6 GUI helpers, styling, and utility widgets.
-"""Shared helpers for the PySide6 GUI."""
+"""!Shared helpers for the PySide6 GUI."""
 
 from __future__ import annotations
 
@@ -412,10 +412,12 @@ QCheckBox::indicator:checked {
 
 
 def priority_label(priority: Priority) -> str:
+	"""!Priority label."""
 	return priority.value.replace('_', ' ').title()
 
 
 def parse_tags(text: str) -> List[str]:
+	"""!Parse tags."""
 	tags: List[str] = []
 	for raw_tag in (text or '').split(','):
 		tag = raw_tag.strip().lstrip('#')
@@ -425,6 +427,7 @@ def parse_tags(text: str) -> List[str]:
 
 
 def create_project_name_combo(board: Optional[KanbanBoard], current_text: Optional[str] = None) -> QComboBox:
+	"""!Create project name combo."""
 	combo = QComboBox()
 	combo.setEditable(True)
 	combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
@@ -443,6 +446,7 @@ def create_project_name_combo(board: Optional[KanbanBoard], current_text: Option
 
 
 def color_to_rgb(color: str) -> tuple[float, float, float]:
+	"""!Color to rgb."""
 	value = (color or '').strip().lstrip('#')
 	if len(value) != 6:
 		raise ValueError(f'Unsupported color value: {color!r}')
@@ -450,11 +454,14 @@ def color_to_rgb(color: str) -> tuple[float, float, float]:
 
 
 def _linear_channel(channel: float) -> float:
+	"""!Linear channel."""
 	return channel / 12.92 if channel <= 0.03928 else ((channel + 0.055) / 1.055) ** 2.4
 
 
 def contrast_ratio(color_a: str, color_b: str) -> float:
+	"""!Contrast ratio."""
 	def luminance(color: str) -> float:
+		"""!Luminance."""
 		red, green, blue = color_to_rgb(color)
 		return 0.2126 * _linear_channel(red) + 0.7152 * _linear_channel(green) + 0.0722 * _linear_channel(blue)
 
@@ -463,6 +470,7 @@ def contrast_ratio(color_a: str, color_b: str) -> float:
 
 
 def contrasting_text_color(background: str) -> str:
+	"""!Contrasting text color."""
 	dark_text = '#1f1812'
 	light_text = '#ffffff'
 	dark_contrast = contrast_ratio(background, dark_text)
@@ -471,6 +479,7 @@ def contrasting_text_color(background: str) -> str:
 
 
 def resolve_hex_color(color: Optional[str], fallback: str) -> str:
+	"""!Resolve hex color."""
 	candidate = QColor((color or '').strip())
 	if candidate.isValid():
 		return candidate.name()
@@ -478,16 +487,19 @@ def resolve_hex_color(color: Optional[str], fallback: str) -> str:
 
 
 def secondary_text_color(background: str) -> str:
+	"""!Secondary text color."""
 	return '#efe4d4' if contrasting_text_color(background) == '#ffffff' else '#66584b'
 
 
 def rgba_color(color: str, alpha: float) -> str:
+	"""!Rgba color."""
 	qcolor = QColor(resolve_hex_color(color, '#000000'))
 	clamped_alpha = max(0.0, min(alpha, 1.0))
 	return f'rgba({qcolor.red()}, {qcolor.green()}, {qcolor.blue()}, {clamped_alpha:.3f})'
 
 
 def priority_accent(priority: Priority) -> str:
+	"""!Priority accent."""
 	return {
 		Priority.LOW: '#4f7f5c',
 		Priority.MEDIUM: '#c67b2f',
@@ -497,6 +509,7 @@ def priority_accent(priority: Priority) -> str:
 
 
 def schedule_summary(card) -> Optional[str]:
+	"""!Schedule summary."""
 	if card.start_date and card.end_date:
 		return f"{card.start_date.isoformat()} -> {card.end_date.isoformat()}"
 	if card.start_date:
@@ -507,6 +520,7 @@ def schedule_summary(card) -> Optional[str]:
 
 
 def due_state_label(board: KanbanBoard, card, today: Optional[date] = None) -> str:
+	"""!Due state label."""
 	reference = today or date.today()
 	if board.is_card_done(card):
 		return 'Done'
@@ -522,10 +536,12 @@ def due_state_label(board: KanbanBoard, card, today: Optional[date] = None) -> s
 
 
 def display_date(value: Optional[date]) -> str:
+	"""!Display date."""
 	return value.isoformat() if value else '—'
 
 
 def due_state_colors(state: str) -> tuple[str, str]:
+	"""!Due state colors."""
 	palette = {
 		'Overdue': ('#f8ddd6', '#7f241b'),
 		'Due Today': ('#f4e4c8', '#7a4b12'),
@@ -539,6 +555,7 @@ def due_state_colors(state: str) -> tuple[str, str]:
 
 
 def clipped_description(text: str, limit: int = 180) -> str:
+	"""!Clipped description."""
 	compact = ' '.join((text or '').split())
 	if len(compact) <= limit:
 		return compact
@@ -546,6 +563,7 @@ def clipped_description(text: str, limit: int = 180) -> str:
 
 
 def clipped_title(text: str, limit: int = 97) -> str:
+	"""!Clipped title."""
 	compact = ' '.join((text or '').split())
 	if len(compact) <= limit:
 		return compact
@@ -553,10 +571,12 @@ def clipped_title(text: str, limit: int = 97) -> str:
 
 
 def wheel_delta(event: QWheelEvent) -> QPoint:
+	"""!Wheel delta."""
 	return event.pixelDelta() if not event.pixelDelta().isNull() else event.angleDelta()
 
 
 def scrollbar_can_consume_wheel(scroll_bar, delta: int) -> bool:
+	"""!Scrollbar can consume wheel."""
 	if scroll_bar is None:
 		return False
 	if scroll_bar.maximum() <= scroll_bar.minimum():
@@ -569,6 +589,7 @@ def scrollbar_can_consume_wheel(scroll_bar, delta: int) -> bool:
 
 
 def scrollable_widget_can_consume_wheel(widget: QAbstractItemView, event: QWheelEvent) -> bool:
+	"""!Scrollable widget can consume wheel."""
 	delta = wheel_delta(event)
 	primary_vertical = abs(delta.y()) >= abs(delta.x())
 	if primary_vertical:
@@ -577,6 +598,7 @@ def scrollable_widget_can_consume_wheel(widget: QAbstractItemView, event: QWheel
 
 
 def forward_wheel_event_to_ancestor_scroll_area(widget: QWidget, event: QWheelEvent) -> bool:
+	"""!Forward wheel event to ancestor scroll area."""
 	ancestor = widget.parentWidget()
 	while ancestor is not None:
 		if isinstance(ancestor, QAbstractScrollArea):
@@ -604,6 +626,7 @@ def forward_wheel_event_to_ancestor_scroll_area(widget: QWidget, event: QWheelEv
 
 
 def handle_scrollable_wheel_event(widget: QWidget, event: QWheelEvent, default_handler) -> None:
+	"""!Handle scrollable wheel event."""
 	if scrollable_widget_can_consume_wheel(widget, event):
 		default_handler()
 		return
@@ -613,26 +636,35 @@ def handle_scrollable_wheel_event(widget: QWidget, event: QWheelEvent, default_h
 
 
 class PropagatingScrollArea(QScrollArea):
+	"""!Propagating Scroll Area."""
 	def wheelEvent(self, event):
+		"""!Wheel event."""
 		handle_scrollable_wheel_event(self, event, lambda: super(PropagatingScrollArea, self).wheelEvent(event))
 
 
 class PropagatingListWidget(QListWidget):
+	"""!Propagating List Widget."""
 	def wheelEvent(self, event):
+		"""!Wheel event."""
 		handle_scrollable_wheel_event(self, event, lambda: super(PropagatingListWidget, self).wheelEvent(event))
 
 
 class PropagatingTableWidget(QTableWidget):
+	"""!Propagating Table Widget."""
 	def wheelEvent(self, event):
+		"""!Wheel event."""
 		handle_scrollable_wheel_event(self, event, lambda: super(PropagatingTableWidget, self).wheelEvent(event))
 
 
 class PropagatingTextEdit(QTextEdit):
+	"""!Propagating Text Edit."""
 	def wheelEvent(self, event):
+		"""!Wheel event."""
 		handle_scrollable_wheel_event(self, event, lambda: super(PropagatingTextEdit, self).wheelEvent(event))
 
 
 def build_dialog_shell(dialog: QDialog, title: str, subtitle: str, scrollable: bool = True) -> QVBoxLayout:
+	"""!Build dialog shell."""
 	dialog.setObjectName('StandardDialog')
 	outer_layout = QVBoxLayout(dialog)
 	outer_layout.setContentsMargins(18, 18, 18, 18)
@@ -689,6 +721,7 @@ def build_dialog_shell(dialog: QDialog, title: str, subtitle: str, scrollable: b
 
 
 def configure_form_layout(layout: QFormLayout):
+	"""!Configure form layout."""
 	layout.setContentsMargins(0, 0, 0, 0)
 	layout.setSpacing(12)
 	layout.setHorizontalSpacing(14)
@@ -698,12 +731,14 @@ def configure_form_layout(layout: QFormLayout):
 
 
 def create_dialog_section_label(text: str) -> QLabel:
+	"""!Create dialog section label."""
 	label = QLabel(text)
 	label.setObjectName('DialogSectionLabel')
 	return label
 
 
 def create_dialog_hint_label(text: str) -> QLabel:
+	"""!Create dialog hint label."""
 	label = QLabel(text)
 	label.setObjectName('DialogHint')
 	label.setWordWrap(True)
@@ -711,6 +746,7 @@ def create_dialog_hint_label(text: str) -> QLabel:
 
 
 def add_dialog_footer(dialog: QDialog, footer: QWidget):
+	"""!Add dialog footer."""
 	layout = dialog.layout()
 	if layout is None:
 		raise ValueError('Dialog footer requires the dialog shell layout to be created first')
@@ -718,9 +754,11 @@ def add_dialog_footer(dialog: QDialog, footer: QWidget):
 
 
 class ColorSelectionField(QWidget):
+	"""!Color Selection Field."""
 	def __init__(self, initial_color: Optional[str] = None, allow_clear: bool = False,
 				 default_label: str = 'Default', selected_label: str = 'Color selected',
 				 parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.allow_clear = allow_clear
 		self.default_label = default_label
@@ -752,6 +790,7 @@ class ColorSelectionField(QWidget):
 		self._refresh_display()
 
 	def _refresh_display(self):
+		"""!Refresh display."""
 		if self._color_value:
 			resolved = resolve_hex_color(self._color_value, '#ddd4c6')
 			self.swatch.setStyleSheet(f'background: {resolved}; border: 1px solid #b8a17f; border-radius: 6px;')
@@ -763,6 +802,7 @@ class ColorSelectionField(QWidget):
 			self.clear_button.setEnabled(self._color_value is not None)
 
 	def pick_color(self):
+		"""!Pick color."""
 		initial = self._color_value or '#ffffff'
 		color = choose_color_dialog(self, 'Choose Color', initial)
 		if color is not None:
@@ -770,14 +810,17 @@ class ColorSelectionField(QWidget):
 			self._refresh_display()
 
 	def clear_color(self):
+		"""!Clear color."""
 		self._color_value = None
 		self._refresh_display()
 
 	def color(self) -> Optional[str]:
+		"""!Color."""
 		return self._color_value
 
 
 def choose_color_dialog(parent: QWidget, title: str, initial_color: str) -> Optional[QColor]:
+	"""!Choose color dialog."""
 	dialog = QColorDialog(QColor(initial_color or '#ffffff'), parent)
 	dialog.setWindowTitle(title)
 	dialog.setOption(QColorDialog.ColorDialogOption.DontUseNativeDialog, True)
@@ -788,6 +831,7 @@ def choose_color_dialog(parent: QWidget, title: str, initial_color: str) -> Opti
 
 
 def choose_existing_directory_dialog(parent: QWidget, title: str, directory: str = '') -> str:
+	"""!Choose existing directory dialog."""
 	dialog = QFileDialog(parent, title, directory or '')
 	dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
 	dialog.setFileMode(QFileDialog.FileMode.Directory)
@@ -799,6 +843,7 @@ def choose_existing_directory_dialog(parent: QWidget, title: str, directory: str
 
 
 def choose_open_file_dialog(parent: QWidget, title: str, directory: str = '', filter_text: str = '') -> str:
+	"""!Choose open file dialog."""
 	dialog = QFileDialog(parent, title, directory or '')
 	dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
 	dialog.setFileMode(QFileDialog.FileMode.ExistingFile)
@@ -811,6 +856,7 @@ def choose_open_file_dialog(parent: QWidget, title: str, directory: str = '', fi
 
 
 def choose_open_files_dialog(parent: QWidget, title: str, directory: str = '', filter_text: str = '') -> List[str]:
+	"""!Choose open files dialog."""
 	dialog = QFileDialog(parent, title, directory or '')
 	dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
 	dialog.setFileMode(QFileDialog.FileMode.ExistingFiles)
@@ -822,6 +868,7 @@ def choose_open_files_dialog(parent: QWidget, title: str, directory: str = '', f
 
 
 def choose_save_file_dialog(parent: QWidget, title: str, directory: str = '', filter_text: str = '') -> str:
+	"""!Choose save file dialog."""
 	dialog = QFileDialog(parent, title, directory or '')
 	dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
 	dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
@@ -835,6 +882,7 @@ def choose_save_file_dialog(parent: QWidget, title: str, directory: str = '', fi
 
 
 def open_path_with_default_app(path: str):
+	"""!Open path with default app."""
 	absolute_path = os.path.abspath(path)
 	if os.name == 'nt':
 		os.startfile(absolute_path)
@@ -844,6 +892,7 @@ def open_path_with_default_app(path: str):
 
 
 def file_paths_from_mime_data(mime_data: QMimeData) -> List[str]:
+	"""!File paths from mime data."""
 	if mime_data is None or not mime_data.hasUrls():
 		return []
 	paths: List[str] = []
@@ -857,6 +906,7 @@ def file_paths_from_mime_data(mime_data: QMimeData) -> List[str]:
 
 
 def format_card_text(board: KanbanBoard, card) -> str:
+	"""!Format card text."""
 	parts = [card.title, f'[{priority_label(card.priority)}]']
 	if card.project:
 		parts.append(f'[{card.project}]')
@@ -871,6 +921,7 @@ def format_card_text(board: KanbanBoard, card) -> str:
 
 
 def column_identifier(column) -> str:
+	"""!Column identifier."""
 	if hasattr(column, 'id'):
 		return column.id
 	status = getattr(column, 'status', None)
@@ -878,6 +929,7 @@ def column_identifier(column) -> str:
 
 
 def column_label(column) -> str:
+	"""!Column label."""
 	if hasattr(column, 'name'):
 		return column.name
 	status = getattr(column, 'status', None)
@@ -885,40 +937,47 @@ def column_label(column) -> str:
 
 
 def column_color(column) -> Optional[str]:
+	"""!Column color."""
 	return getattr(column, 'color', None)
 
 
 def column_is_completed(column) -> bool:
+	"""!Column is completed."""
 	if hasattr(column, 'is_completed'):
 		return bool(column.is_completed)
 	return getattr(column, 'status', None) == Status.DONE
 
 
 def column_can_add_card(column) -> bool:
+	"""!Column can add card."""
 	if hasattr(column, 'can_add_card'):
 		return bool(column.can_add_card)
 	return getattr(column, 'status', None) == Status.TODO
 
 
 def column_target_value(column):
+	"""!Column target value."""
 	if hasattr(column, 'id'):
 		return column.id
 	return getattr(column, 'status', None)
 
 
 def resolve_column_target(board: KanbanBoard, column_token: Optional[str]):
+	"""!Resolve column target."""
 	if not column_token:
 		return None
 	return column_token
 
 
 def clamp_drag_hotspot(point: QPoint, size: QSize) -> QPoint:
+	"""!Clamp drag hotspot."""
 	max_x = max(0, size.width() - 1)
 	max_y = max(0, size.height() - 1)
 	return QPoint(min(max(point.x(), 0), max_x), min(max(point.y(), 0), max_y))
 
 
 def create_drag_preview(source: QPixmap, opacity: float = 0.88) -> QPixmap:
+	"""!Create drag preview."""
 	if source.isNull():
 		return source
 	preview = QPixmap(source.size())

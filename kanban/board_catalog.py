@@ -1,6 +1,6 @@
 ## @file
 #  @brief Project and card-type mixins for the board domain.
-"""Project and card-type mixins for the board domain."""
+"""!Project and card-type mixins for the board domain."""
 
 from __future__ import annotations
 
@@ -11,9 +11,10 @@ from .models import UNSET, CardType, Project
 
 
 class BoardCatalogMixin:
-    """Project and card-type helpers for a Kanban board."""
+    """!Project and card-type helpers for a Kanban board."""
 
     def _ensure_default_card_type(self):
+        """!Ensure default card type."""
         default_type = next((card_type for card_type in self.card_types.values() if card_type.name == self.DEFAULT_CARD_TYPE_NAME), None)
         if default_type is None:
             default_type = CardType(self.DEFAULT_CARD_TYPE_NAME, 'Standard card type')
@@ -21,36 +22,45 @@ class BoardCatalogMixin:
         return default_type
 
     def get_default_card_type(self) -> CardType:
+        """!Get default card type."""
         return self._ensure_default_card_type()
 
     def get_default_card_type_id(self) -> str:
+        """!Get default card type id."""
         return self.get_default_card_type().id
 
     def get_card_type(self, card_type_id: str) -> Optional[CardType]:
+        """!Get card type."""
         return self.card_types.get(card_type_id)
 
     def get_card_types_ordered(self) -> List[CardType]:
+        """!Get card types ordered."""
         default_type = self.get_default_card_type()
         other_types = [card_type for card_type in self.card_types.values() if card_type.id != default_type.id]
         other_types.sort(key=lambda card_type: card_type.name.lower())
         return [default_type] + other_types
 
     def get_project(self, project_id: str) -> Optional[Project]:
+        """!Get project."""
         return self.projects.get(project_id)
 
     def get_project_by_name(self, name: Optional[str]) -> Optional[Project]:
+        """!Get project by name."""
         normalized_name = (name or '').strip().lower()
         if not normalized_name:
             return None
         return next((project for project in self.projects.values() if project.name.strip().lower() == normalized_name), None)
 
     def get_projects_ordered(self) -> List[Project]:
+        """!Get projects ordered."""
         return sorted(self.projects.values(), key=lambda project: project.name.lower())
 
     def _project_name_matches(self, value: Optional[str], project_name: str) -> bool:
+        """!Project name matches."""
         return bool(value and value.strip().lower() == project_name.strip().lower())
 
     def _ensure_project_exists(self, project_name: Optional[str], description: str = '') -> Optional[Project]:
+        """!Ensure project exists."""
         normalized_name = (project_name or '').strip()
         if not normalized_name:
             return None
@@ -62,12 +72,14 @@ class BoardCatalogMixin:
         return project
 
     def _sync_projects_from_references(self):
+        """!Sync projects from references."""
         for card_type in self.card_types.values():
             self._ensure_project_exists(card_type.default_project)
         for card in self.get_all_cards():
             self._ensure_project_exists(card.project)
 
     def create_project(self, name: str, description: str = '') -> str:
+        """!Create project."""
         self._ensure_writable()
         name = (name or '').strip()
         if not name:
@@ -82,6 +94,7 @@ class BoardCatalogMixin:
         return project.id
 
     def edit_project(self, project_id: str, name: str = None, description: str = None) -> Optional[Project]:
+        """!Edit project."""
         self._ensure_writable()
         project = self.get_project(project_id)
         if project is None:
@@ -111,18 +124,21 @@ class BoardCatalogMixin:
         return project
 
     def get_cards_by_project(self, project_id: str):
+        """!Get cards by project."""
         project = self.get_project(project_id)
         if project is None:
             return []
         return [card for card in self.get_all_cards() if self._project_name_matches(card.project, project.name)]
 
     def get_card_types_by_project(self, project_id: str):
+        """!Get card types by project."""
         project = self.get_project(project_id)
         if project is None:
             return []
         return [card_type for card_type in self.card_types.values() if self._project_name_matches(card_type.default_project, project.name)]
 
     def delete_project(self, project_id: str, delete_cards: bool = False, replacement_project_id: str = None) -> bool:
+        """!Delete project."""
         self._ensure_writable()
         project = self.get_project(project_id)
         if project is None:
@@ -159,6 +175,7 @@ class BoardCatalogMixin:
         return True
 
     def get_last_used_card_type(self) -> CardType:
+        """!Get last used card type."""
         card_type = self.get_card_type(self.last_used_card_type_id)
         if card_type is None:
             card_type = self.get_default_card_type()
@@ -166,6 +183,7 @@ class BoardCatalogMixin:
         return card_type
 
     def _resolve_card_type(self, card_type_id: str = None) -> CardType:
+        """!Resolve card type."""
         if card_type_id:
             card_type = self.get_card_type(card_type_id)
             if card_type is None:
@@ -174,6 +192,7 @@ class BoardCatalogMixin:
         return self.get_last_used_card_type()
 
     def create_card_type(self, name: str, description: str = '', default_project: str = None, default_color: str = None) -> str:
+        """!Create card type."""
         self._ensure_writable()
         name = (name or '').strip()
         if not name:
@@ -190,6 +209,7 @@ class BoardCatalogMixin:
         return card_type.id
 
     def edit_card_type(self, card_type_id: str, name: str = None, description: str = None, default_project=UNSET, default_color=UNSET) -> Optional[CardType]:
+        """!Edit card type."""
         self._ensure_writable()
         card_type = self.get_card_type(card_type_id)
         if card_type is None:
@@ -213,9 +233,11 @@ class BoardCatalogMixin:
         return card_type
 
     def get_cards_by_type(self, card_type_id: str):
+        """!Get cards by type."""
         return [card for card in self.get_all_cards() if card.card_type_id == card_type_id]
 
     def delete_card_type(self, card_type_id: str, delete_cards: bool = False, replacement_type_id: str = None) -> bool:
+        """!Delete card type."""
         self._ensure_writable()
         card_type = self.get_card_type(card_type_id)
         if card_type is None:

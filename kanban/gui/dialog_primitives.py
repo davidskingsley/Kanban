@@ -1,6 +1,6 @@
 ## @file
 #  @brief Shared dialog widgets and delegates for the PySide6 multi-board GUI.
-"""Shared dialog widgets and delegates for the PySide6 GUI."""
+"""!Shared dialog widgets and delegates for the PySide6 GUI."""
 
 from __future__ import annotations
 
@@ -25,18 +25,21 @@ from .common import PropagatingListWidget, due_state_colors
 
 
 class DueTimelineDelegate(QStyledItemDelegate):
-	"""Paint a gantt-style schedule bar inside the due-date table."""
+	"""!Paint a gantt-style schedule bar inside the due-date table."""
 
 	def __init__(self, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.range_start = date.today() - timedelta(days=3)
 		self.range_end = date.today() + timedelta(days=10)
 
 	def set_range(self, start_date: date, end_date: date):
+		"""!Set range."""
 		self.range_start = start_date
 		self.range_end = end_date
 
 	def paint(self, painter: QPainter, option, index):
+		"""!Paint."""
 		payload = index.data(Qt.ItemDataRole.UserRole) or {}
 		painter.save()
 
@@ -124,19 +127,22 @@ class DueTimelineDelegate(QStyledItemDelegate):
 
 
 class SubcardsListWidget(PropagatingListWidget):
-	"""List widget that keeps custom subcard rows sized to the current viewport width."""
+	"""!List widget that keeps custom subcard rows sized to the current viewport width."""
 
 	def __init__(self, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
 		self.verticalScrollBar().setSingleStep(20)
 		self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
 	def resizeEvent(self, event):
+		"""!Resize event."""
 		super().resizeEvent(event)
 		self.refresh_item_sizes()
 
 	def refresh_item_sizes(self):
+		"""!Refresh item sizes."""
 		available_width = self.viewport().width() - 12
 		if available_width <= 0:
 			return
@@ -158,11 +164,12 @@ class SubcardsListWidget(PropagatingListWidget):
 
 
 class SubcardListItemContainer(QWidget):
-	"""Full-width row container that adds bottom-only spacing for subcards."""
+	"""!Full-width row container that adds bottom-only spacing for subcards."""
 
 	BOTTOM_SPACING = 5
 
 	def __init__(self, row_widget: 'SubcardRowWidget', parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.row_widget = row_widget
 		self._layout = QHBoxLayout(self)
@@ -171,6 +178,7 @@ class SubcardListItemContainer(QWidget):
 		self._layout.addWidget(row_widget)
 
 	def apply_width(self, row_width: int):
+		"""!Apply width."""
 		margins = self._layout.contentsMargins()
 		content_width = max(120, row_width - margins.left() - margins.right())
 		self.setFixedWidth(row_width)
@@ -178,48 +186,57 @@ class SubcardListItemContainer(QWidget):
 		self.row_widget.updateGeometry()
 
 	def hasHeightForWidth(self) -> bool:
+		"""!Has height for width."""
 		return True
 
 	def heightForWidth(self, width: int) -> int:
+		"""!Height for width."""
 		margins = self._layout.contentsMargins()
 		content_width = max(120, width - margins.left() - margins.right())
 		row_height = self.row_widget.heightForWidth(content_width) if self.row_widget.hasHeightForWidth() else self.row_widget.sizeHint().height()
 		return row_height + margins.top() + margins.bottom()
 
 	def sizeHint(self) -> QSize:
+		"""!Size hint."""
 		width = self.width() if self.width() > 0 else self.row_widget.sizeHint().width()
 		return QSize(width, self.heightForWidth(width))
 
 	def minimumSizeHint(self) -> QSize:
+		"""!Minimum size hint."""
 		width = self.width() if self.width() > 0 else self.row_widget.minimumSizeHint().width()
 		return QSize(width, self.heightForWidth(width))
 
 
 class SubcardRowWidget(QFrame):
-	"""Custom row widget for the subcards panel that supports proper height-for-width sizing."""
+	"""!Custom row widget for the subcards panel that supports proper height-for-width sizing."""
 
 	def hasHeightForWidth(self) -> bool:
+		"""!Has height for width."""
 		return True
 
 	def heightForWidth(self, width: int) -> int:
+		"""!Height for width."""
 		layout = self.layout()
 		if layout is None:
 			return super().sizeHint().height()
 		return max(layout.totalHeightForWidth(max(width, 180)), super().minimumSizeHint().height())
 
 	def sizeHint(self) -> QSize:
+		"""!Size hint."""
 		width = self.width() if self.width() > 0 else super().sizeHint().width()
 		return QSize(width, self.heightForWidth(width))
 
 	def minimumSizeHint(self) -> QSize:
+		"""!Minimum size hint."""
 		width = self.width() if self.width() > 0 else super().minimumSizeHint().width()
 		return QSize(width, self.heightForWidth(width))
 
 
 class OptionalDateField(QWidget):
-	"""A checkbox-controlled date input."""
+	"""!A checkbox-controlled date input."""
 
 	def __init__(self, label: str, initial_value: Optional[date] = None, parent: Optional[QWidget] = None):
+		"""!Init."""
 		super().__init__(parent)
 		self.checkbox = QCheckBox(label)
 		self.editor = QDateEdit()
@@ -248,6 +265,7 @@ class OptionalDateField(QWidget):
 		self.clear_button.clicked.connect(self.clear)
 
 	def _set_enabled_state(self, checked: bool):
+		"""!Set enabled state."""
 		self.editor.setEnabled(checked)
 		self.clear_button.setEnabled(checked)
 		if checked:
@@ -257,10 +275,12 @@ class OptionalDateField(QWidget):
 			self.editor.selectAll()
 
 	def clear(self):
+		"""!Clear."""
 		self.checkbox.setChecked(False)
 		self.editor.setDate(QDate.currentDate())
 
 	def value(self) -> Optional[date]:
+		"""!Value."""
 		if not self.checkbox.isChecked():
 			return None
 		selected = self.editor.date()

@@ -1,6 +1,6 @@
 ## @file
 #  @brief Board statistics dialog for the PySide6 multi-board GUI.
-"""Statistics views for board and portfolio-level summaries."""
+"""!Statistics views for board and portfolio-level summaries."""
 
 from __future__ import annotations
 
@@ -37,9 +37,10 @@ from .common import (
 
 
 class BoardStatisticsDialog(QDialog):
-	"""Rich portfolio and current-board statistics dialog."""
+	"""!Rich portfolio and current-board statistics dialog."""
 
 	def __init__(self, boards: List[Dict[str, object]], loaded_boards: Dict[str, KanbanBoard], parent=None):
+		"""!Init."""
 		super().__init__(parent)
 		self.boards = boards
 		self.loaded_boards = loaded_boards
@@ -54,6 +55,7 @@ class BoardStatisticsDialog(QDialog):
 		self._populate()
 
 	def _build_ui(self):
+		"""!Build ui."""
 		content_layout = build_dialog_shell(
 			self,
 			'Board Statistics',
@@ -118,6 +120,7 @@ class BoardStatisticsDialog(QDialog):
 		add_dialog_footer(self, self.button_box)
 
 	def _create_stat_card(self, caption: str) -> Dict[str, QWidget]:
+		"""!Create stat card."""
 		frame = QFrame()
 		frame.setObjectName('DialogCard')
 		layout = QVBoxLayout(frame)
@@ -135,6 +138,7 @@ class BoardStatisticsDialog(QDialog):
 		return {'frame': frame, 'value': value_label}
 
 	def _configure_table(self, table, stretch_columns: set[int]):
+		"""!Configure table."""
 		table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 		table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
 		table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -147,6 +151,7 @@ class BoardStatisticsDialog(QDialog):
 			header.setSectionResizeMode(index, mode)
 
 	def _board_metrics(self, board: KanbanBoard) -> Dict[str, object]:
+		"""!Board metrics."""
 		cards = board.get_all_cards()
 		total_cards = len(cards)
 		completed = sum(1 for card in cards if board.is_card_done(card))
@@ -172,11 +177,13 @@ class BoardStatisticsDialog(QDialog):
 		}
 
 	def _share_text(self, count: int, total: int) -> str:
+		"""!Share text."""
 		if total <= 0:
 			return '0%'
 		return f'{(count / total) * 100:.0f}%'
 
 	def _populate(self):
+		"""!Populate."""
 		total_cards = 0
 		total_completed = 0
 		total_overdue = 0
@@ -250,6 +257,7 @@ class BoardStatisticsDialog(QDialog):
 		self._populate_current_board_breakdown()
 
 	def _populate_current_board_breakdown(self):
+		"""!Populate current board breakdown."""
 		if self.current_board is None:
 			self.columns_table.setRowCount(0)
 			self.priority_table.setRowCount(0)

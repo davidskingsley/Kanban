@@ -1,6 +1,6 @@
 ## @file
 #  @brief JSON storage helpers and file-lock handling for board persistence.
-"""Data storage and persistence layer for the Kanban board."""
+"""!Data storage and persistence layer for the Kanban board."""
 
 import atexit
 import json
@@ -20,12 +20,12 @@ SQLITE_STORAGE_SUFFIXES = ('.sqlite3', '.sqlite', '.db')
 
 
 def empty_board_data() -> Dict[str, Any]:
-    """Return the default empty board payload."""
+    """!Return the default empty board payload."""
     return {'cards': []}
 
 
 def infer_storage_backend(file_path: str) -> str:
-    """Infer the storage backend from a board file path."""
+    """!Infer the storage backend from a board file path."""
     file_path = (file_path or '').lower()
     if file_path.endswith('.json'):
         return JSON_STORAGE_BACKEND
@@ -35,7 +35,7 @@ def infer_storage_backend(file_path: str) -> str:
 
 
 def normalize_storage_backend(backend: Optional[str], file_path: Optional[str] = None) -> str:
-    """Normalize user or metadata backend values to a supported backend name."""
+    """!Normalize user or metadata backend values to a supported backend name."""
     if backend is None or not str(backend).strip():
         return infer_storage_backend(file_path or '') if file_path else JSON_STORAGE_BACKEND
 
@@ -48,7 +48,7 @@ def normalize_storage_backend(backend: Optional[str], file_path: Optional[str] =
 
 
 def get_board_file_extension(backend: Optional[str]) -> str:
-    """Return the preferred file extension for a storage backend."""
+    """!Return the preferred file extension for a storage backend."""
     backend = normalize_storage_backend(backend)
     if backend == SQLITE_STORAGE_BACKEND:
         return '.sqlite3'
@@ -56,7 +56,7 @@ def get_board_file_extension(backend: Optional[str]) -> str:
 
 
 def is_supported_board_file(file_path: str) -> bool:
-    """Return whether the given file path looks like a supported board store."""
+    """!Return whether the given file path looks like a supported board store."""
     backend = infer_storage_backend(file_path)
     if backend == JSON_STORAGE_BACKEND:
         return str(file_path).lower().endswith('.json')
@@ -64,13 +64,13 @@ def is_supported_board_file(file_path: str) -> bool:
 
 
 def is_board_backup_file(file_name: str) -> bool:
-    """Return whether a candidate board file name looks like a generated backup."""
+    """!Return whether a candidate board file name looks like a generated backup."""
     lower_name = (file_name or '').lower()
     return '.backup.' in lower_name or lower_name.endswith('.backup')
 
 
 def get_default_backup_path(file_path: str, backend: Optional[str] = None) -> str:
-    """Return the default backup file path for a board store."""
+    """!Return the default backup file path for a board store."""
     backend = normalize_storage_backend(backend, file_path=file_path)
     root, extension = os.path.splitext(file_path)
     if not extension:
@@ -79,14 +79,14 @@ def get_default_backup_path(file_path: str, backend: Optional[str] = None) -> st
 
 
 def _ensure_directory(path: str) -> None:
-    """Create the parent directory for a file path if needed."""
+    """!Create the parent directory for a file path if needed."""
     directory = os.path.dirname(path)
     if directory and not os.path.exists(directory):
         os.makedirs(directory, exist_ok=True)
 
 
 def _ensure_sqlite_schema(connection: sqlite3.Connection) -> None:
-    """Ensure the SQLite schema exists for storing a board payload."""
+    """!Ensure the SQLite schema exists for storing a board payload."""
     connection.execute(
         '''
         CREATE TABLE IF NOT EXISTS board_state (
@@ -100,7 +100,7 @@ def _ensure_sqlite_schema(connection: sqlite3.Connection) -> None:
 
 
 def load_sqlite_file(file_path: str) -> Dict[str, Any]:
-    """Load raw board data from a SQLite board file without acquiring locks."""
+    """!Load raw board data from a SQLite board file without acquiring locks."""
     if not os.path.exists(file_path):
         return empty_board_data()
 
@@ -123,7 +123,7 @@ def load_sqlite_file(file_path: str) -> Dict[str, Any]:
 
 
 def save_sqlite_file(file_path: str, data: Dict[str, Any]) -> None:
-    """Persist raw board data into a SQLite board file."""
+    """!Persist raw board data into a SQLite board file."""
     _ensure_directory(file_path)
     with closing(sqlite3.connect(file_path)) as connection:
         _ensure_sqlite_schema(connection)
@@ -141,7 +141,7 @@ def save_sqlite_file(file_path: str, data: Dict[str, Any]) -> None:
 
 
 def load_board_data_file(file_path: str, backend: Optional[str] = None) -> Dict[str, Any]:
-    """Load a board payload using the configured backend."""
+    """!Load a board payload using the configured backend."""
     backend = normalize_storage_backend(backend, file_path=file_path)
     if backend == SQLITE_STORAGE_BACKEND:
         return load_sqlite_file(file_path)
@@ -149,7 +149,7 @@ def load_board_data_file(file_path: str, backend: Optional[str] = None) -> Dict[
 
 
 def save_board_data_file(file_path: str, data: Dict[str, Any], backend: Optional[str] = None) -> None:
-    """Write a board payload using the configured backend."""
+    """!Write a board payload using the configured backend."""
     backend = normalize_storage_backend(backend, file_path=file_path)
     if backend == SQLITE_STORAGE_BACKEND:
         save_sqlite_file(file_path, data)
@@ -161,7 +161,7 @@ def save_board_data_file(file_path: str, data: Dict[str, Any], backend: Optional
 
 
 def backup_board_data_file(file_path: str, backup_path: Optional[str] = None, backend: Optional[str] = None) -> Optional[str]:
-    """Create a backup of a board payload and return the backup path."""
+    """!Create a backup of a board payload and return the backup path."""
     backend = normalize_storage_backend(backend, file_path=file_path)
     if backup_path is None:
         backup_path = get_default_backup_path(file_path, backend)
@@ -186,7 +186,7 @@ def backup_board_data_file(file_path: str, backup_path: Optional[str] = None, ba
 
 
 def restore_board_data_file(file_path: str, backup_path: str, backend: Optional[str] = None) -> bool:
-    """Restore a board payload from a backup file."""
+    """!Restore a board payload from a backup file."""
     backend = normalize_storage_backend(backend, file_path=file_path)
     if not os.path.exists(backup_path):
         return False
@@ -208,43 +208,43 @@ def restore_board_data_file(file_path: str, backup_path: str, backend: Optional[
 
 
 class BoardLockCancelledError(Exception):
-    """Raised when the user cancels opening a locked board."""
+    """!Raised when the user cancels opening a locked board."""
 
 
 def get_lock_path(file_path: str) -> str:
-    """Return the lock-file path for a board file."""
+    """!Return the lock-file path for a board file."""
     return f"{os.path.abspath(file_path)}.lock"
 
 
 def read_board_lock_info(file_path: str) -> Dict[str, Any]:
-    """Return lock metadata for a board file if a lock file exists."""
+    """!Return lock metadata for a board file if a lock file exists."""
     return load_json_file(get_lock_path(file_path))
 
 
 def delete_board_lock(file_path: str) -> None:
-    """Delete the lock file for a board if it exists."""
+    """!Delete the lock file for a board if it exists."""
     lock_path = get_lock_path(file_path)
     if os.path.exists(lock_path):
         os.remove(lock_path)
 
 
 def get_default_storage_dir() -> str:
-    """Return the default storage root for Kanban application data."""
+    """!Return the default storage root for Kanban application data."""
     return os.path.join(os.path.expanduser("~"), ".kanban-ds")
 
 
 def get_default_single_board_file() -> str:
-    """Return the default data file path for a standalone board file."""
+    """!Return the default data file path for a standalone board file."""
     return os.path.join(get_default_storage_dir(), "kanban_data.json")
 
 
 def get_default_boards_dir() -> str:
-    """Return the default directory path for multi-board mode."""
+    """!Return the default directory path for multi-board mode."""
     return os.path.join(get_default_storage_dir(), "boards")
 
 
 def load_json_file(file_path: str) -> Dict[str, Any]:
-    """Load raw JSON data from a board file without acquiring locks."""
+    """!Load raw JSON data from a board file without acquiring locks."""
     if not os.path.exists(file_path):
         return empty_board_data()
 
@@ -257,11 +257,12 @@ def load_json_file(file_path: str) -> Dict[str, Any]:
 
 ## @brief Persist board data and coordinate read-only lock behavior.
 class DataStorage:
-    """Handles saving and loading board data to/from JSON files."""
+    """!Handles saving and loading board data to/from JSON files."""
 
     _owned_locks: Dict[str, int] = {}
     
     def __init__(self, file_path: str, lock_handler: Optional[LockHandler] = None, backend: Optional[str] = None):
+        """!Init."""
         self.file_path = os.path.abspath(file_path)
         self.backend = normalize_storage_backend(backend, file_path=self.file_path)
         self.lock_path = get_lock_path(self.file_path)
@@ -273,7 +274,7 @@ class DataStorage:
         self._acquire_lock()
 
     def _build_lock_info(self) -> Dict[str, Any]:
-        """Build metadata describing the current lock owner."""
+        """!Build metadata describing the current lock owner."""
         return {
             'pid': os.getpid(),
             'hostname': socket.gethostname(),
@@ -282,11 +283,11 @@ class DataStorage:
         }
 
     def _read_lock_info(self) -> Dict[str, Any]:
-        """Read lock metadata from disk, if available."""
+        """!Read lock metadata from disk, if available."""
         return load_json_file(self.lock_path)
 
     def _handle_lock_conflict(self) -> str:
-        """Resolve a lock conflict using the configured handler, if any."""
+        """!Resolve a lock conflict using the configured handler, if any."""
         if not self.lock_handler:
             self.read_only = True
             return 'read_only'
@@ -302,7 +303,7 @@ class DataStorage:
         raise BoardLockCancelledError(self.file_path)
 
     def _acquire_lock(self):
-        """Acquire a write lock if possible; otherwise resolve the lock conflict."""
+        """!Acquire a write lock if possible; otherwise resolve the lock conflict."""
         directory = os.path.dirname(self.file_path)
         if directory and not os.path.exists(directory):
             os.makedirs(directory, exist_ok=True)
@@ -336,7 +337,7 @@ class DataStorage:
                 return
 
     def release_lock(self):
-        """Release the lock file owned by this process, if any."""
+        """!Release the lock file owned by this process, if any."""
         if not self.lock_owned:
             return
 
@@ -355,15 +356,15 @@ class DataStorage:
             pass
 
     def is_read_only(self) -> bool:
-        """Return whether this storage instance is read-only."""
+        """!Return whether this storage instance is read-only."""
         return self.read_only
 
     def get_lock_details(self) -> Dict[str, Any]:
-        """Return metadata about the lock owner, if known."""
+        """!Return metadata about the lock owner, if known."""
         return dict(self.lock_info)
 
     def get_read_only_message(self) -> str:
-        """Return a user-friendly read-only message."""
+        """!Return a user-friendly read-only message."""
         details = self.get_lock_details()
         if not details:
             return "This board is currently open elsewhere and is available in read-only mode only."
@@ -377,7 +378,7 @@ class DataStorage:
         )
     
     def save(self, data: Dict[str, Any]):
-        """Save data to the configured board storage backend."""
+        """!Save data to the configured board storage backend."""
         if self.read_only:
             raise PermissionError(self.get_read_only_message())
 
@@ -387,14 +388,14 @@ class DataStorage:
             print(f"Error saving data: {e}")
     
     def load(self) -> Dict[str, Any]:
-        """Load data from the configured board storage backend."""
+        """!Load data from the configured board storage backend."""
         data = load_board_data_file(self.file_path, backend=self.backend)
         if not data:
             return empty_board_data()
         return data
     
     def backup(self, backup_path: str = None):
-        """Create a backup of the current data file."""
+        """!Create a backup of the current data file."""
         try:
             return backup_board_data_file(self.file_path, backup_path=backup_path, backend=self.backend)
         except Exception as e:
@@ -402,22 +403,22 @@ class DataStorage:
             return None
 
     def get_board_directory(self) -> str:
-        """Return the directory containing the board data file."""
+        """!Return the directory containing the board data file."""
         return os.path.dirname(self.file_path) or os.getcwd()
 
     def get_attachments_directory(self) -> str:
-        """Return the board-specific attachments directory path."""
+        """!Return the board-specific attachments directory path."""
         board_name = os.path.splitext(os.path.basename(self.file_path))[0] or 'board'
         return os.path.join(self.get_board_directory(), f"{board_name}_attachments")
 
     def resolve_attachment_path(self, relative_path: str) -> str:
-        """Return an absolute path for a stored attachment path."""
+        """!Return an absolute path for a stored attachment path."""
         if os.path.isabs(relative_path):
             return relative_path
         return os.path.abspath(os.path.join(self.get_board_directory(), relative_path))
 
     def copy_attachment(self, source_path: str, card_id: str) -> str:
-        """Copy a source file into the board attachment store and return a relative path."""
+        """!Copy a source file into the board attachment store and return a relative path."""
         if self.read_only:
             raise PermissionError(self.get_read_only_message())
 
@@ -441,7 +442,7 @@ class DataStorage:
         return os.path.relpath(destination_path, self.get_board_directory())
 
     def list_attachment_files(self) -> List[str]:
-        """Return all stored attachment file paths for this board."""
+        """!Return all stored attachment file paths for this board."""
         attachments_directory = self.get_attachments_directory()
         if not os.path.isdir(attachments_directory):
             return []
@@ -453,7 +454,7 @@ class DataStorage:
         return sorted(attachment_files)
 
     def delete_attachment_file(self, file_path: str) -> bool:
-        """Delete a stored attachment file if it belongs to this board's attachment store."""
+        """!Delete a stored attachment file if it belongs to this board's attachment store."""
         if self.read_only:
             raise PermissionError(self.get_read_only_message())
 
@@ -471,7 +472,7 @@ class DataStorage:
         return True
 
     def remove_empty_attachment_directories(self) -> int:
-        """Remove empty directories from the board attachment store, including the root if empty."""
+        """!Remove empty directories from the board attachment store, including the root if empty."""
         attachments_directory = self.get_attachments_directory()
         if not os.path.isdir(attachments_directory):
             return 0
@@ -484,7 +485,7 @@ class DataStorage:
         return removed_count
     
     def restore(self, backup_path: str):
-        """Restore data from a backup file."""
+        """!Restore data from a backup file."""
         try:
             return restore_board_data_file(self.file_path, backup_path, backend=self.backend)
         except Exception as e:

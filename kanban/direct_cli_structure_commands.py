@@ -1,6 +1,6 @@
 ## @file
 #  @brief Column, card-type, and maintenance commands for the direct-action CLI.
-"""Column, card-type, and maintenance commands for the direct-action CLI."""
+"""!Column, card-type, and maintenance commands for the direct-action CLI."""
 
 from __future__ import annotations
 
@@ -10,9 +10,10 @@ from .models import UNSET
 
 
 class DirectCliStructureCommandsMixin:
-    """Column, card-type, and maintenance commands for the direct CLI."""
+    """!Column, card-type, and maintenance commands for the direct CLI."""
 
     def cmd_create_column(self, args: argparse.Namespace):
+        """!Cmd create column."""
         _, board_info, board = self._load_board(args.board)
         column_id = board.create_column(
             args.name,
@@ -24,6 +25,7 @@ class DirectCliStructureCommandsMixin:
         print(f"Created column '{args.name}' ({column_id}) on board '{board_info['name']}'.")
 
     def cmd_rename_column(self, args: argparse.Namespace):
+        """!Cmd rename column."""
         _, board_info, board = self._load_board(args.board)
         column = self._resolve_column(board, args.column)
         if not board.rename_column(column.id, args.new_name):
@@ -31,6 +33,7 @@ class DirectCliStructureCommandsMixin:
         print(f"Renamed column '{column.name}' to '{args.new_name}' on board '{board_info['name']}'.")
 
     def cmd_delete_column(self, args: argparse.Namespace):
+        """!Cmd delete column."""
         _, board_info, board = self._load_board(args.board)
         column = self._resolve_column(board, args.column)
         move_target_id = self._resolve_column(board, args.move_cards_to).id if args.move_cards_to else None
@@ -39,6 +42,7 @@ class DirectCliStructureCommandsMixin:
         print(f"Deleted column '{column.name}' from board '{board_info['name']}'.")
 
     def cmd_reorder_columns(self, args: argparse.Namespace):
+        """!Cmd reorder columns."""
         _, board_info, board = self._load_board(args.board)
         ordered_ids = [self._resolve_column(board, token).id for token in self._normalize_order_tokens(args.order)]
         if not board.reorder_columns(ordered_ids):
@@ -46,6 +50,7 @@ class DirectCliStructureCommandsMixin:
         print(f"Reordered columns on board '{board_info['name']}'.")
 
     def cmd_change_column_color(self, args: argparse.Namespace):
+        """!Cmd change column color."""
         _, board_info, board = self._load_board(args.board)
         column = self._resolve_column(board, args.column)
         if not board.change_column_color(column.id, args.color):
@@ -53,6 +58,7 @@ class DirectCliStructureCommandsMixin:
         print(f"Changed color for column '{column.name}' on board '{board_info['name']}'.")
 
     def cmd_edit_column_flags(self, args: argparse.Namespace):
+        """!Cmd edit column flags."""
         if args.is_completed is None and args.can_add_card is None:
             raise ValueError('Provide at least one of --completed/--not-completed or --can-add-card/--cannot-add-card.')
         _, board_info, board = self._load_board(args.board)
@@ -66,6 +72,7 @@ class DirectCliStructureCommandsMixin:
         print(f"Updated flags for column '{column.name}' on board '{board_info['name']}'.")
 
     def cmd_list_columns(self, args: argparse.Namespace):
+        """!Cmd list columns."""
         _, _, board = self._load_board(args.board)
         for column in board.get_columns_ordered():
             markers = []
@@ -77,6 +84,7 @@ class DirectCliStructureCommandsMixin:
             print(f"{column.name} ({column.id}){marker_text} color={column.color} cards={len(board.get_column_cards(column))}")
 
     def cmd_list_card_types(self, args: argparse.Namespace):
+        """!Cmd list card types."""
         _, _, board = self._load_board(args.board)
         default_type_id = board.get_default_card_type_id()
         last_used_id = board.get_last_used_card_type().id
@@ -94,11 +102,13 @@ class DirectCliStructureCommandsMixin:
             )
 
     def cmd_create_card_type(self, args: argparse.Namespace):
+        """!Cmd create card type."""
         _, board_info, board = self._load_board(args.board)
         card_type_id = board.create_card_type(args.name, args.description, args.default_project, args.default_color)
         print(f"Created card type '{args.name}' ({card_type_id}) on board '{board_info['name']}'.")
 
     def cmd_edit_card_type(self, args: argparse.Namespace):
+        """!Cmd edit card type."""
         _, board_info, board = self._load_board(args.board)
         card_type = self._resolve_card_type(board, args.card_type)
         description = '' if args.clear_description else args.description
@@ -116,6 +126,7 @@ class DirectCliStructureCommandsMixin:
         print(f"Updated card type '{updated.name}' on board '{board_info['name']}'.")
 
     def cmd_delete_card_type(self, args: argparse.Namespace):
+        """!Cmd delete card type."""
         _, board_info, board = self._load_board(args.board)
         card_type = self._resolve_card_type(board, args.card_type)
         replacement_type_id = self._resolve_card_type(board, args.replacement_card_type).id if args.replacement_card_type else None
@@ -124,6 +135,7 @@ class DirectCliStructureCommandsMixin:
         print(f"Deleted card type '{card_type.name}' from board '{board_info['name']}'.")
 
     def cmd_create_backup(self, args: argparse.Namespace):
+        """!Cmd create backup."""
         _, board_info, board = self._load_board(args.board)
         backup_path = board.storage.backup(args.output)
         if not backup_path:
@@ -131,6 +143,7 @@ class DirectCliStructureCommandsMixin:
         print(f"Created backup for board '{board_info['name']}' at '{backup_path}'.")
 
     def cmd_cleanup_orphaned_attachments(self, args: argparse.Namespace):
+        """!Cmd cleanup orphaned attachments."""
         _, board_info, board = self._load_board(args.board)
         result = board.cleanup_orphaned_attachment_files()
         print(
@@ -140,6 +153,7 @@ class DirectCliStructureCommandsMixin:
         )
 
     def cmd_undo_current_board(self, args: argparse.Namespace):
+        """!Cmd undo current board."""
         _, board_info, board = self._load_board(args.board)
         description = board.undo_last_action()
         if not description:
@@ -147,6 +161,7 @@ class DirectCliStructureCommandsMixin:
         print(f"Undid board action on '{board_info['name']}': {description}")
 
     def cmd_redo_current_board(self, args: argparse.Namespace):
+        """!Cmd redo current board."""
         _, board_info, board = self._load_board(args.board)
         description = board.redo_last_action()
         if not description:

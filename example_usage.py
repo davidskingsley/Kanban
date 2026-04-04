@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 ## @file
 #  @brief Standalone API usage example for the Kanban board package.
-"""Example usage of the Kanban Board application."""
+"""!Example usage of the Kanban Board application."""
 
 from kanban.board import KanbanBoard
 from kanban.models import Priority, Status
@@ -9,7 +9,7 @@ from kanban.models import Priority, Status
 
 ## @brief Demonstrate core board operations without starting the GUI or CLI.
 def main():
-    """Demonstrate API usage of the Kanban board."""
+    """!Demonstrate API usage of the Kanban board."""
     
     print("🗂️ Kanban Board API Example")
     print("=" * 40)

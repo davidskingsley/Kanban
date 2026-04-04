@@ -1,6 +1,6 @@
 ## @file
 #  @brief Card and archive commands for the direct-action CLI.
-"""Card and archive commands for the direct-action CLI."""
+"""!Card and archive commands for the direct-action CLI."""
 
 from __future__ import annotations
 
@@ -11,9 +11,10 @@ from .models import UNSET
 
 
 class DirectCliCardCommandsMixin:
-    """Card, checklist, and archive commands for the direct CLI."""
+    """!Card, checklist, and archive commands for the direct CLI."""
 
     def cmd_create_card(self, args: argparse.Namespace):
+        """!Cmd create card."""
         _, board_info, board = self._load_board(args.board)
         column_id = self._resolve_column(board, args.column).id if args.column else None
         card_type_id = self._resolve_card_type(board, args.card_type).id if args.card_type else None
@@ -39,6 +40,7 @@ class DirectCliCardCommandsMixin:
         print(f"Created card '{card.title}' ({card.id}) on board '{board_info['name']}'.")
 
     def cmd_edit_card(self, args: argparse.Namespace):
+        """!Cmd edit card."""
         _, board_info, board = self._load_board(args.board)
         card = self._resolve_card(board, args.card)
         description = self._pick_optional_value(args.description, args.clear_description, '')
@@ -86,6 +88,7 @@ class DirectCliCardCommandsMixin:
         print(f"Updated card '{card.title}' on board '{board_info['name']}'.")
 
     def cmd_add_subcard(self, args: argparse.Namespace):
+        """!Cmd add subcard."""
         _, board_info, board = self._load_board(args.board)
         parent = self._resolve_card(board, args.parent_card)
         card_type_id = self._resolve_card_type(board, args.card_type).id if args.card_type else None
@@ -111,6 +114,7 @@ class DirectCliCardCommandsMixin:
         print(f"Created subcard '{child.title}' ({child.id}) under '{parent.title}' on board '{board_info['name']}'.")
 
     def cmd_move_card(self, args: argparse.Namespace):
+        """!Cmd move card."""
         _, board_info, board = self._load_board(args.board)
         card = self._resolve_card(board, args.card)
         column = self._resolve_column(board, args.column)
@@ -120,6 +124,7 @@ class DirectCliCardCommandsMixin:
         print(f"Moved card '{card.title}' to column '{column.name}' on board '{board_info['name']}'.")
 
     def cmd_delete_card(self, args: argparse.Namespace):
+        """!Cmd delete card."""
         self._require_force(args.force, 'Deleting a card requires --force.')
         _, board_info, board = self._load_board(args.board)
         card = self._resolve_card(board, args.card)
@@ -128,21 +133,25 @@ class DirectCliCardCommandsMixin:
         print(f"Deleted card '{card.title}' from board '{board_info['name']}'.")
 
     def cmd_search_cards(self, args: argparse.Namespace):
+        """!Cmd search cards."""
         _, _, board = self._load_board(args.board)
         results = board.search_cards(args.query)
         self._print_cards(board, results)
 
     def cmd_filter_priority(self, args: argparse.Namespace):
+        """!Cmd filter priority."""
         _, _, board = self._load_board(args.board)
         results = board.get_cards_by_priority(self._parse_priority(args.priority))
         self._print_cards(board, results)
 
     def cmd_filter_assignee(self, args: argparse.Namespace):
+        """!Cmd filter assignee."""
         _, _, board = self._load_board(args.board)
         results = board.get_cards_by_assignee(args.assignee)
         self._print_cards(board, results)
 
     def cmd_add_tag(self, args: argparse.Namespace):
+        """!Cmd add tag."""
         _, board_info, board = self._load_board(args.board)
         card = self._resolve_card(board, args.card)
         if not board.add_card_tag(card.id, args.tag):
@@ -150,6 +159,7 @@ class DirectCliCardCommandsMixin:
         print(f"Added tag '{args.tag}' to card '{card.title}' on board '{board_info['name']}'.")
 
     def cmd_add_todo_item(self, args: argparse.Namespace):
+        """!Cmd add todo item."""
         _, board_info, board = self._load_board(args.board)
         card = self._resolve_card(board, args.card)
         todo_item = board.add_card_todo_item(card.id, args.text, completed=args.completed)
@@ -162,12 +172,15 @@ class DirectCliCardCommandsMixin:
         )
 
     def cmd_check_todo_item(self, args: argparse.Namespace):
+        """!Cmd check todo item."""
         self._set_todo_item_completed(args, True)
 
     def cmd_uncheck_todo_item(self, args: argparse.Namespace):
+        """!Cmd uncheck todo item."""
         self._set_todo_item_completed(args, False)
 
     def cmd_toggle_todo_item(self, args: argparse.Namespace):
+        """!Cmd toggle todo item."""
         _, board_info, board = self._load_board(args.board)
         card = self._resolve_card(board, args.card)
         todo_item = self._resolve_todo_item(card, args.item)
@@ -181,6 +194,7 @@ class DirectCliCardCommandsMixin:
         )
 
     def cmd_remove_todo_item(self, args: argparse.Namespace):
+        """!Cmd remove todo item."""
         _, board_info, board = self._load_board(args.board)
         card = self._resolve_card(board, args.card)
         todo_item = self._resolve_todo_item(card, args.item)
@@ -192,16 +206,19 @@ class DirectCliCardCommandsMixin:
         )
 
     def cmd_card_details(self, args: argparse.Namespace):
+        """!Cmd card details."""
         _, _, board = self._load_board(args.board)
         card = self._resolve_card(board, args.card)
         self._print_card_details(board, card)
 
     def cmd_list_notes(self, args: argparse.Namespace):
+        """!Cmd list notes."""
         _, _, board = self._load_board(args.board)
         card = self._resolve_card(board, args.card)
         self._print_card_notes(card, include_full_text=True)
 
     def cmd_add_note(self, args: argparse.Namespace):
+        """!Cmd add note."""
         _, board_info, board = self._load_board(args.board)
         card = self._resolve_card(board, args.card)
         note = board.add_card_note(card.id, args.text)
@@ -212,6 +229,7 @@ class DirectCliCardCommandsMixin:
         )
 
     def cmd_edit_note(self, args: argparse.Namespace):
+        """!Cmd edit note."""
         _, board_info, board = self._load_board(args.board)
         card = self._resolve_card(board, args.card)
         note = self._resolve_note(card, args.note)
@@ -223,6 +241,7 @@ class DirectCliCardCommandsMixin:
         )
 
     def cmd_delete_note(self, args: argparse.Namespace):
+        """!Cmd delete note."""
         _, board_info, board = self._load_board(args.board)
         card = self._resolve_card(board, args.card)
         note = self._resolve_note(card, args.note)
@@ -233,12 +252,14 @@ class DirectCliCardCommandsMixin:
         )
 
     def cmd_archive_done_cards(self, args: argparse.Namespace):
+        """!Cmd archive done cards."""
         self._require_force(args.force, 'Archiving done cards requires --force.')
         _, board_info, board = self._load_board(args.board)
         archived = board.archive_done_cards()
         print(f"Archived {archived} done card(s) from board '{board_info['name']}'.")
 
     def cmd_list_archived_cards(self, args: argparse.Namespace):
+        """!Cmd list archived cards."""
         _, _, board = self._load_board(args.board)
         cards = board.get_archived_cards()
         if not cards:
@@ -252,6 +273,7 @@ class DirectCliCardCommandsMixin:
             )
 
     def cmd_restore_archived_card(self, args: argparse.Namespace):
+        """!Cmd restore archived card."""
         _, board_info, board = self._load_board(args.board)
         card = self._resolve_card(board, args.card, include_archived=True, archived_only=True)
         if not board.restore_archived_card(card.id):
@@ -259,6 +281,7 @@ class DirectCliCardCommandsMixin:
         print(f"Restored archived card '{card.title}' on board '{board_info['name']}'.")
 
     def cmd_delete_archived_card(self, args: argparse.Namespace):
+        """!Cmd delete archived card."""
         self._require_force(args.force, 'Deleting an archived card requires --force.')
         _, board_info, board = self._load_board(args.board)
         card = self._resolve_card(board, args.card, include_archived=True, archived_only=True)

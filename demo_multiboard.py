@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 ## @file
 #  @brief Demo data generator for multi-board Kanban workflows.
-"""Multi-board demo script for populating sample boards."""
+"""!Multi-board demo script for populating sample boards."""
 
 import os
 
@@ -11,7 +11,7 @@ from kanban.models import Priority
 
 ## @brief Create several sample boards with representative task data.
 def create_demo_boards():
-    """Create demo boards with sample data."""
+    """!Create demo boards with sample data."""
     print("🎯 Creating Multi-Board Demo...")
     
     # Create board manager in a demo directory
@@ -94,7 +94,7 @@ def create_demo_boards():
 
 ## @brief Print a summary of the demo boards created by the script.
 def show_demo_stats(board_manager):
-    """Show statistics for demo boards."""
+    """!Show statistics for demo boards."""
     print("\n📊 Demo Board Statistics:")
     print("=" * 50)
     

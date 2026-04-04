@@ -1,6 +1,6 @@
 ## @file
 #  @brief Dialog facade used by the PySide6 multi-board GUI.
-"""Public dialog facade for the PySide6 GUI."""
+"""!Public dialog facade for the PySide6 GUI."""
 
 from PySide6.QtWidgets import QMessageBox
 
