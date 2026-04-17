@@ -63,6 +63,9 @@ class MultiBoardCLI:
         print("🗂️  WELCOME TO MULTI-BOARD KANBAN MANAGER  🗂️")
         print("=" * 60)
         print("Organize multiple projects with separate Kanban boards!")
+        actor_name = self.board_manager.get_actor_name()
+        if actor_name:
+            print(f"Action log user: {actor_name}")
         print()
     
     def show_board_selector(self):
@@ -152,7 +155,7 @@ class MultiBoardCLI:
         print("Opening board interface...")
         print()
         
-        board_cli = BoardCLI(current_board)
+        board_cli = BoardCLI(current_board, self.board_manager)
         board_cli.run()
     
     def switch_board(self):

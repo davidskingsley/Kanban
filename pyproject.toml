@@ -1,6 +1,6 @@
 [project]
 name = "kanban"
-version = "2.1"
+version = "3.0"
 description = "Multi-board Kanban manager with a PySide6 GUI and CLI workflows."
 readme = "README.md"
 requires-python = ">=3.9,<3.15"

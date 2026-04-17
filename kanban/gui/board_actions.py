@@ -20,6 +20,7 @@ from .common import (
 )
 from .dialogs import (
 	AboutDialog,
+	ActionLogDialog,
 	ArchivedCardsDialog,
 	BoardDialog,
 	CardDialog,
@@ -246,6 +247,26 @@ class BoardActionsMixin:
 		if board is None:
 			return
 		dialog = BoardStatisticsDialog(board, self._current_board_name(), self.window)
+		dialog.exec()
+
+	def show_action_log(self):
+		"""!Show action log."""
+		board = self.ensure_board()
+		if board is None:
+			return
+		dialog = ActionLogDialog(board, self._current_board_name(), self.window)
+		dialog.exec()
+
+	def show_selected_card_action_log(self):
+		"""!Show the audit log for the selected card."""
+		board = self.ensure_board()
+		if board is None:
+			return
+		card = self._selected_card()
+		if card is None:
+			QMessageBox.information(self.window, 'No Card Selected', 'Select a card first.')
+			return
+		dialog = ActionLogDialog(board, self._current_board_name(), self.window, card=card)
 		dialog.exec()
 
 	def _choose_card_type(
@@ -693,7 +714,7 @@ class BoardActionsMixin:
 		else:
 			for entry in sorted(os.listdir(folder)):
 				candidate_path = os.path.join(folder, entry)
-				if entry == 'boards_metadata.json' or os.path.isdir(candidate_path) or '.backup.' in entry.lower():
+				if entry in {'boards_metadata.json', 'user_profile.json'} or os.path.isdir(candidate_path) or '.backup.' in entry.lower():
 					continue
 				try:
 					inspected = self.board_manager.inspect_board_file(candidate_path)

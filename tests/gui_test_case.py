@@ -22,6 +22,7 @@ class GuiTestCase(unittest.TestCase):
         """!Set up."""
         self.temp_dir = tempfile.mkdtemp(prefix='kanban_gui_tests_')
         self.board_manager = BoardManager(self.temp_dir)
+        self.board_manager.set_actor_name('Test User', persist=True)
         self.gui = None
 
     def tearDown(self):

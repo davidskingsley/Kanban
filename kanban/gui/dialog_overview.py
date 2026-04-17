@@ -359,6 +359,57 @@ class DueDateViewDialog(QDialog):
 		self._activate_selected_row('edit')
 
 
+class ActionLogDialog(QDialog):
+	"""!Action Log Dialog."""
+
+	def __init__(self, board: KanbanBoard, board_name: str, parent: Optional[QWidget] = None, card=None):
+		"""!Init."""
+		super().__init__(parent)
+		self.board = board
+		self.board_name = board_name
+		self.card = card
+		is_card_log = card is not None
+		summary = f"Timestamped audit trail for board actions on {board_name}."
+		headline = 'Action Log'
+		log_text = self.board.export_action_log()
+		window_label = board_name
+		if is_card_log:
+			headline = 'Card Action Log'
+			window_label = card.title
+			summary = f"Timestamped audit trail for actions recorded against card {card.title}."
+			log_text = self.board.export_card_action_log(card.id, card_title=card.title)
+		self.setWindowTitle(f'{headline} - {window_label}')
+		self.resize(920, 620)
+
+		content_layout = build_dialog_shell(
+			self,
+			headline,
+			summary,
+			scrollable=False,
+		)
+
+		self.log_browser = QTextBrowser()
+		self.log_browser.setObjectName('ActionLogBrowser')
+		self.log_browser.setReadOnly(True)
+		self.log_browser.setOpenExternalLinks(False)
+		self.log_browser.setStyleSheet(
+			'QTextBrowser#ActionLogBrowser {'
+			'background: #fffaf2; color: #4f4134; border: 1px solid #d8c6ab; border-radius: 12px; padding: 8px;'
+			'}'
+		)
+		self.log_browser.setPlainText(log_text)
+		content_layout.addWidget(self.log_browser)
+
+		hint = 'Entries are stored with the actor name, date, time, and action description.'
+		if is_card_log:
+			hint = 'Only entries tagged to the selected card are shown here.'
+		content_layout.addWidget(create_dialog_hint_label(hint))
+
+		self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+		self.button_box.accepted.connect(self.accept)
+		add_dialog_footer(self, self.button_box)
+
+
 class ArchivedCardInfoDialog(QDialog):
 	"""!Archived Card Info Dialog."""
 	def __init__(self, card, column_label: str, parent: Optional[QWidget] = None):

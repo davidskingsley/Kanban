@@ -90,6 +90,7 @@ class BoardCatalogMixin:
         self._push_undo_state(f"Create project '{name}'")
         project = Project(name, description)
         self.projects[project.id] = project
+        self._record_action(f"Created project '{name}'.")
         self.save_board()
         return project.id
 
@@ -120,6 +121,7 @@ class BoardCatalogMixin:
                 if self._project_name_matches(card_type.default_project, old_name):
                     card_type.update(default_project=project.name)
 
+        self._record_action(f"Edited project '{project.name}'.")
         self.save_board()
         return project
 
@@ -171,6 +173,7 @@ class BoardCatalogMixin:
             card_type.update(default_project=replacement_name)
 
         del self.projects[project_id]
+        self._record_action(f"Deleted project '{project.name}'.")
         self.save_board()
         return True
 
@@ -205,6 +208,7 @@ class BoardCatalogMixin:
         self.card_types[card_type.id] = card_type
         self._ensure_project_exists(default_project)
         self.last_used_card_type_id = card_type.id
+        self._record_action(f"Created card type '{name}'.")
         self.save_board()
         return card_type.id
 
@@ -229,6 +233,7 @@ class BoardCatalogMixin:
         card_type.update(name, description, default_project, default_color)
         if default_project is not UNSET:
             self._ensure_project_exists(card_type.default_project)
+        self._record_action(f"Edited card type '{card_type.name}'.")
         self.save_board()
         return card_type
 
@@ -263,5 +268,6 @@ class BoardCatalogMixin:
         del self.card_types[card_type_id]
         if self.last_used_card_type_id == card_type_id:
             self.last_used_card_type_id = replacement_type.id if not delete_cards else self.get_default_card_type_id()
+        self._record_action(f"Deleted card type '{card_type.name}'.")
         self.save_board()
         return True

@@ -23,6 +23,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--boards-dir', type=str,
                        help='Specify a custom boards registry directory for this session')
     parser.add_argument(
+        '--actor-name',
+        type=str,
+        help='User name to use for board action logging; if provided it is saved for future sessions',
+    )
+    parser.add_argument(
         '--lock-action',
         choices=('cancel', 'open_read_only', 'delete_lock'),
         default='cancel',
@@ -45,6 +50,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     
     try:
         board_manager = BoardManager(args.boards_dir)
+        if args.actor_name:
+            board_manager.set_actor_name(args.actor_name, persist=True)
 
         if args.command:
             direct_cli = DirectActionCLI(board_manager, lock_action=args.lock_action)

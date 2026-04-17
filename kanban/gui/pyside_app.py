@@ -45,6 +45,7 @@ from .common import (
 )
 from .dialogs import (
     AboutDialog,
+    ActionLogDialog,
     ArchivedCardsDialog,
     BoardDialog,
     CardDialog,
@@ -70,6 +71,7 @@ from .embedded_board import (
 
 __all__ = [
     'AboutDialog',
+    'ActionLogDialog',
     'ArchivedCardsDialog',
     'BoardDialog',
     'CardDialog',
@@ -272,6 +274,7 @@ class MultiBoardGUI(BoardActionsMixin, BoardFiltersMixin, BoardNavigationMixin):
         self.board_menu.addSection('Overview')
         self.board_menu.addAction(self._action('Due Date View', self.show_due_date_view, 'Ctrl+Shift+T'))
         self.board_menu.addAction(self._action('Board Statistics', self.show_board_statistics, 'Ctrl+I'))
+        self.board_menu.addAction(self._action('Action Log', self.show_action_log, 'Ctrl+Shift+L'))
 
         card_menu = menu_bar.addMenu('Cards')
         card_menu.addSection('Selected Card')
@@ -280,6 +283,7 @@ class MultiBoardGUI(BoardActionsMixin, BoardFiltersMixin, BoardNavigationMixin):
         card_menu.addAction(self._action('Edit Selected Card', self.edit_selected_card, 'Ctrl+E'))
         card_menu.addAction(self._action('Move Selected Card', self.move_selected_card, 'Ctrl+M'))
         card_menu.addAction(self._action('Delete Selected Card', self.delete_selected_card, 'Ctrl+D'))
+        card_menu.addAction(self._action('Selected Card Action Log', self.show_selected_card_action_log))
         card_menu.addSection('Cleanup')
         card_menu.addAction(self._action('Archive Done Cards', self.archive_done_cards, 'Ctrl+Shift+K'))
         card_menu.addAction(self._action('Manage Archived Cards', self.manage_archived_cards))
@@ -347,6 +351,21 @@ class MultiBoardGUI(BoardActionsMixin, BoardFiltersMixin, BoardNavigationMixin):
             QMessageBox.warning(self.window, 'No Board Selected', 'Select or create a board first.')
         return board
 
+    def ensure_actor_name(self) -> bool:
+        """!Prompt for and persist the actor name when audit logging needs it."""
+        actor_name = self.board_manager.get_actor_name()
+        if actor_name:
+            return True
+        entered_name, ok = QInputDialog.getText(self.window, 'Action Log User', 'Enter your name for the action log')
+        if not ok:
+            return False
+        normalized = entered_name.strip()
+        if not normalized:
+            QMessageBox.information(self.window, 'Action Log User', 'A user name is required to log board actions.')
+            return False
+        self.board_manager.set_actor_name(normalized, persist=True)
+        return True
+
     def ensure_writable_board(self) -> Optional[KanbanBoard]:
         """!Return the current board if it is writable."""
         board = self.ensure_board()
@@ -354,6 +373,8 @@ class MultiBoardGUI(BoardActionsMixin, BoardFiltersMixin, BoardNavigationMixin):
             return None
         if board.is_read_only():
             QMessageBox.warning(self.window, 'Read Only Board', board.get_read_only_message())
+            return None
+        if not self.ensure_actor_name():
             return None
         return board
 

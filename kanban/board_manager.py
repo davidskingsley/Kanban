@@ -36,17 +36,56 @@ class BoardManager:
         
         self.boards_directory = boards_directory
         self.metadata_file = os.path.join(boards_directory, "boards_metadata.json")
+        profile_directory = os.path.abspath(boards_directory)
+        if os.path.basename(profile_directory).lower() == 'boards':
+            profile_directory = os.path.dirname(profile_directory)
+        self.user_profile_file = os.path.join(profile_directory, 'user_profile.json')
         self.boards: Dict[str, KanbanBoard] = {}
         self.current_board_id: Optional[str] = None
         self.lock_handler: Optional[LockHandler] = None
         self._undo_stack: List[Dict[str, object]] = []
         self._redo_stack: List[Dict[str, object]] = []
+        self.actor_name: Optional[str] = self._load_actor_name()
         
         # Ensure boards directory exists
         os.makedirs(boards_directory, exist_ok=True)
         
         # Load existing boards
         self.load_boards_metadata()
+
+    def _normalize_actor_name(self, actor_name: Optional[str]) -> Optional[str]:
+        """!Normalize a persisted actor name."""
+        normalized = (actor_name or '').strip()
+        return normalized or None
+
+    def _load_actor_name(self) -> Optional[str]:
+        """!Load the saved actor name from the user profile file."""
+        if not os.path.exists(self.user_profile_file):
+            return None
+        try:
+            with open(self.user_profile_file, 'r', encoding='utf-8') as profile_file:
+                profile = json.load(profile_file)
+        except Exception:
+            return None
+        return self._normalize_actor_name(profile.get('name'))
+
+    def get_actor_name(self) -> Optional[str]:
+        """!Return the saved actor name for this board-manager session."""
+        return self.actor_name
+
+    def set_actor_name(self, actor_name: str, persist: bool = True) -> str:
+        """!Set the current actor name and optionally persist it to disk."""
+        normalized = self._normalize_actor_name(actor_name)
+        if normalized is None:
+            raise ValueError('User name is required.')
+        self.actor_name = normalized
+        if persist:
+            os.makedirs(os.path.dirname(self.user_profile_file), exist_ok=True)
+            with open(self.user_profile_file, 'w', encoding='utf-8') as profile_file:
+                json.dump({'name': normalized}, profile_file, indent=2, ensure_ascii=False)
+        for board in self.boards.values():
+            board.set_actor_name(normalized)
+        return normalized
 
     def _normalize_board_info(self, board_info: Dict) -> Dict:
         """!Return a metadata entry with backend defaults applied."""
@@ -198,6 +237,7 @@ class BoardManager:
             lock_handler=self.lock_handler,
             storage_backend=self._board_backend(board_info),
         )
+        board.set_actor_name(self.actor_name)
         self.boards[board_id] = board
         return board
 
@@ -248,6 +288,8 @@ class BoardManager:
         except BoardLockCancelledError:
             return None
 
+        board.set_actor_name(self.actor_name)
+
         self.boards[board_id] = board
 
         metadata['boards'][board_id] = {
@@ -296,6 +338,7 @@ class BoardManager:
         
         # Create the board with custom columns by default
         board = KanbanBoard(data_file, lock_handler=self.lock_handler, storage_backend=storage_backend)
+        board.set_actor_name(self.actor_name)
         if not board.get_columns_ordered():
             board._init_default_custom_columns()
         self.boards[board_id] = board

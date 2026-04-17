@@ -24,7 +24,7 @@ class DirectCliRegressionTests(unittest.TestCase):
     def invoke_direct(self, argv):
         """!Invoke direct."""
         parser = build_parser()
-        args = parser.parse_args(['--boards-dir', self.temp_dir, *argv])
+        args = parser.parse_args(['--boards-dir', self.temp_dir, '--actor-name', 'Test User', *argv])
         manager = BoardManager(self.temp_dir)
         cli = DirectActionCLI(manager, lock_action='cancel')
         output = io.StringIO()
@@ -264,6 +264,71 @@ class DirectCliRegressionTests(unittest.TestCase):
             '--card', 'Document release',
         ])
         self.assertIn('Notes: (none)', list_output)
+
+    def test_direct_cli_can_show_action_log_with_actor_and_timestamp(self):
+        """!Test direct cli can show action log with actor and timestamp."""
+        self.invoke_direct(['create-board', '--name', 'Audit Board'])
+        self.invoke_direct([
+            'create-card',
+            '--board', 'Audit Board',
+            '--title', 'Logged Card',
+        ])
+        self.invoke_direct([
+            'add-note',
+            '--board', 'Audit Board',
+            '--card', 'Logged Card',
+            '--text', 'Captured in the audit trail',
+        ])
+
+        exit_code, output = self.invoke_direct([
+            'show-action-log',
+            '--board', 'Audit Board',
+        ])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Action log for board 'Audit Board':", output)
+        self.assertIn('Test User', output)
+        self.assertIn("Added note to card 'Logged Card'.", output)
+        self.assertRegex(output, r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \| Test User \|')
+
+    def test_direct_cli_can_show_card_action_log_for_one_card(self):
+        """!Test direct cli can show card action log for one card."""
+        self.invoke_direct(['create-board', '--name', 'Card Audit Board'])
+        self.invoke_direct([
+            'create-card',
+            '--board', 'Card Audit Board',
+            '--title', 'Logged Card',
+        ])
+        self.invoke_direct([
+            'create-card',
+            '--board', 'Card Audit Board',
+            '--title', 'Other Card',
+        ])
+        self.invoke_direct([
+            'add-note',
+            '--board', 'Card Audit Board',
+            '--card', 'Logged Card',
+            '--text', 'Captured for one card',
+        ])
+        self.invoke_direct([
+            'add-note',
+            '--board', 'Card Audit Board',
+            '--card', 'Other Card',
+            '--text', 'Should not appear in the filtered log',
+        ])
+
+        exit_code, output = self.invoke_direct([
+            'show-card-action-log',
+            '--board', 'Card Audit Board',
+            '--card', 'Logged Card',
+        ])
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Action log for card 'Logged Card' on board 'Card Audit Board':", output)
+        self.assertIn('Test User', output)
+        self.assertIn("Added note to card 'Logged Card'.", output)
+        self.assertNotIn('Should not appear in the filtered log', output)
+        self.assertRegex(output, r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \| Test User \|')
 
     def test_direct_cli_can_archive_restore_and_delete_archived_cards(self):
         """!Test direct cli can archive restore and delete archived cards."""

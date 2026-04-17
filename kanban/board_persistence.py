@@ -7,7 +7,7 @@ from __future__ import annotations
 import uuid
 from typing import Dict, List
 
-from .models import Card, CardType, CustomColumn, Project, Status
+from .models import ActionLogEntry, Card, CardType, CustomColumn, Project, Status
 
 
 class BoardPersistenceMixin:
@@ -18,12 +18,14 @@ class BoardPersistenceMixin:
         data = self.storage.load()
         self._load_from_data(data, persist_defaults=not self.is_read_only())
 
-    def _load_from_data(self, data: Dict, persist_defaults: bool = True):
+    def _load_from_data(self, data: Dict, persist_defaults: bool = True, preserve_action_log: bool = False):
         """!Load from data."""
         self.custom_columns.clear()
         self.card_types.clear()
         self.projects.clear()
         self.last_used_card_type_id = None
+        if not preserve_action_log:
+            self.action_log = [ActionLogEntry.from_dict(entry) for entry in data.get('action_log', [])]
         has_custom_columns = 'columns' in data
         is_legacy_data = 'cards' in data and not has_custom_columns
         is_empty_board = not data.get('cards') and not has_custom_columns

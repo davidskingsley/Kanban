@@ -28,6 +28,41 @@ class Status(Enum):
     DONE = "Done"
 
 
+## @brief Represents one timestamped audit-log entry for a board action.
+class ActionLogEntry:
+    """!Represents one timestamped audit-log entry for a board action."""
+
+    def __init__(self, actor_name: str, description: str, occurred_at: datetime = None,
+                 card_id: str = None, entry_id: str = None):
+        """!Init."""
+        self.id = entry_id if entry_id else str(uuid.uuid4())
+        self.actor_name = (actor_name or '').strip() or 'Unknown User'
+        self.description = (description or '').strip()
+        self.occurred_at = occurred_at or datetime.now()
+        self.card_id = card_id
+
+    def to_dict(self):
+        """!Convert audit entry to dictionary for serialization."""
+        return {
+            'id': self.id,
+            'actor_name': self.actor_name,
+            'description': self.description,
+            'occurred_at': self.occurred_at.isoformat(),
+            'card_id': self.card_id,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        """!Create audit entry from dictionary."""
+        return cls(
+            data.get('actor_name', 'Unknown User'),
+            data.get('description', ''),
+            datetime.fromisoformat(data.get('occurred_at', datetime.now().isoformat())),
+            data.get('card_id'),
+            data.get('id'),
+        )
+
+
 ## @brief Represents a timestamped note attached to a card.
 class CardNote:
     """!Represents a note recorded against a card."""

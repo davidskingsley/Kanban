@@ -52,6 +52,7 @@ This opens the menu-based multi-board CLI. It is intended for terminal-first wor
 
 ```bash
 uv run python main.py list-boards
+uv run python main.py --actor-name "David" list-boards
 uv run python main.py create-board --name "Automation" --storage-backend sqlite --switch
 uv run python main.py create-card --board "Automation" --title "Ship release" --priority high --assignee david
 uv run python main.py export-board --board "Automation" --output automation.json
@@ -68,12 +69,14 @@ uv run python main.py <direct-command> [command-options]
 Options:
   --cli
   --boards-dir DIR
+   --actor-name NAME
   --lock-action {cancel,open_read_only,delete_lock}
   --help
 ```
 
 - `--cli` starts the interactive multi-board CLI instead of the GUI
 - `--boards-dir DIR` uses a custom board registry directory for the session
+- `--actor-name NAME` sets and saves the user name used for board action logging
 - `--lock-action` controls how direct commands respond when the selected board is locked
 
 Run `uv run python main.py --help` for launcher help, or `uv run python main.py <direct-command> --help` for the flags supported by a specific direct command.
@@ -82,8 +85,8 @@ Run `uv run python main.py --help` for launcher help, or `uv run python main.py 
 
 The direct CLI covers the same major workflows as the interactive CLI, but without prompts.
 
-- Board management: `list-boards`, `create-board`, `switch-board`, `rename-board`, `delete-board`, `board-stats`, `export-board`, `export-all-boards`, `import-boards`, `load-board-from-folder`, `undo-board-management`, `redo-board-management`, `show-board`
-- Card actions: `create-card`, `edit-card`, `add-subcard`, `move-card`, `delete-card`, `search-cards`, `filter-priority`, `filter-assignee`, `add-tag`, `add-todo-item`, `check-todo-item`, `uncheck-todo-item`, `toggle-todo-item`, `remove-todo-item`, `card-details`, `list-notes`, `add-note`, `edit-note`, `delete-note`, `archive-done-cards`, `list-archived-cards`, `restore-archived-card`, `delete-archived-card`
+- Board management: `list-boards`, `create-board`, `switch-board`, `rename-board`, `delete-board`, `board-stats`, `export-board`, `export-all-boards`, `import-boards`, `load-board-from-folder`, `undo-board-management`, `redo-board-management`, `show-board`, `show-action-log`
+- Card actions: `create-card`, `edit-card`, `add-subcard`, `move-card`, `delete-card`, `search-cards`, `filter-priority`, `filter-assignee`, `add-tag`, `add-todo-item`, `check-todo-item`, `uncheck-todo-item`, `toggle-todo-item`, `remove-todo-item`, `card-details`, `show-card-action-log`, `list-notes`, `add-note`, `edit-note`, `delete-note`, `archive-done-cards`, `list-archived-cards`, `restore-archived-card`, `delete-archived-card`
 - Column actions: `create-column`, `rename-column`, `delete-column`, `reorder-columns`, `change-column-color`, `edit-column-flags`, `list-columns`
 - Card type and maintenance actions: `list-card-types`, `create-card-type`, `edit-card-type`, `delete-card-type`, `create-backup`, `cleanup-orphaned-attachments`, `undo-current-board`, `redo-current-board`
 
@@ -91,6 +94,7 @@ Safety notes:
 
 - Destructive direct commands require `--force`
 - Locked-board behavior in direct mode is controlled with `--lock-action`
+- The first write action will prompt for a user name if none is saved yet; direct commands can pre-seed it with `--actor-name NAME`
 - Date arguments use `YYYY-MM-DD`
 - Checklist item commands accept exact item text or checklist item ids printed by `card-details`
 - Managed project CRUD remains a GUI workflow; interactive and direct CLI flows can assign project names on cards and card types, and both CLI modes can now view and manipulate timestamped card notes
@@ -118,9 +122,34 @@ Cards support timestamped notes across the GUI and CLI, and boards support manag
 
 - GUI card dialogs can add, edit, and delete timestamped notes on existing cards
 - Interactive CLI board menus can view, add, edit, and delete notes on cards
-- Direct CLI automation can use `list-notes`, `add-note`, `edit-note`, and `delete-note`
+- Direct CLI automation can use `list-notes`, `add-note`, `edit-note`, `delete-note`, `show-action-log`, and `show-card-action-log`
 - GUI project management can view, create, edit, and delete managed projects, with updates propagated to cards and card-type presets that reference them
 - Interactive and direct CLI flows can assign project names when creating or editing cards and card types, but managed project CRUD is still GUI-only
+
+## Action Logging
+
+Board mutations append to a persisted action log that stores:
+
+- the saved user name
+- the date and time of the action
+- a short description of what changed
+
+If no user name has been saved yet, the GUI and interactive CLI will prompt for one before the first write action. You can also save it up front from any launcher mode with:
+
+```bash
+uv run python main.py --actor-name "David"
+```
+
+To inspect the log:
+
+- GUI: `Boards -> Overview -> Action Log`
+- GUI: `Cards -> Selected Card -> Selected Card Action Log`
+- Interactive CLI: `View action log` from the board menu
+- Interactive CLI: `View card action log` from the board menu
+- Direct CLI: `uv run python main.py show-action-log --board "Automation"`
+- Direct CLI: `uv run python main.py show-card-action-log --board "Automation" --card "Ship release"`
+
+Per-card logs are filtered views of the same persisted audit trail, so card-related entries keep the same actor name and timestamp data as the board-wide view.
 
 ## Storage Backends
 
@@ -167,6 +196,7 @@ The desktop application includes:
 - board-level search plus priority, assignee, card type, tag, and due-state filters
 - embedded multi-column board view
 - board statistics, due-date views, and archived-card management
+- board-wide and selected-card action-log viewing with user, date, time, and description details
 - create, edit, move, and delete actions for cards
 - create, rename, delete, recolor, reorder, and flag editing for columns
 - reusable card type management and managed project CRUD
@@ -181,6 +211,7 @@ Common GUI actions:
 4. Use the Cards and Columns menus after selecting a card or column in the board view.
 5. Double-click a card to edit it, update notes, manage attachments, and work with subcards.
 6. Use Help to open the About dialog, the Command Line Guide, or the Direct-Action CLI Options reference.
+7. Open the Action Log from Boards for the full audit trail, or use Selected Card Action Log from Cards to focus on one card.
 
 Visual cues include priority indicators, assignee labels, tags, custom card colors, checklist progress, subcard progress, due-state filtering, and read-only state when a lock is held elsewhere.
 
@@ -202,6 +233,7 @@ Board-management capabilities include:
 Board-level capabilities include:
 
 - card creation, editing, moving, deleting, searching, filtering, tag management, checklist entry, note management, card details, archive-done, archived-card management, and subcards
+- board and selected-card action log viewing with per-entry user and timestamp details
 - column creation, rename, deletion, reorder, recolor, flag editing, and listing
 - card type listing, creation, editing, and deletion
 - maintenance actions such as backup creation, orphaned attachment cleanup, undo, and redo
@@ -224,6 +256,7 @@ The interactive CLI can set project names on cards and card types and can manage
 | `Ctrl+Shift+E` | Export all boards |
 | `Ctrl+Shift+I` | Import boards |
 | `Ctrl+Shift+T` | Due Date View |
+| `Ctrl+Shift+L` | Open Action Log |
 | `Ctrl+I` | Board statistics |
 | `Ctrl+Shift+N` | Create card |
 | `Ctrl+Shift+J` | Add subcard to the selected card |

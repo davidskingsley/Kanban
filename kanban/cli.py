@@ -6,6 +6,7 @@ from datetime import date
 from typing import Dict, List, Optional
 
 from .board import KanbanBoard
+from .board_manager import BoardManager
 from .models import Priority
 
 EMPTY_NOTE_LABEL = '(empty note)'
@@ -15,9 +16,10 @@ EMPTY_NOTE_LABEL = '(empty note)'
 class BoardCLI:
     """!Command line interface for an individual board."""
     
-    def __init__(self, board: KanbanBoard):
+    def __init__(self, board: KanbanBoard, board_manager: Optional[BoardManager] = None):
         """!Init."""
         self.board = board
+        self.board_manager = board_manager
         self.running = True
 
     def parse_optional_date(self, value: str, field_name: str) -> Optional[date]:
@@ -76,14 +78,31 @@ class BoardCLI:
         print("🗂️  WELCOME TO KANBAN BOARD MANAGER  🗂️")
         print("=" * 50)
         print("Organize your tasks efficiently!")
+        actor_name = self.board.get_actor_name() or '(not set yet)'
+        print(f"Action log user: {actor_name}")
         if self.board.is_read_only():
             print("🔒 This board is open in read-only mode.")
         print()
 
+    def ensure_actor_name(self) -> bool:
+        """!Prompt for and save the actor name when needed."""
+        if self.board.get_actor_name():
+            return True
+        if self.board_manager is None:
+            self.board.set_actor_name('Unknown User')
+            return True
+
+        while True:
+            actor_name = input('Enter your name for the action log: ').strip()
+            if actor_name:
+                self.board_manager.set_actor_name(actor_name, persist=True)
+                return True
+            print('A user name is required to log board actions.')
+
     def ensure_board_writable(self) -> bool:
         """!Return False and explain why if the current board is read-only."""
         if not self.board.is_read_only():
-            return True
+            return self.ensure_actor_name()
 
         print(f"\n🔒 {self.board.get_read_only_message()}")
         return False
@@ -139,6 +158,8 @@ class BoardCLI:
         print("26. Clean up orphaned attachment files")
         print("27. Undo last change")
         print("28. Redo last undone change")
+        print("29. View action log")
+        print("30. View card action log")
         print("0. Exit")
         print()
     
@@ -173,6 +194,8 @@ class BoardCLI:
             '26': self.cleanup_orphaned_attachment_files,
             '27': self.undo_last_change,
             '28': self.redo_last_change,
+            '29': self.view_action_log,
+            '30': self.view_card_action_log,
             '0': self.exit_app
         }
         
@@ -634,6 +657,25 @@ class BoardCLI:
             return
 
         print(f"↪ Redid: {description}")
+
+    def view_action_log(self):
+        """!Print the board action log on request."""
+        print("\n--- ACTION LOG ---")
+        print(self.board.export_action_log())
+
+    def view_card_action_log(self):
+        """!Print the audit log for one selected card."""
+        print("\n--- CARD ACTION LOG ---")
+        card_id = self.select_card()
+        if not card_id:
+            return
+
+        card = self.board.find_card(card_id)
+        if not card:
+            print("Card not found!")
+            return
+
+        print(self.board.export_card_action_log(card.id, card_title=card.title))
     
     def show_card_details(self):
         """!Show detailed information about a card."""

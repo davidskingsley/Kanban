@@ -66,17 +66,20 @@ class BoardCardsMixin:
             self.columns[Status.TODO].add_card(card)
 
         self.last_used_card_type_id = card_type.id
+        self._record_action(f"Created card '{card.title}' in '{self.get_card_location_label(card)}'.", card.id)
         self.save_board()
         return card
 
     def edit_card(self, card_id: str, title: str = None, description: str = None,
                   priority: Priority = None, assignee: str = None, project: str = None,
                   start_date=UNSET, end_date=UNSET, parent_id: str = None, color=UNSET,
-                  tags=UNSET, card_type_id=UNSET, todo_items=UNSET) -> Optional[Card]:
+                  tags=UNSET, card_type_id=UNSET, todo_items=UNSET,
+                  clear_assignee: bool = False, clear_project: bool = False) -> Optional[Card]:
         """!Edit card."""
         self._ensure_writable()
         card = self.find_card(card_id)
         if card:
+            original_title = card.title
             resolved_type_id = card_type_id
             if card_type_id is not UNSET:
                 resolved_type = self._resolve_card_type(card_type_id)
@@ -84,11 +87,18 @@ class BoardCardsMixin:
                 self.last_used_card_type_id = resolved_type.id
             self._push_undo_state(f"Edit card '{card.title}'")
             card.update(title, description, priority, assignee, project, start_date, end_date, parent_id, color, resolved_type_id, todo_items)
-            if project is not None:
+            if clear_assignee:
+                card.assignee = None
+            if clear_project:
+                card.project = None
+            if clear_assignee or clear_project:
+                card.updated_at = datetime.now()
+            if project is not None and project is not UNSET:
                 self._ensure_project_exists(project)
             if tags is not UNSET:
                 card.tags = list(dict.fromkeys(tags or []))
                 card.updated_at = datetime.now()
+            self._record_action(f"Edited card '{card.title or original_title}'.", card.id)
             self.save_board()
             return card
         return None
@@ -102,6 +112,7 @@ class BoardCardsMixin:
         self._push_undo_state(f"Update tags on '{card.title}'")
         card.tags = list(dict.fromkeys(tags or []))
         card.updated_at = datetime.now()
+        self._record_action(f"Replaced tags on card '{card.title}'.", card.id)
         self.save_board()
         return card
 
@@ -113,6 +124,7 @@ class BoardCardsMixin:
             return False
         self._push_undo_state(f"Add tag to '{card.title}'")
         card.add_tag(tag)
+        self._record_action(f"Added tag '{tag}' to card '{card.title}'.", card.id)
         self.save_board()
         return True
 
@@ -127,6 +139,7 @@ class BoardCardsMixin:
         todo_item = CardTodoItem(normalized_text, completed)
         card.todo_items.append(todo_item)
         card.updated_at = datetime.now()
+        self._record_action(f"Added checklist item to card '{card.title}'.", card.id)
         self.save_board()
         return todo_item
 
@@ -149,6 +162,7 @@ class BoardCardsMixin:
         todo_item.text = new_text
         todo_item.completed = new_completed
         card.updated_at = datetime.now()
+        self._record_action(f"Updated checklist item on card '{card.title}'.", card.id)
         self.save_board()
         return todo_item
 
@@ -164,6 +178,7 @@ class BoardCardsMixin:
             self._push_undo_state(f"Remove checklist item from '{card.title}'")
             card.todo_items.pop(index)
             card.updated_at = datetime.now()
+            self._record_action(f"Removed checklist item from card '{card.title}'.", card.id)
             self.save_board()
             return True
         return False
@@ -248,6 +263,7 @@ class BoardCardsMixin:
         except Exception:
             self._undo_stack.pop()
             raise
+        self._record_action(f"Added {len(attachments)} attachment(s) to card '{card.title}'.", card.id)
         self.save_board()
         return attachments
 
@@ -265,6 +281,7 @@ class BoardCardsMixin:
         if removed is None:
             self._undo_stack.pop()
             return False
+        self._record_action(f"Removed attachment '{removed.name}' from card '{card.title}'.", card.id)
         self.save_board()
         return True
 
@@ -311,6 +328,11 @@ class BoardCardsMixin:
             if self.storage.delete_attachment_file(file_path):
                 removed_paths.append(file_path)
         removed_directories = self.storage.remove_empty_attachment_directories()
+        if removed_paths or removed_directories:
+            self._record_action(
+                f"Cleaned up {len(removed_paths)} orphaned attachment file(s) and {removed_directories} empty director{'y' if removed_directories == 1 else 'ies'}."
+            )
+            self.save_board()
         return {
             'removed_files': len(removed_paths),
             'removed_directories': removed_directories,
@@ -327,6 +349,7 @@ class BoardCardsMixin:
             return None
         self._push_undo_state(f"Add note to '{card.title}'")
         note = card.add_note(text)
+        self._record_action(f"Added note to card '{card.title}'.", card.id)
         self.save_board()
         return note
 
@@ -339,6 +362,7 @@ class BoardCardsMixin:
         self._push_undo_state(f"Delete note from '{card.title}'")
         removed = card.remove_note(note_id)
         if removed:
+            self._record_action(f"Deleted note from card '{card.title}'.", card.id)
             self.save_board()
         else:
             self._undo_stack.pop()
@@ -353,6 +377,7 @@ class BoardCardsMixin:
         self._push_undo_state(f"Edit note on '{card.title}'")
         note = card.update_note(note_id, text)
         if note is not None:
+            self._record_action(f"Edited note on card '{card.title}'.", card.id)
             self.save_board()
         else:
             self._undo_stack.pop()
@@ -430,6 +455,7 @@ class BoardCardsMixin:
         self._push_undo_state(f"Delete card '{card.title}'")
         removed = self._delete_card_internal(card_id)
         if removed:
+            self._record_action(f"Deleted card '{card.title}'.", card.id)
             self.save_board()
         return removed
 
@@ -440,6 +466,7 @@ class BoardCardsMixin:
         existing_card = self.find_card(card_id)
         if not existing_card:
             return False
+        source_label = self.get_card_location_label(existing_card)
         self._push_undo_state(f"Move card '{existing_card.title}'")
         if self.use_custom_columns:
             if not isinstance(to_column, str) or to_column not in self.custom_columns:
@@ -468,6 +495,10 @@ class BoardCardsMixin:
                         target_index += 1
                 card.move_to_column(to_column)
                 target_column.add_card(card, target_index)
+                self._record_action(
+                    f"Moved card '{card.title}' from '{source_label}' to '{target_column.name}'.",
+                    card.id,
+                )
                 self.save_board()
                 return True
         else:
@@ -478,6 +509,10 @@ class BoardCardsMixin:
             if card and isinstance(to_column, Status):
                 card.move_to_status(to_column)
                 self.columns[to_column].add_card(card)
+                self._record_action(
+                    f"Moved card '{card.title}' from '{source_label}' to '{to_column.value}'.",
+                    card.id,
+                )
                 self.save_board()
                 return True
         self._undo_stack.pop()
@@ -514,6 +549,7 @@ class BoardCardsMixin:
             return False
         self._push_undo_state(f"Archive card '{card.title}'")
         self._set_card_archived_state(card, archived=True)
+        self._record_action(f"Archived card '{card.title}'.", card.id)
         self.save_board()
         return True
 
@@ -525,6 +561,7 @@ class BoardCardsMixin:
             return False
         self._push_undo_state(f"Restore archived card '{card.title}'")
         self._set_card_archived_state(card, archived=False)
+        self._record_action(f"Restored archived card '{card.title}'.", card.id)
         self.save_board()
         return True
 
@@ -619,6 +656,7 @@ class BoardCardsMixin:
         self._push_undo_state('Archive done cards')
         for card in cards_to_archive:
             self._set_card_archived_state(card, archived=True)
+        self._record_action(f"Archived {len(cards_to_archive)} done card(s).")
         self.save_board()
         return len(cards_to_archive)
 

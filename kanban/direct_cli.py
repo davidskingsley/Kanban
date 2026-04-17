@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from typing import Any
 
 from .board_manager import BoardManager
@@ -210,6 +211,17 @@ def add_direct_action_subcommands(subparsers: Any) -> None:
     card_details.add_argument('--card', required=True, help='Card id or exact card title')
     card_details.set_defaults(command='card-details')
 
+    show_card_action_log = subparsers.add_parser('show-card-action-log', help="Show one card's action log")
+    show_card_action_log.add_argument('--board', help='Board id or exact board name; omit to use the current board')
+    show_card_action_log.add_argument('--card', required=True, help='Card id or exact card title')
+    show_card_action_log.add_argument('--limit', type=int, default=50, help='Maximum number of log entries to print')
+    show_card_action_log.set_defaults(command='show-card-action-log')
+
+    show_action_log = subparsers.add_parser('show-action-log', help='Show the board action log')
+    show_action_log.add_argument('--board', help='Board id or exact board name; omit to use the current board')
+    show_action_log.add_argument('--limit', type=int, default=50, help='Maximum number of log entries to print')
+    show_action_log.set_defaults(command='show-action-log')
+
     list_notes = subparsers.add_parser('list-notes', help='List notes recorded on a card')
     list_notes.add_argument('--board', help='Board id or exact board name; omit to use the current board')
     list_notes.add_argument('--card', required=True, help='Card id or exact card title')
@@ -358,16 +370,65 @@ class DirectActionCLI(
 ):
     """!Execute direct non-interactive board and card operations."""
 
+    MUTATING_COMMANDS = {
+        'create-card',
+        'edit-card',
+        'add-subcard',
+        'move-card',
+        'delete-card',
+        'add-tag',
+        'add-todo-item',
+        'check-todo-item',
+        'uncheck-todo-item',
+        'toggle-todo-item',
+        'remove-todo-item',
+        'add-note',
+        'edit-note',
+        'delete-note',
+        'archive-done-cards',
+        'restore-archived-card',
+        'delete-archived-card',
+        'create-column',
+        'rename-column',
+        'delete-column',
+        'reorder-columns',
+        'change-column-color',
+        'edit-column-flags',
+        'create-card-type',
+        'edit-card-type',
+        'delete-card-type',
+        'undo-current-board',
+        'redo-current-board',
+        'cleanup-orphaned-attachments',
+    }
+
     def __init__(self, board_manager: BoardManager, lock_action: str = 'cancel'):
         """!Init."""
         self.board_manager = board_manager
         self.lock_action = lock_action
         self.board_manager.set_lock_handler(lambda _file_path, _lock_details: lock_action)
 
+    def _ensure_actor_name(self, args: argparse.Namespace):
+        """!Ensure a persisted actor name exists before mutating board state."""
+        actor_name = getattr(args, 'actor_name', None) or self.board_manager.get_actor_name()
+        if actor_name:
+            self.board_manager.set_actor_name(actor_name, persist=True)
+            return
+        if not sys.stdin.isatty():
+            raise ValueError('No saved user name found. Re-run with --actor-name NAME to enable action logging.')
+        while True:
+            entered_name = input('Enter your name for the board action log: ').strip()
+            if entered_name:
+                self.board_manager.set_actor_name(entered_name, persist=True)
+                return
+            print('A user name is required to log board actions.')
+
     def execute(self, args: argparse.Namespace) -> int:
         """!Dispatch the parsed direct-action command."""
         handler = getattr(self, f"cmd_{args.command.replace('-', '_')}", None)
         if handler is None:
             raise ValueError(f"Unsupported direct command: {args.command}")
+        if args.command in self.MUTATING_COMMANDS:
+            self._ensure_actor_name(args)
         handler(args)
         return 0

@@ -54,6 +54,7 @@ The core design separates board behavior from user interfaces. All surfaces oper
 
 - `Priority`
 - `Status`
+- `ActionLogEntry`
 - `CardNote`
 - `CardAttachment`
 - `CardTodoItem`
@@ -112,6 +113,7 @@ At runtime, a board contains four primary categories of state:
 - Cards
 - Card types
 - Projects
+- Action log
 
 Cards can also own nested substructures:
 
@@ -134,8 +136,9 @@ The canonical serialized board document is produced by `KanbanBoard.export_data(
   "cards": [],
   "card_types": [],
   "projects": [],
+  "action_log": [],
   "last_used_card_type_id": "string-or-null",
-  "format_version": "2.0"
+  "format_version": "2.1"
 }
 ```
 
@@ -151,11 +154,14 @@ Top-level fields:
   - Array of reusable card-type presets.
 - `projects`
   - Array of reusable project records.
+- `action_log`
+  - Array of persisted audit-log entries.
+  - Stores the user name, timestamp, and description for logged board mutations.
 - `last_used_card_type_id`
   - ID of the most recently selected card type.
   - Used as the default type for future card creation.
 - `format_version`
-  - Current exported version string, currently `2.0`.
+  - Current exported version string, currently `2.1`.
 
 ### Column Object Schema
 
@@ -341,6 +347,28 @@ Field details:
 - `text`: item text
 - `completed`: boolean completion state
 
+### Action Log Entry Schema
+
+Each entry in `action_log` has this shape:
+
+```json
+{
+  "id": "uuid",
+  "actor_name": "david",
+  "description": "Moved card 'Ship release' from 'To Do' to 'Done'.",
+  "occurred_at": "2026-04-16T14:22:33.123456",
+  "card_id": "uuid-or-null"
+}
+```
+
+Field details:
+
+- `id`: unique log entry identifier
+- `actor_name`: saved user name for the action
+- `description`: short human-readable action summary
+- `occurred_at`: ISO 8601 timestamp of the action
+- `card_id`: optional related card identifier when the action targets a specific card; GUI and CLI card audit views filter entries through this field
+
 ## Multi-Board Metadata JSON Schema
 
 The multi-board registry lives in `boards_metadata.json` under the boards directory managed by `BoardManager`.
@@ -399,8 +427,9 @@ Top-level shape:
       "cards": [],
       "card_types": [],
       "projects": [],
+      "action_log": [],
       "last_used_card_type_id": "uuid",
-      "format_version": "2.0"
+      "format_version": "2.1"
     }
   }
 }
@@ -429,6 +458,22 @@ Field details:
 - `hostname`: machine name of the lock owner
 - `opened_at`: timestamp when the lock was created
 - `file_path`: absolute board file path
+
+## User Profile JSON Schema
+
+The saved user name used for action logging is stored outside individual boards in `user_profile.json` beside the board registry root.
+
+Example:
+
+```json
+{
+  "name": "david"
+}
+```
+
+Field details:
+
+- `name`: saved user name reused across GUI, interactive CLI, and direct CLI sessions for audit logging
 
 ## SQLite Storage Schema
 
@@ -481,7 +526,7 @@ Implications:
 
 - One SQLite file stores one board
 - The latest persisted board payload always lives in the single `board_state` row
-- There are no child tables for cards, columns, notes, tags, or attachments
+- There are no child tables for cards, columns, notes, tags, attachments, or action-log entries
 
 ### Read Behavior
 

@@ -15,7 +15,7 @@ from .dialog_management import (
 	ProjectsBrowserDialog,
 	ReorderColumnsDialog,
 )
-from .dialog_overview import ArchivedCardInfoDialog, ArchivedCardsDialog, DueDateViewDialog
+from .dialog_overview import ActionLogDialog, ArchivedCardInfoDialog, ArchivedCardsDialog, DueDateViewDialog
 from .dialog_primitives import (
 	DueTimelineDelegate,
 	OptionalDateField,
@@ -26,6 +26,7 @@ from .dialog_primitives import (
 
 __all__ = [
 	'AboutDialog',
+	'ActionLogDialog',
 	'ArchivedCardInfoDialog',
 	'ArchivedCardsDialog',
 	'AttachmentDropFrame',

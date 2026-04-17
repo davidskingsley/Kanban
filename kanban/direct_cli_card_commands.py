@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
 
 from .models import UNSET
 
@@ -54,38 +53,25 @@ class DirectCliCardCommandsMixin:
         card_type_id = self._resolve_card_type(board, args.card_type).id if args.card_type else UNSET
         priority = self._parse_priority(args.priority) if args.priority else None
 
-        board._ensure_writable()
-        board._push_undo_state(f"Edit card '{card.title}'")
-
-        if args.title is not None:
-            card.title = args.title
-        if description is not UNSET:
-            card.description = description
-        if priority is not None:
-            card.priority = priority
-        if assignee is not UNSET:
-            card.assignee = assignee
-        if project is not UNSET:
-            card.project = project
-            if project is not None:
-                board._ensure_project_exists(project)
-        if start_date is not UNSET:
-            card.start_date = start_date
-        if end_date is not UNSET:
-            card.end_date = end_date
-        if color is not UNSET:
-            card.color = color
-        if card_type_id is not UNSET:
-            card.card_type_id = card_type_id
-            board.last_used_card_type_id = card_type_id
-        if tags is not UNSET:
-            card.tags = list(dict.fromkeys(tags or []))
-        if todo_items is not UNSET:
-            card.todo_items = card._coerce_todo_items(todo_items)
-
-        card.updated_at = datetime.now()
-        board.save_board()
-        print(f"Updated card '{card.title}' on board '{board_info['name']}'.")
+        updated = board.edit_card(
+            card.id,
+            title=args.title,
+            description=description if description is not UNSET else None,
+            priority=priority,
+            assignee=assignee if assignee is not UNSET else None,
+            project=project if project is not UNSET else None,
+            start_date=start_date,
+            end_date=end_date,
+            color=color,
+            tags=tags,
+            card_type_id=card_type_id,
+            todo_items=todo_items,
+            clear_assignee=assignee is None,
+            clear_project=project is None,
+        )
+        if updated is None:
+            raise ValueError(f"Unable to update card '{card.title}'.")
+        print(f"Updated card '{updated.title}' on board '{board_info['name']}'.")
 
     def cmd_add_subcard(self, args: argparse.Namespace):
         """!Cmd add subcard."""
@@ -210,6 +196,19 @@ class DirectCliCardCommandsMixin:
         _, _, board = self._load_board(args.board)
         card = self._resolve_card(board, args.card)
         self._print_card_details(board, card)
+
+    def cmd_show_card_action_log(self, args: argparse.Namespace):
+        """!Cmd show card action log."""
+        _, board_info, board = self._load_board(args.board)
+        card = self._resolve_card(board, args.card)
+        print(f"Action log for card '{card.title}' on board '{board_info['name']}':")
+        print(board.export_card_action_log(card.id, limit=args.limit, card_title=card.title))
+
+    def cmd_show_action_log(self, args: argparse.Namespace):
+        """!Cmd show action log."""
+        _, board_info, board = self._load_board(args.board)
+        print(f"Action log for board '{board_info['name']}':")
+        print(board.export_action_log(limit=args.limit))
 
     def cmd_list_notes(self, args: argparse.Namespace):
         """!Cmd list notes."""

@@ -30,6 +30,7 @@ from kanban.gui.common import WINDOW_STYLE
 from kanban.gui.dialogs import ArchivedCardInfoDialog
 from kanban.gui.pyside_app import (
     AboutDialog,
+    ActionLogDialog,
     ArchivedCardsDialog,
     BoardDialog,
     CardDialog,
@@ -116,7 +117,7 @@ class GuiDialogRegressionTests(GuiTestCase):
         card_type = board.get_card_types_ordered()[0]
 
         dialogs = [
-            AboutDialog(version='2.0', parent=self.gui.window),
+            AboutDialog(version='3.0', parent=self.gui.window),
             BoardDialog(self.temp_dir, parent=self.gui.window),
             CardTypeDialog(card_type=card_type, parent=self.gui.window),
             CardDialog(board, card=card, parent=self.gui.window),
@@ -129,6 +130,37 @@ class GuiDialogRegressionTests(GuiTestCase):
             self.assertIsNotNone(button_box, f'{type(dialog).__name__} should include a button box')
             self.assertIsNot(button_box.parentWidget(), scroll_area.widget())
             self.assertNotIn(button_box, scroll_area.widget().findChildren(QDialogButtonBox))
+
+    def test_action_log_dialog_shows_actor_timestamp_and_messages(self):
+        """!Test action log dialog shows actor timestamp and messages."""
+        self.board_manager.create_board('Audit Dialog Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        card = board.create_card('Logged Card', 'dialog content', Priority.MEDIUM, board.get_columns_ordered()[0].id)
+        board.add_card_note(card.id, 'Audit note')
+
+        dialog = ActionLogDialog(board, 'Audit Dialog Board', parent=self.gui.window)
+        log_text = dialog.log_browser.toPlainText()
+
+        self.assertIn('Test User', log_text)
+        self.assertIn("Added note to card 'Logged Card'.", log_text)
+        self.assertRegex(log_text, r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \| Test User \|')
+
+    def test_action_log_dialog_can_filter_to_one_card(self):
+        """!Test action log dialog can filter to one card."""
+        self.board_manager.create_board('Filtered Audit Dialog Board')
+        self.gui = MultiBoardGUI(self.board_manager)
+        board = self.board_manager.get_current_board()
+        first_card = board.create_card('Logged Card', 'dialog content', Priority.MEDIUM, board.get_columns_ordered()[0].id)
+        second_card = board.create_card('Other Card', 'dialog content', Priority.MEDIUM, board.get_columns_ordered()[0].id)
+        board.add_card_note(first_card.id, 'Show only this card')
+        board.add_card_note(second_card.id, 'Do not show this card')
+
+        dialog = ActionLogDialog(board, 'Filtered Audit Dialog Board', parent=self.gui.window, card=first_card)
+        log_text = dialog.log_browser.toPlainText()
+
+        self.assertIn("Added note to card 'Logged Card'.", log_text)
+        self.assertNotIn("Added note to card 'Other Card'.", log_text)
 
     def test_drag_hotspot_is_clamped_to_preview_bounds(self):
         """!Test drag hotspot is clamped to preview bounds."""

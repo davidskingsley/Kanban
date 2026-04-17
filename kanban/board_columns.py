@@ -30,6 +30,7 @@ class BoardColumnsMixin:
         column = CustomColumn(column_id, name, position, color, is_completed, can_add_card)
         self.custom_columns[column_id] = column
         self._adjust_column_positions()
+        self._record_action(f"Created column '{name}'.")
         self.save_board()
         return column_id
 
@@ -42,6 +43,7 @@ class BoardColumnsMixin:
 
         self._push_undo_state(f"Rename column '{self.custom_columns[column_id].name}'")
         self.custom_columns[column_id].rename(new_name)
+        self._record_action(f"Renamed column to '{new_name}'.")
         self.save_board()
         return True
 
@@ -66,6 +68,7 @@ class BoardColumnsMixin:
             column.set_completed(is_completed)
         if can_add_card is not UNSET:
             column.set_can_add_card(can_add_card)
+        self._record_action(f"Updated column '{column.name}'.")
         self.save_board()
         return True
 
@@ -96,6 +99,7 @@ class BoardColumnsMixin:
 
         del self.custom_columns[column_id]
         self._adjust_column_positions()
+        self._record_action(f"Deleted column '{column.name}'.")
         self.save_board()
         return True
 
@@ -112,6 +116,7 @@ class BoardColumnsMixin:
         for index, column_id in enumerate(column_order):
             self.custom_columns[column_id].reposition(index)
 
+        self._record_action('Reordered columns.')
         self.save_board()
         return True
 
@@ -124,6 +129,7 @@ class BoardColumnsMixin:
 
         self._push_undo_state(f"Change color of column '{self.custom_columns[column_id].name}'")
         self.custom_columns[column_id].change_color(color)
+        self._record_action(f"Changed color of column '{self.custom_columns[column_id].name}'.")
         self.save_board()
         return True
 
